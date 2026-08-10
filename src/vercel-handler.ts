@@ -1,10 +1,9 @@
-// backend/api/index.ts
 import 'reflect-metadata';
 import serverless from 'serverless-http';
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from '../src/AppModule';
+import { AppModule } from './AppModule';
 
-let cachedHandler: any;
+let cachedHandler: ReturnType<typeof serverless> | undefined;
 
 export default async function handler(req: any, res: any) {
   if (!cachedHandler) {
