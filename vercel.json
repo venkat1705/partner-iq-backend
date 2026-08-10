@@ -1,9 +1,9 @@
 {
   "version": 2,
   "functions": {
-    "api/index.js": {
+    "api/index.ts": {
       "maxDuration": 30,
-      "includeFiles": "node_modules/mysql2/**"
+      "includeFiles": "{src/**,node_modules/mysql2/**}"
     }
   },
   "routes": [
