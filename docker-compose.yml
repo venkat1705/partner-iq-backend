@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  partneriq-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: partneriq-api
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_NAME=partneriq
+      - DATABASE_USER=partneriq
+      - DATABASE_PASSWORD=partneriq_secure_pass
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_ACCESS_SECRET=partneriq_super_secret_jwt_access_key_min_32_chars
+      - JWT_REFRESH_SECRET=partneriq_super_secret_jwt_refresh_key_min_32_chars
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  partneriq-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: partneriq-worker
+    command: ["node", "dist/server.cjs", "--worker"]
+    environment:
+      - NODE_ENV=production
+      - DATABASE_HOST=postgres
+      - REDIS_HOST=redis
+      - JWT_ACCESS_SECRET=partneriq_super_secret_jwt_access_key_min_32_chars
+      - JWT_REFRESH_SECRET=partneriq_super_secret_jwt_refresh_key_min_32_chars
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: partneriq-postgres
+    environment:
+      POSTGRES_DB: partneriq
+      POSTGRES_USER: partneriq
+      POSTGRES_PASSWORD: partneriq_secure_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U partneriq -d partneriq"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: partneriq-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:

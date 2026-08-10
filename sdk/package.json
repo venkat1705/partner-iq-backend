@@ -1,0 +1,39 @@
+{
+  "name": "@partneriq/sdk",
+  "version": "1.0.0",
+  "description": "Official Node.js & Browser SDK for PartnerIQ B2B SaaS Partner & Affiliate Engine",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --external:crypto --outfile=dist/index.js --format=esm --sourcemap && esbuild src/index.ts --bundle --platform=node --external:crypto --outfile=dist/index.cjs --format=cjs --sourcemap && tsc -p tsconfig.json",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "partneriq",
+    "affiliate",
+    "referral",
+    "saas",
+    "b2b",
+    "commissions",
+    "attribution",
+    "sdk"
+  ],
+  "author": "PartnerIQ Engineering",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/partneriq/partneriq-node.git"
+  }
+}
