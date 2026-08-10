@@ -502,7 +502,7 @@ export class AdminService {
 
   private async checkRedisHealth() {
     const startedAt = Date.now();
-    const redisUrl = process.env.REDIS_URL;
+    const redisUrl = process.env.REDIS_URL || process.env.KV_URL;
     const redis = redisUrl
       ? new Redis(redisUrl, { lazyConnect: true, maxRetriesPerRequest: 0, enableOfflineQueue: false })
       : new Redis({

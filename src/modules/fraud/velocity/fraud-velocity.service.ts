@@ -8,7 +8,7 @@ export class FraudVelocityService {
 
   private getClient() {
     if (!this.redis) {
-      const redisUrl = process.env.REDIS_URL;
+      const redisUrl = process.env.REDIS_URL || process.env.KV_URL;
       this.redis = redisUrl
         ? new Redis(redisUrl, { lazyConnect: true, maxRetriesPerRequest: 0, enableOfflineQueue: false })
         : new Redis({
