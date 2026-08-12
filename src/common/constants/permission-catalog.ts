@@ -68,6 +68,13 @@ export const PERMISSIONS = [
 
   { code: 'audit.read', resource: 'audit', action: 'read', description: 'View audit logs' },
 
+  { code: 'billing.view', resource: 'billing', action: 'view', description: 'View plans, subscription, invoices, and payments' },
+  { code: 'billing.manage', resource: 'billing', action: 'manage', description: 'Manage subscription, upgrades, downgrades, and billing profile' },
+  { code: 'billing.subscribe', resource: 'billing', action: 'subscribe', description: 'Start or change organization subscriptions' },
+  { code: 'billing.cancel', resource: 'billing', action: 'cancel', description: 'Cancel organization subscriptions' },
+  { code: 'billing.refund', resource: 'billing', action: 'refund', description: 'Issue payment refunds' },
+  { code: 'billing.admin', resource: 'billing', action: 'admin', description: 'Administer billing across all organizations' },
+
   { code: 'organization_policies.read', resource: 'organization_policies', action: 'read', description: 'View access policies' },
   { code: 'organization_policies.create', resource: 'organization_policies', action: 'create', description: 'Create access policies' },
   { code: 'organization_policies.update', resource: 'organization_policies', action: 'update', description: 'Update access policies' },
@@ -136,6 +143,10 @@ export const BUILT_IN_ROLES = {
       'webhooks.update',
       'webhooks.delete',
       'audit.read',
+      'billing.view',
+      'billing.manage',
+      'billing.subscribe',
+      'billing.cancel',
     ],
   },
   PROGRAM_MANAGER: {
@@ -186,6 +197,7 @@ export const BUILT_IN_ROLES = {
       'payouts.read',
       'payouts.create',
       'payouts.approve',
+      'billing.view',
       'conversions.read',
       'analytics.read',
     ],
@@ -268,6 +280,8 @@ export const PERMISSION_ALIASES: Record<string, string[]> = {
   'manage.payouts': ['payouts.read', 'payouts.create', 'payouts.approve'],
   'manage.api_keys': ['api_keys.read', 'api_keys.create', 'api_keys.revoke'],
   'manage.webhooks': ['webhooks.read', 'webhooks.create', 'webhooks.update', 'webhooks.delete'],
+  'view.billing': ['billing.view'],
+  'manage.billing': ['billing.view', 'billing.manage', 'billing.subscribe', 'billing.cancel'],
   'view.integrations': ['integrations.read'],
   'view.programs': ['programs.read'],
   'view.affiliates': ['affiliates.read'],

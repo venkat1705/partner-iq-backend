@@ -1457,3 +1457,375 @@ export class IntegrationOAuthState {
   @CreateDateColumn()
   createdAt!: Date;
 }
+
+@Entity('billing_plans')
+@Unique(['code', 'billingInterval', 'currency'])
+export class BillingPlan {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column({ type: 'varchar', length: 50 })
+  code!: string;
+
+  @Column({ type: 'varchar', length: 120 })
+  name!: string;
+
+  @Column({ type: 'text', nullable: true })
+  description?: string;
+
+  @Column({ type: 'int', default: 0 })
+  price!: number;
+
+  @Column({ type: 'varchar', length: 10, default: 'INR' })
+  currency!: string;
+
+  @Column({ type: 'varchar', length: 20, default: 'MONTHLY' })
+  billingInterval!: string;
+
+  @Column({ type: 'int', default: 1 })
+  billingIntervalCount!: number;
+
+  @Column({ type: 'int', default: 0 })
+  trialDays!: number;
+
+  @Column({ type: 'boolean', default: true })
+  isActive!: boolean;
+
+  @Column({ type: 'boolean', default: true })
+  isPublic!: boolean;
+
+  @Column({ type: 'int', default: 0 })
+  sortOrder!: number;
+
+  @Column({ type: 'uuid', nullable: true })
+  createdBy?: string;
+
+  @CreateDateColumn()
+  createdDate!: Date;
+
+  @UpdateDateColumn()
+  modifiedDate!: Date;
+
+  @Column({ type: 'uuid', nullable: true })
+  modifiedBy?: string;
+
+  @Column({ type: 'varchar', length: 20, default: 'ACTIVE' })
+  rowStatus!: string;
+}
+
+@Entity('billing_plan_provider_mappings')
+@Unique(['planId', 'provider', 'currency'])
+export class BillingPlanProviderMapping {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  planId!: string;
+
+  @Column({ type: 'varchar', length: 30 })
+  provider!: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  providerPlanId?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  providerPriceId?: string;
+
+  @Column({ type: 'varchar', length: 10, default: 'INR' })
+  currency!: string;
+
+  @Column({ type: 'boolean', default: true })
+  isActive!: boolean;
+
+  @Column({ type: 'simple-json', nullable: true })
+  metadata?: any;
+
+  @CreateDateColumn()
+  createdDate!: Date;
+
+  @UpdateDateColumn()
+  modifiedDate!: Date;
+}
+
+@Entity('billing_plan_features')
+@Unique(['planId', 'featureKey'])
+export class BillingPlanFeature {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  planId!: string;
+
+  @Column({ type: 'varchar', length: 120 })
+  featureKey!: string;
+
+  @Column({ type: 'boolean', default: true })
+  enabled!: boolean;
+
+  @Column({ type: 'int', nullable: true })
+  limitValue?: number;
+
+  @CreateDateColumn()
+  createdDate!: Date;
+
+  @UpdateDateColumn()
+  modifiedDate!: Date;
+}
+
+@Entity('billing_subscriptions')
+@Unique(['organizationId', 'providerSubscriptionId'])
+export class BillingSubscription {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationId!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  planId!: string;
+
+  @Column({ type: 'varchar', length: 30 })
+  provider!: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  providerCustomerId?: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  providerSubscriptionId?: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 50, default: 'CREATED' })
+  status!: string;
+
+  @Column({ type: 'varchar', length: 20, default: 'MONTHLY' })
+  billingInterval!: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  currentPeriodStart?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  currentPeriodEnd?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  trialStart?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  trialEnd?: Date;
+
+  @Column({ type: 'boolean', default: false })
+  cancelAtPeriodEnd!: boolean;
+
+  @Column({ type: 'timestamp', nullable: true })
+  cancelledAt?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  nextBillingDate?: Date;
+
+  @Column({ type: 'uuid', nullable: true })
+  pendingPlanId?: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  scheduledChangeDate?: Date;
+
+  @Column({ type: 'uuid', nullable: true })
+  createdBy?: string;
+
+  @CreateDateColumn()
+  createdDate!: Date;
+
+  @UpdateDateColumn()
+  modifiedDate!: Date;
+
+  @Column({ type: 'uuid', nullable: true })
+  modifiedBy?: string;
+
+  @Column({ type: 'varchar', length: 20, default: 'ACTIVE' })
+  rowStatus!: string;
+}
+
+@Entity('billing_payments')
+export class BillingPayment {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationId!: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  subscriptionId?: string;
+
+  @Column({ type: 'varchar', length: 30 })
+  provider!: string;
+
+  @Index({ unique: true })
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  providerPaymentId?: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  providerOrderId?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  providerInvoiceId?: string;
+
+  @Column({ type: 'int' })
+  amount!: number;
+
+  @Column({ type: 'varchar', length: 10, default: 'INR' })
+  currency!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 50, default: 'CREATED' })
+  status!: string;
+
+  @Column({ type: 'varchar', length: 80, nullable: true })
+  paymentMethod?: string;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  failureCode?: string;
+
+  @Column({ type: 'text', nullable: true })
+  failureReason?: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  paidAt?: Date;
+
+  @CreateDateColumn()
+  createdDate!: Date;
+
+  @UpdateDateColumn()
+  modifiedDate!: Date;
+}
+
+@Entity('billing_payment_events')
+@Unique(['provider', 'providerEventId'])
+export class BillingPaymentEvent {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column({ type: 'varchar', length: 30 })
+  provider!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  providerEventId!: string;
+
+  @Column({ type: 'varchar', length: 120 })
+  eventType!: string;
+
+  @Column({ type: 'varchar', length: 128 })
+  payloadHash!: string;
+
+  @Column({ type: 'varchar', length: 50, default: 'RECEIVED' })
+  status!: string;
+
+  @Column({ type: 'int', default: 0 })
+  retryCount!: number;
+
+  @Column({ type: 'text', nullable: true })
+  errorMessage?: string;
+
+  @Column({ type: 'timestamp' })
+  receivedAt!: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  processedAt?: Date;
+
+  @CreateDateColumn()
+  createdDate!: Date;
+}
+
+@Entity('billing_refunds')
+export class BillingRefund {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationId!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  paymentId!: string;
+
+  @Column({ type: 'varchar', length: 30 })
+  provider!: string;
+
+  @Index({ unique: true })
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  providerRefundId?: string;
+
+  @Column({ type: 'int' })
+  amount!: number;
+
+  @Column({ type: 'varchar', length: 10, default: 'INR' })
+  currency!: string;
+
+  @Column({ type: 'varchar', length: 50, default: 'CREATED' })
+  status!: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  createdBy?: string;
+
+  @CreateDateColumn()
+  createdDate!: Date;
+
+  @UpdateDateColumn()
+  modifiedDate!: Date;
+}
+
+@Entity('billing_invoices')
+export class BillingInvoice {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationId!: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  subscriptionId?: string;
+
+  @Column({ type: 'varchar', length: 30 })
+  provider!: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  providerInvoiceId?: string;
+
+  @Column({ type: 'varchar', length: 80 })
+  invoiceNumber!: string;
+
+  @Column({ type: 'int' })
+  amount!: number;
+
+  @Column({ type: 'int', default: 0 })
+  tax!: number;
+
+  @Column({ type: 'int' })
+  total!: number;
+
+  @Column({ type: 'varchar', length: 10, default: 'INR' })
+  currency!: string;
+
+  @Column({ type: 'varchar', length: 50, default: 'ISSUED' })
+  status!: string;
+
+  @Column({ type: 'varchar', length: 2000, nullable: true })
+  invoiceUrl?: string;
+
+  @Column({ type: 'timestamp' })
+  invoiceDate!: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  dueDate?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  paidDate?: Date;
+}

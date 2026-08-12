@@ -56,6 +56,14 @@ import {
   IntegrationCredential,
   IntegrationEvent,
   IntegrationOAuthState,
+  BillingPlan,
+  BillingPlanProviderMapping,
+  BillingPlanFeature,
+  BillingSubscription,
+  BillingPayment,
+  BillingPaymentEvent,
+  BillingRefund,
+  BillingInvoice,
 } from './schema';
 import {
   RoleDefinition,
@@ -101,6 +109,14 @@ export type OrganizationIntegrationEntity = OrganizationIntegration;
 export type IntegrationCredentialEntity = IntegrationCredential;
 export type IntegrationEventEntity = IntegrationEvent;
 export type IntegrationOAuthStateEntity = IntegrationOAuthState;
+export type BillingPlanEntity = BillingPlan;
+export type BillingPlanProviderMappingEntity = BillingPlanProviderMapping;
+export type BillingPlanFeatureEntity = BillingPlanFeature;
+export type BillingSubscriptionEntity = BillingSubscription;
+export type BillingPaymentEntity = BillingPayment;
+export type BillingPaymentEventEntity = BillingPaymentEvent;
+export type BillingRefundEntity = BillingRefund;
+export type BillingInvoiceEntity = BillingInvoice;
 export type RoleDefinitionEntity = import('./schema-rbac').RoleDefinition;
 export type PermissionDefinitionEntity = import('./schema-rbac').PermissionDefinition;
 export type RolePermissionEntity = import('./schema-rbac').RolePermission;
@@ -213,6 +229,14 @@ export class InMemoryDataStore {
   integrationCredentials: IntegrationCredentialEntity[] = [];
   integrationEvents: IntegrationEventEntity[] = [];
   integrationOAuthStates: IntegrationOAuthStateEntity[] = [];
+  billingPlans: BillingPlanEntity[] = [];
+  billingPlanProviderMappings: BillingPlanProviderMappingEntity[] = [];
+  billingPlanFeatures: BillingPlanFeatureEntity[] = [];
+  billingSubscriptions: BillingSubscriptionEntity[] = [];
+  billingPayments: BillingPaymentEntity[] = [];
+  billingPaymentEvents: BillingPaymentEventEntity[] = [];
+  billingRefunds: BillingRefundEntity[] = [];
+  billingInvoices: BillingInvoiceEntity[] = [];
   roles: RoleDefinitionEntity[] = [];
   permissions: PermissionDefinitionEntity[] = [];
   rolePermissions: RolePermissionEntity[] = [];
@@ -322,6 +346,35 @@ export class InMemoryDataStore {
     this.integrationOAuthStates = new DBBackedArray(
       AppDataSource.getRepository(IntegrationOAuthState),
       await AppDataSource.getRepository(IntegrationOAuthState).find(),
+    );
+    this.billingPlans = new DBBackedArray(AppDataSource.getRepository(BillingPlan), await AppDataSource.getRepository(BillingPlan).find());
+    this.billingPlanProviderMappings = new DBBackedArray(
+      AppDataSource.getRepository(BillingPlanProviderMapping),
+      await AppDataSource.getRepository(BillingPlanProviderMapping).find(),
+    );
+    this.billingPlanFeatures = new DBBackedArray(
+      AppDataSource.getRepository(BillingPlanFeature),
+      await AppDataSource.getRepository(BillingPlanFeature).find(),
+    );
+    this.billingSubscriptions = new DBBackedArray(
+      AppDataSource.getRepository(BillingSubscription),
+      await AppDataSource.getRepository(BillingSubscription).find(),
+    );
+    this.billingPayments = new DBBackedArray(
+      AppDataSource.getRepository(BillingPayment),
+      await AppDataSource.getRepository(BillingPayment).find(),
+    );
+    this.billingPaymentEvents = new DBBackedArray(
+      AppDataSource.getRepository(BillingPaymentEvent),
+      await AppDataSource.getRepository(BillingPaymentEvent).find(),
+    );
+    this.billingRefunds = new DBBackedArray(
+      AppDataSource.getRepository(BillingRefund),
+      await AppDataSource.getRepository(BillingRefund).find(),
+    );
+    this.billingInvoices = new DBBackedArray(
+      AppDataSource.getRepository(BillingInvoice),
+      await AppDataSource.getRepository(BillingInvoice).find(),
     );
     this.roles = new DBBackedArray(AppDataSource.getRepository(RoleDefinition), await AppDataSource.getRepository(RoleDefinition).find());
     this.permissions = new DBBackedArray(AppDataSource.getRepository(PermissionDefinition), await AppDataSource.getRepository(PermissionDefinition).find());

@@ -17,7 +17,7 @@ export async function createPartnerIqApp() {
   await dbStore.initialize();
 
   const appConfig = getAppConfig();
-  const app = await NestFactory.create(AppModule, { cors: true });
+  const app = await NestFactory.create(AppModule, { cors: true, rawBody: true });
 
   app.enableCors({
     origin: appConfig.corsOrigins,

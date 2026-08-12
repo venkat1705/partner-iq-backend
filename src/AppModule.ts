@@ -15,6 +15,7 @@ import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { IntegrationsModule } from './modules/integrations/integrations.module';
+import { BillingModule } from './modules/billing/billing.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { IntegrationsModule } from './modules/integrations/integrations.module';
     AuditModule,
     AdminModule,
     IntegrationsModule,
+    BillingModule,
   ],
 })
 export class AppModule {}
