@@ -1,5 +1,5 @@
 {
-  "name": "@partneriq/sdk",
+  "name": "@partneriq-io/sdk",
   "version": "1.0.0",
   "description": "Official Node.js & Browser SDK for PartnerIQ B2B SaaS Partner & Affiliate Engine",
   "main": "dist/index.cjs",
@@ -18,7 +18,11 @@
   ],
   "scripts": {
     "build": "esbuild src/index.ts --bundle --platform=node --external:crypto --outfile=dist/index.js --format=esm --sourcemap && esbuild src/index.ts --bundle --platform=node --external:crypto --outfile=dist/index.cjs --format=cjs --sourcemap && tsc -p tsconfig.json",
+    "pack:test": "npm pack --dry-run",
     "prepublishOnly": "npm run build"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "keywords": [
     "partneriq",
@@ -34,6 +38,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/partneriq/partneriq-node.git"
+    "url": "https://github.com/partneriq-io/partneriq-node.git"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "esbuild": "^0.25.0",
+    "typescript": "~5.8.2"
   }
 }

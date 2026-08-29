@@ -1,6 +1,18 @@
 import { dbStore } from '../store';
 import { initializeDataSource } from '../data-source';
-import { FraudSettings, Integration, Organization, OrganizationMembership, Program, User } from '../schema';
+import {
+  FraudSettings,
+  Integration,
+  Organization,
+  OrganizationMembership,
+  Program,
+  User,
+  PartnerTier,
+  Milestone,
+  AutomationEmailTemplate,
+  AutomationWorkflow,
+  AffiliateTier,
+} from '../schema';
 import { RoleDefinition, PermissionDefinition, RolePermission } from '../schema-rbac';
 import { IsNull } from 'typeorm';
 import { SecurityUtils } from '../../common/utils/security.utils';
@@ -232,45 +244,75 @@ export async function runSeed() {
     });
   }
 
-  // Seed API Key for Acme
-  if (!dbStore.apiKeys.some((k) => k.organizationId === org.id)) {
-    const { key, prefix, hash } = SecurityUtils.generateApiKey('live');
-    dbStore.apiKeys.push({
-      id: uuidv4(),
-      organizationId: org.id,
-      name: 'Default Live Key',
-      prefix,
-      keyHash: hash,
-      scopes: [
-        'conversions:write',
-        'conversions:read',
-        'affiliates:write',
-        'affiliates:read',
-        'links:write',
-        'links:read',
-        'webhooks:manage',
-      ],
-      createdBy: admin.id,
-      createdAt: new Date(),
-    });
-    console.log(`🔑 Seeded Live API Key for Acme SaaS: ${key}`);
+  // Seed API Keys for Acme (including default deterministic test & live keys for Postman)
+  const defaultOrgKeys = [
+    {
+      key: 'pi_live_sk_acme_994a20bf1028e331b90c',
+      name: 'Acme Production Server Key',
+      environment: 'live' as const,
+      prefix: 'pi_live_sk_',
+    },
+    {
+      key: 'pi_test_sk_acme_7719f20108bb63e4110f',
+      name: 'Acme Test Sandbox Server Key',
+      environment: 'test' as const,
+      prefix: 'pi_test_sk_',
+    },
+  ];
+
+  for (const dk of defaultOrgKeys) {
+    const hash = SecurityUtils.hashToken(dk.key);
+    if (!dbStore.apiKeys.some((k) => k.keyHash === hash)) {
+      dbStore.apiKeys.push({
+        id: uuidv4(),
+        organizationId: org.id,
+        name: dk.name,
+        prefix: dk.prefix,
+        keyHash: hash,
+        environment: dk.environment,
+        scopes: [
+          'programs:read',
+          'conversions:write',
+          'conversions:read',
+          'affiliates:write',
+          'affiliates:read',
+          'tracking_links:write',
+          'tracking_links:read',
+          'customers:write',
+          'attributions:write',
+          'refunds:write',
+          'webhooks:write',
+          'webhooks:read',
+        ],
+        status: 'ACTIVE',
+        createdBy: admin.id,
+        createdAt: new Date(),
+      });
+      console.log(`🔑 Seeded ${dk.environment.toUpperCase()} API Key: ${dk.key}`);
+    }
+  }
+
+  const unsupportedIntegrationCodes = [
+    'STRIPE',
+    'PADDLE',
+    'CHARGEBEE',
+    'SHOPIFY',
+    'WOOCOMMERCE',
+    'SALESFORCE',
+    'ZAPIER',
+    'SLACK',
+    'SEGMENT',
+  ];
+  for (const code of unsupportedIntegrationCodes) {
+    const existing = await integrations.findOne({ where: { code } });
+    if (existing && existing.status !== IntegrationStatus.DISABLED) {
+      existing.status = IntegrationStatus.DISABLED;
+      await integrations.save(existing);
+    }
   }
 
   const integrationCatalog = [
-    ['STRIPE', 'Stripe', 'stripe', 'Stripe', IntegrationCategory.PAYMENTS, IntegrationStatus.ACTIVE, [IntegrationConnectionType.API_KEY, IntegrationConnectionType.WEBHOOK], true, true, false, 'Payment, subscription, refund, dispute, and checkout events from Stripe.', 'stripe'],
-    ['PADDLE', 'Paddle', 'paddle', 'Paddle', IntegrationCategory.BILLING, IntegrationStatus.ACTIVE, [IntegrationConnectionType.API_KEY, IntegrationConnectionType.WEBHOOK], true, true, false, 'Merchant of record billing events for SaaS subscriptions and payments.', 'paddle'],
-    ['CHARGEBEE', 'Chargebee', 'chargebee', 'Chargebee', IntegrationCategory.BILLING, IntegrationStatus.BETA, [IntegrationConnectionType.API_KEY, IntegrationConnectionType.WEBHOOK], true, true, false, 'Subscription lifecycle and invoice sync for Chargebee billing.', 'chargebee'],
-    ['SHOPIFY', 'Shopify', 'shopify', 'Shopify', IntegrationCategory.COMMERCE, IntegrationStatus.BETA, [IntegrationConnectionType.OAUTH, IntegrationConnectionType.WEBHOOK], false, true, true, 'Order, customer, refund, and storefront purchase events from Shopify.', 'shopify'],
-    ['WOOCOMMERCE', 'WooCommerce', 'woocommerce', 'WooCommerce', IntegrationCategory.COMMERCE, IntegrationStatus.BETA, [IntegrationConnectionType.API_KEY, IntegrationConnectionType.WEBHOOK], true, true, false, 'Commerce conversion and refund data from WooCommerce stores.', 'woocommerce'],
-    ['HUBSPOT', 'HubSpot', 'hubspot', 'HubSpot', IntegrationCategory.CRM, IntegrationStatus.BETA, [IntegrationConnectionType.OAUTH, IntegrationConnectionType.WEBHOOK], false, true, true, 'CRM lifecycle and deal-stage events from HubSpot.', 'hubspot'],
-    ['SALESFORCE', 'Salesforce', 'salesforce', 'Salesforce', IntegrationCategory.CRM, IntegrationStatus.COMING_SOON, [IntegrationConnectionType.OAUTH], false, false, true, 'Opportunity and account sync for Salesforce CRM.', 'salesforce'],
-    ['ZAPIER', 'Zapier', 'zapier', 'Zapier', IntegrationCategory.AUTOMATION, IntegrationStatus.COMING_SOON, [IntegrationConnectionType.WEBHOOK], false, true, false, 'No-code workflow automation triggers and actions.', 'zapier'],
-    ['SLACK', 'Slack', 'slack', 'Slack', IntegrationCategory.NOTIFICATIONS, IntegrationStatus.COMING_SOON, [IntegrationConnectionType.OAUTH, IntegrationConnectionType.WEBHOOK], false, true, true, 'Operational alerts for fraud, payouts, approvals, and system status.', 'slack'],
-    ['PARTNERIQ_API', 'PartnerIQ API', 'partneriq-api', 'PartnerIQ', IntegrationCategory.DEVELOPER, IntegrationStatus.ACTIVE, [IntegrationConnectionType.API_KEY], true, false, false, 'Native REST API access for server-side integrations.', 'api'],
-    ['PARTNERIQ_WEBHOOKS', 'PartnerIQ Webhooks', 'partneriq-webhooks', 'PartnerIQ', IntegrationCategory.DEVELOPER, IntegrationStatus.ACTIVE, [IntegrationConnectionType.WEBHOOK], false, true, false, 'Outbound webhook delivery for partner lifecycle and revenue events.', 'webhooks'],
-    ['PARTNERIQ_NODE_SDK', 'Node SDK', 'partneriq-node-sdk', 'PartnerIQ', IntegrationCategory.DEVELOPER, IntegrationStatus.ACTIVE, [IntegrationConnectionType.SDK], false, false, false, 'Official Node.js SDK for conversion and affiliate event ingestion.', 'node'],
-    ['PARTNERIQ_BROWSER_SDK', 'Browser SDK', 'partneriq-browser-sdk', 'PartnerIQ', IntegrationCategory.DEVELOPER, IntegrationStatus.ACTIVE, [IntegrationConnectionType.SDK], false, false, false, 'Browser-side tracking SDK for clicks and attribution signals.', 'browser'],
-    ['SEGMENT', 'Segment', 'segment', 'Segment', IntegrationCategory.AUTOMATION, IntegrationStatus.COMING_SOON, [IntegrationConnectionType.WEBHOOK], false, true, false, 'Customer data routing into PartnerIQ events.', 'segment'],
+    ['HUBSPOT', 'HubSpot CRM', 'hubspot', 'HubSpot', IntegrationCategory.CRM, IntegrationStatus.ACTIVE, [IntegrationConnectionType.OAUTH, IntegrationConnectionType.WEBHOOK], false, true, true, 'B2B partner deal registration, pipeline sync, closed-won attribution, and commission triggering from HubSpot.', 'hubspot'],
   ] as const;
 
   for (const [index, item] of integrationCatalog.entries()) {
@@ -347,11 +389,273 @@ export async function runSeed() {
     }));
   }
 
-  console.log('✅ Seed completed successfully!');
-  console.log(`👤 Admin: admin@partneriq.demo | Password: PartnerIQ@123`);
-  console.log(`👑 Super Admin: superadmin@partneriq.demo | Password: PartnerIQAdmin@123`);
-  console.log(`🏢 Organization ID: ${org.id}`);
-  return { admin, superAdmin, org, seedPrograms, affiliate };
+  // Seed Partner Tiers
+  const partnerTiersRepo = dataSource.getRepository(PartnerTier);
+  const existingTiers = await partnerTiersRepo.find({ where: { organizationId: org.id } });
+  let bronzeTier = existingTiers.find((t) => t.code === 'BRONZE');
+  let silverTier = existingTiers.find((t) => t.code === 'SILVER');
+  let goldTier = existingTiers.find((t) => t.code === 'GOLD');
+
+  if (!existingTiers.length) {
+    bronzeTier = await partnerTiersRepo.save(partnerTiersRepo.create({
+      id: uuidv4(),
+      organizationId: org.id,
+      name: 'Bronze Partner',
+      code: 'BRONZE',
+      description: 'Starting tier for all enrolled partners.',
+      level: 1,
+      displayOrder: 1,
+      icon: 'shield',
+      badge: 'Bronze Affiliate',
+      colorToken: 'bronze',
+      commissionRateOverride: 1500, // 15.00%
+      isDefault: true,
+      isActive: true,
+      isVisibleToAffiliate: true,
+      conditions: {
+        minimumConversions: 0,
+        minimumRevenue: 0,
+      },
+    }));
+
+    silverTier = await partnerTiersRepo.save(partnerTiersRepo.create({
+      id: uuidv4(),
+      organizationId: org.id,
+      name: 'Silver Partner',
+      code: 'SILVER',
+      description: 'Unlocked upon generating 10 approved conversions or $2,500 in revenue.',
+      level: 2,
+      displayOrder: 2,
+      icon: 'award',
+      badge: 'Silver Affiliate',
+      colorToken: 'silver',
+      commissionRateOverride: 2000, // 20.00%
+      isDefault: false,
+      isActive: true,
+      isVisibleToAffiliate: true,
+      conditions: {
+        minimumConversions: 10,
+        minimumRevenue: 2500,
+      },
+      rewardsConfig: {
+        bonusAmount: 5000, // $50 bonus
+        badgeName: 'Silver Partner',
+        notificationTitle: '🌟 Promoted to Silver Tier!',
+        notificationBody: 'You reached 10 conversions! Your commission rate has been increased to 20%.',
+      },
+    }));
+
+    goldTier = await partnerTiersRepo.save(partnerTiersRepo.create({
+      id: uuidv4(),
+      organizationId: org.id,
+      name: 'Gold Partner',
+      code: 'GOLD',
+      description: 'Elite tier for high volume partners with 50+ conversions or $10,000 in revenue.',
+      level: 3,
+      displayOrder: 3,
+      icon: 'crown',
+      badge: 'Gold Affiliate',
+      colorToken: 'gold',
+      commissionRateOverride: 2500, // 25.00%
+      isDefault: false,
+      isActive: true,
+      isVisibleToAffiliate: true,
+      conditions: {
+        minimumConversions: 50,
+        minimumRevenue: 10000,
+      },
+      rewardsConfig: {
+        bonusAmount: 20000, // $200 bonus
+        badgeName: 'Gold Partner',
+        notificationTitle: '👑 Welcome to Gold Tier!',
+        notificationBody: 'Congratulations on reaching Gold Tier! Enjoy 25% commission and VIP partner support.',
+      },
+    }));
+  }
+
+  // Seed Milestones
+  const milestonesRepo = dataSource.getRepository(Milestone);
+  const existingMilestones = await milestonesRepo.find({ where: { organizationId: org.id } });
+  if (!existingMilestones.length) {
+    await milestonesRepo.save([
+      milestonesRepo.create({
+        id: uuidv4(),
+        organizationId: org.id,
+        name: 'First Sale Club',
+        code: 'FIRST_SALE',
+        description: 'Earn your very first approved customer conversion.',
+        metric: 'APPROVED_CONVERSIONS' as any,
+        operator: 'GREATER_THAN_OR_EQUAL',
+        targetValue: 1,
+        rewardType: 'MULTI_REWARD' as any,
+        rewardConfig: {
+          bonusAmount: 2500, // $25 bonus
+          badgeName: 'First Sale Club',
+          badgeIcon: 'sparkles',
+        },
+        badgeIcon: 'sparkles',
+        badgeName: 'First Sale Club',
+        isActive: true,
+        displayOrder: 1,
+      }),
+      milestonesRepo.create({
+        id: uuidv4(),
+        organizationId: org.id,
+        name: '10 Conversions Milestone',
+        code: 'TEN_CONVERSIONS',
+        description: 'Achieve 10 approved referral sales.',
+        metric: 'APPROVED_CONVERSIONS' as any,
+        operator: 'GREATER_THAN_OR_EQUAL',
+        targetValue: 10,
+        rewardType: 'FIXED_BONUS' as any,
+        rewardConfig: { bonusAmount: 5000 },
+        badgeIcon: 'award',
+        badgeName: '10 Sales Achiever',
+        isActive: true,
+        displayOrder: 2,
+      }),
+      milestonesRepo.create({
+        id: uuidv4(),
+        organizationId: org.id,
+        name: '$10k Revenue Champion',
+        code: 'TEN_K_REVENUE',
+        description: 'Generate over $10,000 in customer referral volume.',
+        metric: 'REVENUE_GENERATED' as any,
+        operator: 'GREATER_THAN_OR_EQUAL',
+        targetValue: 10000,
+        rewardType: 'FIXED_BONUS' as any,
+        rewardConfig: { bonusAmount: 15000 },
+        badgeIcon: 'crown',
+        badgeName: '$10k Club',
+        isActive: true,
+        displayOrder: 3,
+      }),
+    ]);
+  }
+
+  // Seed Email Templates
+  const emailTemplatesRepo = dataSource.getRepository(AutomationEmailTemplate);
+  const existingTemplates = await emailTemplatesRepo.find({ where: { organizationId: org.id } });
+  if (!existingTemplates.length) {
+    await emailTemplatesRepo.save([
+      emailTemplatesRepo.create({
+        id: uuidv4(),
+        organizationId: org.id,
+        code: 'WELCOME_AFFILIATE',
+        name: 'Welcome to Partner Program',
+        subject: 'Welcome to {{program_name}}! Here is your quickstart guide',
+        preheader: 'Start earning commissions with your unique partner links today.',
+        bodyHtml: '<p>Hi {{affiliate_first_name}},</p><p>Welcome to <strong>{{organization_name}}</strong>\'s partner program! Your starting tier is <strong>{{current_tier}}</strong> at <strong>{{current_commission_rate}}</strong> commission.</p><p><a href="{{tracking_link_url}}">Access Your Affiliate Dashboard</a> to generate your links and download marketing materials.</p>',
+        bodyText: 'Welcome {{affiliate_first_name}} to {{program_name}}! Access your dashboard at {{affiliate_dashboard_url}}.',
+        ctaText: 'Open Dashboard',
+        ctaUrl: '{{affiliate_dashboard_url}}',
+      }),
+      emailTemplatesRepo.create({
+        id: uuidv4(),
+        organizationId: org.id,
+        code: 'CREATE_FIRST_LINK',
+        name: 'Create Your First Tracking Link',
+        subject: 'Quick reminder: Create your referral link to start earning',
+        preheader: 'Generate tracking links in seconds to refer your audience.',
+        bodyHtml: '<p>Hi {{affiliate_first_name}},</p><p>We noticed you haven\'t created a tracking link yet for <strong>{{program_name}}</strong>.</p><p>It only takes 10 seconds! <a href="{{affiliate_dashboard_url}}">Click here to generate your link</a> and start earning {{current_commission_rate}} on every sale.</p>',
+        bodyText: 'Hi {{affiliate_first_name}}, create your tracking link at {{affiliate_dashboard_url}} to start earning.',
+        ctaText: 'Create Tracking Link',
+        ctaUrl: '{{affiliate_dashboard_url}}',
+      }),
+      emailTemplatesRepo.create({
+        id: uuidv4(),
+        organizationId: org.id,
+        code: 'MARKETING_ASSETS_TIPS',
+        name: 'Marketing Assets & Promotion Tips',
+        subject: 'Free marketing assets to boost your referral clicks',
+        preheader: 'High-converting banners, email copy, and product kits.',
+        bodyHtml: '<p>Hi {{affiliate_first_name}},</p><p>Want more clicks and conversions? Check out our official <a href="{{asset_library_url}}">Marketing Asset Library</a> for ready-to-use banners, social graphics, and product demos.</p>',
+        bodyText: 'Download assets at {{asset_library_url}}.',
+        ctaText: 'View Asset Library',
+        ctaUrl: '{{asset_library_url}}',
+      }),
+      emailTemplatesRepo.create({
+        id: uuidv4(),
+        organizationId: org.id,
+        code: 'FIRST_CONVERSION_CONGRATS',
+        name: 'First Sale Celebration',
+        subject: '🎉 Congratulations on your first referral sale!',
+        preheader: 'You just earned your first commission on {{organization_name}}.',
+        bodyHtml: '<p>Hi {{affiliate_first_name}},</p><p>Awesome job! You just generated your first approved customer sale for <strong>{{program_name}}</strong>. Your commission is now recorded in your partner ledger.</p>',
+        bodyText: 'Congratulations on your first sale! Check details at {{affiliate_dashboard_url}}.',
+        ctaText: 'View Earnings',
+        ctaUrl: '{{affiliate_dashboard_url}}',
+      }),
+      emailTemplatesRepo.create({
+        id: uuidv4(),
+        organizationId: org.id,
+        code: 'TIER_UPGRADE_CONGRATS',
+        name: 'Tier Promotion Notice',
+        subject: '🌟 You have been upgraded to {{current_tier}} Tier!',
+        preheader: 'Your commission rate has increased to {{current_commission_rate}}.',
+        bodyHtml: '<p>Hi {{affiliate_first_name}},</p><p>Congratulations! Based on your outstanding performance, you have advanced to <strong>{{current_tier}}</strong> Tier! Your new commission rate is <strong>{{current_commission_rate}}</strong>.</p>',
+        bodyText: 'You reached {{current_tier}} tier at {{current_commission_rate}} commission rate!',
+        ctaText: 'View Tier Journey',
+        ctaUrl: '{{affiliate_dashboard_url}}',
+      }),
+      emailTemplatesRepo.create({
+        id: uuidv4(),
+        organizationId: org.id,
+        code: 'RE_ENGAGE_AFFILIATE',
+        name: 'Inactive Partner Re-Engagement',
+        subject: 'We miss you! Special rewards waiting in your partner portal',
+        preheader: 'Unlock next tier commission rates and new campaign bonuses.',
+        bodyHtml: '<p>Hi {{affiliate_first_name}},</p><p>We noticed you haven\'t promoted <strong>{{program_name}}</strong> recently. You are only {{conversions_remaining}} sales away from reaching {{next_tier}} Tier with {{next_commission_rate}} commission!</p>',
+        bodyText: 'Re-engage and earn {{next_commission_rate}} at {{affiliate_dashboard_url}}.',
+        ctaText: 'Explore New Campaigns',
+        ctaUrl: '{{affiliate_dashboard_url}}',
+      }),
+    ]);
+  }
+
+  // Seed Default Automation Workflows
+  const workflowsRepo = dataSource.getRepository(AutomationWorkflow);
+  const existingWorkflows = await workflowsRepo.find({ where: { organizationId: org.id } });
+  if (!existingWorkflows.length) {
+    const { PREBUILT_WORKFLOW_TEMPLATES } = await import('../../modules/automations/workflows/workflow-templates.data');
+    for (const t of PREBUILT_WORKFLOW_TEMPLATES) {
+      await workflowsRepo.save(workflowsRepo.create({
+        id: uuidv4(),
+        organizationId: org.id,
+        name: t.name,
+        description: t.description,
+        triggerType: t.triggerType,
+        status: 'ACTIVE' as any,
+        version: 1,
+        goalType: t.goalType,
+        goalConfig: t.goalConfig,
+        maxEmailsPerDay: 2,
+        maxEmailsPerWeek: 5,
+        quietHoursEnabled: true,
+        nodes: t.nodes as any,
+        edges: t.edges as any,
+      }));
+    }
+  }
+
+  // Assign demo affiliate to bronze tier
+  if (affiliate && bronzeTier) {
+    const affiliateTiersRepo = dataSource.getRepository(AffiliateTier);
+    const existingAffiliateTier = await affiliateTiersRepo.findOne({ where: { affiliateId: affiliate.id } });
+    if (!existingAffiliateTier) {
+      await affiliateTiersRepo.save(affiliateTiersRepo.create({
+        id: uuidv4(),
+        organizationId: org.id,
+        programId: seedPrograms[0]?.id,
+        affiliateId: affiliate.id,
+        currentTierId: bronzeTier.id,
+        effectiveFrom: new Date(),
+        isLocked: false,
+      }));
+    }
+  }
+
+  return { admin, org, seedPrograms, affiliate };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

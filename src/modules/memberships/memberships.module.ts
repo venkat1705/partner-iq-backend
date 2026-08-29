@@ -9,6 +9,6 @@ import { BrevoEmailService } from './brevo-email.service';
   imports: [AuthModule],
   controllers: [MembershipsController, InvitationsController],
   providers: [MembershipsService, BrevoEmailService],
-  exports: [MembershipsService],
+  exports: [MembershipsService, BrevoEmailService],
 })
 export class MembershipsModule {}

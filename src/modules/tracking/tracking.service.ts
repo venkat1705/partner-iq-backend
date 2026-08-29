@@ -9,11 +9,18 @@ import { dbStore, TrackingLinkEntity, ClickEntity, AttributionEntity } from '../
 import { AuditAction, FraudStatus, TrackingLinkStatus } from '../../common/enums';
 import { SecurityUtils } from '../../common/utils/security.utils';
 import { FraudService } from '../fraud/fraud.service';
+import { PerformanceAggregationService } from '../gamification/performance/performance-aggregation.service';
+import { AutomationEngineService } from '../automations/engine/automation-engine.service';
+import { AutomationTriggerType } from '../../common/enums';
 import { CreateTrackingLinkDto, BrowserClickDto, IdentifyCustomerDto } from './dto/tracking.dto';
 
 @Injectable()
 export class TrackingService {
-  constructor(private readonly fraudService: FraudService) {}
+  constructor(
+    private readonly fraudService: FraudService,
+    private readonly performanceAggregationService: PerformanceAggregationService,
+    private readonly automationEngineService: AutomationEngineService,
+  ) {}
 
   async createLink(organizationId: string, dto: CreateTrackingLinkDto, actorId?: string) {
     const shortCode = (
@@ -41,6 +48,23 @@ export class TrackingService {
     };
 
     dbStore.trackingLinks.push(link);
+
+    // 1. Performance Aggregation
+    await this.performanceAggregationService.recordTrackingLinkCreated(
+      organizationId,
+      dto.programId,
+      dto.affiliateId,
+    );
+
+    // 2. Trigger Automations
+    await this.automationEngineService.handleEvent(
+      AutomationTriggerType.TRACKING_LINK_CREATED,
+      organizationId,
+      dto.programId,
+      dto.affiliateId,
+      { trackingLinkId: link.id, shortCode },
+    );
+
     dbStore.auditLogs.push({
       id: uuidv4(),
       organizationId,
@@ -128,12 +152,15 @@ export class TrackingService {
     };
     dbStore.clicks.push(click);
 
+    // Record click in performance summary
+    this.performanceAggregationService.recordClick(link.organizationId, link.programId, link.affiliateId);
+
     this.fraudService.evaluateClick(click.id, ipAddress).catch((error) => {
       console.error('click fraud assessment failed:', error?.message || error);
     });
 
     // Record Attribution Record
-    const cookieDays = program?.cookieDurationDays || 30;
+    const cookieDays = program?.cookieDurationDays || program?.attributionWindowDays || 30;
     const expiresAt = new Date(Date.now() + cookieDays * 24 * 3600 * 1000);
 
     const attribution: AttributionEntity = {
@@ -144,6 +171,13 @@ export class TrackingService {
       clickId: click.id,
       anonymousId,
       model: program?.attributionModel || ('LAST_CLICK' as any),
+      breakdown: [{
+        affiliateId: link.affiliateId,
+        clickId: click.id,
+        model: program?.attributionModel || 'LAST_CLICK',
+        weight: 1,
+        createdAt: new Date().toISOString(),
+      }],
       expiresAt,
       createdAt: new Date(),
     };

@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { randomBytes } from 'crypto';
 
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
@@ -41,7 +42,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       this.logger.error(`Unhandled Exception: ${exception.message}`, exception.stack);
     }
 
-    const requestId = (request.headers['x-request-id'] as string) || `req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const requestId = (request.headers['x-request-id'] as string) || `req_${randomBytes(12).toString('hex')}`;
 
     response.status(status).json({
       success: false,

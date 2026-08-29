@@ -30,6 +30,9 @@ import { CommissionsService } from '../modules/commissions/commissions.service';
 import { LedgerService } from '../modules/ledger/ledger.service';
 import { runSeed } from '../database/seeds/run-seed';
 import { SecurityUtils } from '../common/utils/security.utils';
+import { AssetManagementService } from '../modules/asset-management/asset-management.service';
+import { dbStore } from '../database/store';
+import { AffiliateAssetActivityType, AssetBundleVisibility, AssetSourceType, AssetStatus, AssetType, AttributionModel } from '../common/enums';
 
 async function runTestSuite() {
   console.log('🧪 Running PartnerIQ Comprehensive Test Suite...\n');
@@ -71,6 +74,7 @@ async function runTestSuite() {
         new FraudPolicyService(),
         new FraudScoreService(),
         new FraudDecisionService(),
+        { createNotification: async () => ({}) } as any,
       ),
     );
   }
@@ -100,6 +104,58 @@ async function runTestSuite() {
   const orgsService = new OrganizationsService();
   const orgB = await orgsService.create(admin.id, { name: 'Tenant B Org', slug: 'tenant-b-org' });
   assert(org.id !== orgB.id, 'Multi-tenant Org B Isolation Verified');
+
+  // 4b. Asset Library Tenant Isolation, Versioning, Publishing, Personalization & Analytics
+  const assetService = new AssetManagementService();
+  const launchCopy = await assetService.createAsset(org.id, admin.id, {
+    name: 'HR Mentor Pro Launch LinkedIn Post',
+    assetType: AssetType.SOCIAL_COPY,
+    sourceType: AssetSourceType.TEXT,
+    textContent: 'Join HR Mentor with {{affiliate_name}}. Use {{coupon_code}}: {{affiliate_tracking_link}}',
+    status: AssetStatus.PUBLISHED,
+    isPublicToAffiliates: true,
+    isCopyable: true,
+    isDownloadable: false,
+    programId: seedPrograms[0].id,
+    tags: ['LinkedIn', 'Launch'],
+  });
+  assert(launchCopy.version === 1 && launchCopy.status === AssetStatus.PUBLISHED, 'Marketing Asset Created and Published');
+
+  await assetService.addVersion(org.id, launchCopy.id, admin.id, { changeNotes: 'Updated campaign copy' });
+  const versions = await assetService.listVersions(org.id, launchCopy.id);
+  assert(versions.length === 2 && versions[0].isCurrent, 'Asset Version History Tracks Current Version');
+
+  const bundle = await assetService.createBundle(org.id, admin.id, {
+    name: 'HR Mentor Pro Launch Kit',
+    programId: seedPrograms[0].id,
+    visibility: AssetBundleVisibility.ALL_PROGRAM_AFFILIATES,
+  });
+  await assetService.addBundleAsset(org.id, bundle.id, admin.id, { assetId: launchCopy.id, displayOrder: 1 });
+  const publishedBundle = await assetService.publishBundle(org.id, bundle.id, admin.id);
+  assert(publishedBundle.status === 'PUBLISHED' && publishedBundle.items.length === 1, 'Asset Bundle Published with Reusable Asset');
+
+  const affiliateBundles = await assetService.listAffiliateBundles(org.id, affiliate.id);
+  assert(affiliateBundles.some((item) => item.id === bundle.id), 'Affiliate Sees Authorized Published Bundle');
+
+  await assetService.recordActivity(org.id, affiliate.id, launchCopy.id, {
+    activityType: AffiliateAssetActivityType.COPY,
+    bundleId: bundle.id,
+    idempotencyKey: 'asset-copy-test-1',
+  });
+  await assetService.recordActivity(org.id, affiliate.id, launchCopy.id, {
+    activityType: AffiliateAssetActivityType.COPY,
+    bundleId: bundle.id,
+    idempotencyKey: 'asset-copy-test-1',
+  });
+  const assetAnalytics = await assetService.analytics(org.id);
+  assert(assetAnalytics.totals.copies === 1 && assetAnalytics.totals.activeAffiliatesUsingAssets >= 1, 'Asset Activity Analytics Deduplicate Idempotent Events');
+
+  try {
+    await assetService.getAsset(orgB.id, launchCopy.id);
+    assert(false, 'Cross-tenant Asset Access should have thrown NotFoundException');
+  } catch {
+    assert(true, 'Cross-tenant Asset Access Blocked');
+  }
 
   // 5. Tracking Redirect & Click Capture Test
   const trackingService = new TrackingService(createFraudService());
@@ -139,15 +195,54 @@ async function runTestSuite() {
 
   assert(repeatedConv.conversion.id === convRes.conversion.id, 'Idempotency Key Prevents Duplicate Conversions');
 
-  // 7. Ledger Entry Verification
+  // 7. Multi-touch & custom attribution model test
+  const multiTouchProgram = {
+    ...seedPrograms[0],
+    id: 'program-multitouch',
+    organizationId: org.id,
+    attributionModel: AttributionModel.MULTI_TOUCH,
+    attributionWindowDays: 45,
+    attributionConfig: {
+      weights: { first: 0.25, middle: 0.5, last: 0.25 },
+      stageWeights: { discovery: 0.2, consideration: 0.5, purchase: 0.3 },
+    },
+    couponAttributionPriority: 'PROMO_CODE',
+  };
+  dbStore.programs.push(multiTouchProgram as any);
+
+  const viaLegacy = 'anon_multi_touch_legacy';
+  const partnerA = 'affiliate-mt-a';
+  const partnerB = 'affiliate-mt-b';
+  const partnerC = 'affiliate-mt-c';
+  dbStore.attributions.push(
+    { id: 'attr-mt-1', organizationId: org.id, programId: multiTouchProgram.id, affiliateId: partnerA, clickId: 'click-mt-1', anonymousId: viaLegacy, model: AttributionModel.FIRST_CLICK, expiresAt: new Date(Date.now() + 86400000), createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 8) } as any,
+    { id: 'attr-mt-2', organizationId: org.id, programId: multiTouchProgram.id, affiliateId: partnerB, clickId: 'click-mt-2', anonymousId: viaLegacy, model: AttributionModel.MULTI_TOUCH, expiresAt: new Date(Date.now() + 86400000), createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3) } as any,
+    { id: 'attr-mt-3', organizationId: org.id, programId: multiTouchProgram.id, affiliateId: partnerC, clickId: 'click-mt-3', anonymousId: viaLegacy, model: AttributionModel.LAST_CLICK, expiresAt: new Date(Date.now() + 86400000), createdAt: new Date(Date.now() - 1000 * 60 * 60 * 12) } as any,
+  );
+
+  const customRes = await conversionsService.createConversion(
+    org.id,
+    {
+      externalId: 'ORD-MULTI-TOUCH-01',
+      customerExternalId: viaLegacy,
+      amount: 25000,
+      currency: 'USD',
+      metadata: { promoCode: 'SAVE20' },
+    },
+    'multi_touch_test_key',
+  );
+
+  assert(customRes.conversion.affiliateId === partnerB, 'Multi-touch attribution chooses the highest weighted partner in the journey');
+
+  // 8. Ledger Entry Verification
   const ledgerAcc = await ledgerService.getAccount(org.id, affiliate.id);
   assert(ledgerAcc.balance > 0, `Double-entry Ledger Balance Updated: $${(ledgerAcc.balance / 100).toFixed(2)}`);
 
-  // 8. Refund & Clawback Test
+  // 9. Refund & Clawback Test
   const refundRes = await conversionsService.refundConversion(org.id, convRes.conversion.id, { reason: 'Customer returned product' });
   assert(refundRes.conversion.status === 'REFUNDED', 'Refund & Commission Clawback Executed');
 
-  // 9. Webhook HMAC Signature Test
+  // 10. Webhook HMAC Signature Test
   const timestamp = Math.floor(Date.now() / 1000);
   const signature = SecurityUtils.signWebhookPayload('secret123', timestamp, '{"test":true}');
   assert(signature.length === 64, 'HMAC SHA-256 Webhook Signature Generated');

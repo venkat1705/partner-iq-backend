@@ -17,6 +17,7 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthUserPayload } from '../../common/interfaces/request-with-user.interface';
+import { RequireApiScopes } from '../../common/decorators/require-api-scopes.decorator';
 
 @ApiTags('Conversions & Idempotency')
 @Controller()
@@ -25,6 +26,7 @@ export class ConversionsController {
 
   @Post('api/v1/conversions')
   @UseGuards(ApiKeyGuard)
+  @RequireApiScopes('conversions:write')
   @ApiBearerAuth()
   @ApiHeader({ name: 'Idempotency-Key', required: false, description: 'Unique key to guarantee single execution' })
   @ApiOperation({ summary: 'Create a conversion event (Server-to-Server API Key required)' })
@@ -33,7 +35,19 @@ export class ConversionsController {
     @Body() dto: CreateConversionDto,
     @Headers('idempotency-key') idempotencyKey?: string,
   ) {
-    return this.conversionsService.createConversion(user.organizationId!, dto, idempotencyKey);
+    return this.conversionsService.createConversion(user.organizationId!, dto, idempotencyKey, {
+      apiKeyId: user.apiKeyId,
+      environment: user.apiKeyEnvironment,
+    });
+  }
+
+  @Get('api/v1/conversions/:id')
+  @UseGuards(ApiKeyGuard)
+  @RequireApiScopes('conversions:read')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get a conversion by PartnerIQ id or externalId' })
+  async getPublicConversion(@Param('id') conversionId: string, @CurrentUser() user: AuthUserPayload) {
+    return this.conversionsService.findOne(user.organizationId!, conversionId);
   }
 
   @Get('api/v1/organizations/:organizationId/conversions')
@@ -46,8 +60,8 @@ export class ConversionsController {
   }
 
   @Post('api/v1/conversions/:id/refund')
-  @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
-  @RequirePermissions('manage.commissions')
+  @UseGuards(ApiKeyGuard)
+  @RequireApiScopes('refunds:write')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Process a conversion refund and clawback commission' })
   async refundConversion(

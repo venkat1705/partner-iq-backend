@@ -28,12 +28,20 @@ export class SecurityUtils {
     return result;
   }
 
-  static generateApiKey(environment: 'live' | 'test' = 'live'): { key: string; prefix: string; hash: string } {
-    const randomStr = crypto.randomBytes(24).toString('hex');
-    const prefix = `pi_${environment}_`;
+  static generateApiKey(
+    environment: 'live' | 'test' = 'live',
+    keyType: 'sk' | 'pk' = 'sk',
+  ): { key: string; prefix: string; hash: string } {
+    const randomStr = crypto.randomBytes(32).toString('base64url');
+    const prefix = `pi_${environment}_${keyType}_`;
     const key = `${prefix}${randomStr}`;
     const hash = this.hashToken(key);
     return { key, prefix, hash };
+  }
+
+  static maskCredential(value: string): string {
+    if (!value) return '';
+    return `${value.slice(0, 14)}${'•'.repeat(10)}`;
   }
 
   static generateWebhookSecret(): { secret: string; hash: string } {
@@ -48,6 +56,13 @@ export class SecurityUtils {
       .createHmac('sha256', secret)
       .update(signatureBase)
       .digest('hex');
+  }
+
+  static timingSafeCompare(a: string, b: string): boolean {
+    const left = Buffer.from(a);
+    const right = Buffer.from(b);
+    if (left.length !== right.length) return false;
+    return crypto.timingSafeEqual(left, right);
   }
 
   static encrypt(text: string): string {

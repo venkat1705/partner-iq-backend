@@ -24,8 +24,11 @@ import {
   Organization,
   OrganizationMembership,
   AuthSession,
+  Notification,
+  NotificationPreference,
   Program,
   Affiliate,
+  AffiliateInvitation,
   ProgramAffiliate,
   AffiliateApplication,
   TrackingLink,
@@ -56,6 +59,12 @@ import {
   IntegrationCredential,
   IntegrationEvent,
   IntegrationOAuthState,
+  IntegrationPlatformConfig,
+  CrmPipelineMapping,
+  CrmFieldMapping,
+  CrmEntityMapping,
+  IntegrationSyncLog,
+  PartnerDeal,
   BillingPlan,
   BillingPlanProviderMapping,
   BillingPlanFeature,
@@ -64,6 +73,25 @@ import {
   BillingPaymentEvent,
   BillingRefund,
   BillingInvoice,
+  Asset,
+  AssetVersion,
+  AssetBundle,
+  AssetBundleItem,
+  AssetTag,
+  AffiliateAssetActivity,
+  AffiliateAssetFavorite,
+  PartnerTier,
+  AffiliateTier,
+  AffiliateTierHistory,
+  Milestone,
+  AffiliateMilestoneAchievement,
+  AffiliatePerformanceSummary,
+  AutomationWorkflow,
+  AutomationWorkflowVersion,
+  AutomationExecution,
+  AutomationScheduledStep,
+  AutomationEmailTemplate,
+  AutomationEmailLog,
 } from './schema';
 import {
   RoleDefinition,
@@ -77,8 +105,11 @@ export type UserEntity = User;
 export type OrganizationEntity = Organization;
 export type OrganizationMembershipEntity = OrganizationMembership;
 export type AuthSessionEntity = AuthSession;
+export type NotificationEntity = Notification;
+export type NotificationPreferenceEntity = NotificationPreference;
 export type ProgramEntity = Program;
 export type AffiliateEntity = Affiliate;
+export type AffiliateInvitationEntity = AffiliateInvitation;
 export type ProgramAffiliateEntity = ProgramAffiliate;
 export type AffiliateApplicationEntity = AffiliateApplication;
 export type TrackingLinkEntity = TrackingLink;
@@ -109,6 +140,12 @@ export type OrganizationIntegrationEntity = OrganizationIntegration;
 export type IntegrationCredentialEntity = IntegrationCredential;
 export type IntegrationEventEntity = IntegrationEvent;
 export type IntegrationOAuthStateEntity = IntegrationOAuthState;
+export type IntegrationPlatformConfigEntity = IntegrationPlatformConfig;
+export type CrmPipelineMappingEntity = CrmPipelineMapping;
+export type CrmFieldMappingEntity = CrmFieldMapping;
+export type CrmEntityMappingEntity = CrmEntityMapping;
+export type IntegrationSyncLogEntity = IntegrationSyncLog;
+export type PartnerDealEntity = PartnerDeal;
 export type BillingPlanEntity = BillingPlan;
 export type BillingPlanProviderMappingEntity = BillingPlanProviderMapping;
 export type BillingPlanFeatureEntity = BillingPlanFeature;
@@ -117,6 +154,25 @@ export type BillingPaymentEntity = BillingPayment;
 export type BillingPaymentEventEntity = BillingPaymentEvent;
 export type BillingRefundEntity = BillingRefund;
 export type BillingInvoiceEntity = BillingInvoice;
+export type AssetEntity = Asset;
+export type AssetVersionEntity = AssetVersion;
+export type AssetBundleEntity = AssetBundle;
+export type AssetBundleItemEntity = AssetBundleItem;
+export type AssetTagEntity = AssetTag;
+export type AffiliateAssetActivityEntity = AffiliateAssetActivity;
+export type AffiliateAssetFavoriteEntity = AffiliateAssetFavorite;
+export type PartnerTierEntity = PartnerTier;
+export type AffiliateTierEntity = AffiliateTier;
+export type AffiliateTierHistoryEntity = AffiliateTierHistory;
+export type MilestoneEntity = Milestone;
+export type AffiliateMilestoneAchievementEntity = AffiliateMilestoneAchievement;
+export type AffiliatePerformanceSummaryEntity = AffiliatePerformanceSummary;
+export type AutomationWorkflowEntity = AutomationWorkflow;
+export type AutomationWorkflowVersionEntity = AutomationWorkflowVersion;
+export type AutomationExecutionEntity = AutomationExecution;
+export type AutomationScheduledStepEntity = AutomationScheduledStep;
+export type AutomationEmailTemplateEntity = AutomationEmailTemplate;
+export type AutomationEmailLogEntity = AutomationEmailLog;
 export type RoleDefinitionEntity = import('./schema-rbac').RoleDefinition;
 export type PermissionDefinitionEntity = import('./schema-rbac').PermissionDefinition;
 export type RolePermissionEntity = import('./schema-rbac').RolePermission;
@@ -184,7 +240,43 @@ class DBBackedArray<T extends object> extends Array<T> {
     if (items.length > 0) {
       this.persist(items);
     }
+    // If items were removed, delete them from the underlying repository as well
+    if (removed && removed.length > 0) {
+      const ids = removed.map((r: any) => r && (r as any).id).filter(Boolean);
+      if (ids.length) {
+        this.repo.delete(ids as any).catch((err) => {
+          console.error('dbStore delete error:', err);
+        });
+      }
+    }
+
     return removed;
+  }
+
+  pop(): T | undefined {
+    const item = super.pop();
+    if (item) {
+      const id = (item as any).id;
+      if (id) {
+        this.repo.delete(id as any).catch((err) => {
+          console.error('dbStore delete error:', err);
+        });
+      }
+    }
+    return item;
+  }
+
+  shift(): T | undefined {
+    const item = super.shift();
+    if (item) {
+      const id = (item as any).id;
+      if (id) {
+        this.repo.delete(id as any).catch((err) => {
+          console.error('dbStore delete error:', err);
+        });
+      }
+    }
+    return item;
   }
 }
 
@@ -197,8 +289,11 @@ export class InMemoryDataStore {
   organizations: OrganizationEntity[] = [];
   organizationMemberships: OrganizationMembershipEntity[] = [];
   authSessions: AuthSessionEntity[] = [];
+  notifications: NotificationEntity[] = [];
+  notificationPreferences: NotificationPreferenceEntity[] = [];
   programs: ProgramEntity[] = [];
   affiliates: AffiliateEntity[] = [];
+  affiliateInvitations: AffiliateInvitationEntity[] = [];
   programAffiliates: ProgramAffiliateEntity[] = [];
   affiliateApplications: AffiliateApplicationEntity[] = [];
   trackingLinks: TrackingLinkEntity[] = [];
@@ -229,6 +324,12 @@ export class InMemoryDataStore {
   integrationCredentials: IntegrationCredentialEntity[] = [];
   integrationEvents: IntegrationEventEntity[] = [];
   integrationOAuthStates: IntegrationOAuthStateEntity[] = [];
+  integrationPlatformConfigs: IntegrationPlatformConfigEntity[] = [];
+  crmPipelineMappings: CrmPipelineMappingEntity[] = [];
+  crmFieldMappings: CrmFieldMappingEntity[] = [];
+  crmEntityMappings: CrmEntityMappingEntity[] = [];
+  integrationSyncLogs: IntegrationSyncLogEntity[] = [];
+  partnerDeals: PartnerDealEntity[] = [];
   billingPlans: BillingPlanEntity[] = [];
   billingPlanProviderMappings: BillingPlanProviderMappingEntity[] = [];
   billingPlanFeatures: BillingPlanFeatureEntity[] = [];
@@ -237,6 +338,25 @@ export class InMemoryDataStore {
   billingPaymentEvents: BillingPaymentEventEntity[] = [];
   billingRefunds: BillingRefundEntity[] = [];
   billingInvoices: BillingInvoiceEntity[] = [];
+  assets: AssetEntity[] = [];
+  assetVersions: AssetVersionEntity[] = [];
+  assetBundles: AssetBundleEntity[] = [];
+  assetBundleItems: AssetBundleItemEntity[] = [];
+  assetTags: AssetTagEntity[] = [];
+  affiliateAssetActivities: AffiliateAssetActivityEntity[] = [];
+  affiliateAssetFavorites: AffiliateAssetFavoriteEntity[] = [];
+  partnerTiers: PartnerTierEntity[] = [];
+  affiliateTiers: AffiliateTierEntity[] = [];
+  affiliateTierHistories: AffiliateTierHistoryEntity[] = [];
+  milestones: MilestoneEntity[] = [];
+  affiliateMilestoneAchievements: AffiliateMilestoneAchievementEntity[] = [];
+  affiliatePerformanceSummaries: AffiliatePerformanceSummaryEntity[] = [];
+  automationWorkflows: AutomationWorkflowEntity[] = [];
+  automationWorkflowVersions: AutomationWorkflowVersionEntity[] = [];
+  automationExecutions: AutomationExecutionEntity[] = [];
+  automationScheduledSteps: AutomationScheduledStepEntity[] = [];
+  automationEmailTemplates: AutomationEmailTemplateEntity[] = [];
+  automationEmailLogs: AutomationEmailLogEntity[] = [];
   roles: RoleDefinitionEntity[] = [];
   permissions: PermissionDefinitionEntity[] = [];
   rolePermissions: RolePermissionEntity[] = [];
@@ -264,8 +384,20 @@ export class InMemoryDataStore {
       await AppDataSource.getRepository(OrganizationMembership).find(),
     );
     this.authSessions = new DBBackedArray(AppDataSource.getRepository(AuthSession), await AppDataSource.getRepository(AuthSession).find());
+    this.notifications = new DBBackedArray(
+      AppDataSource.getRepository(Notification),
+      await AppDataSource.getRepository(Notification).find(),
+    );
+    this.notificationPreferences = new DBBackedArray(
+      AppDataSource.getRepository(NotificationPreference),
+      await AppDataSource.getRepository(NotificationPreference).find(),
+    );
     this.programs = new DBBackedArray(AppDataSource.getRepository(Program), await AppDataSource.getRepository(Program).find());
     this.affiliates = new DBBackedArray(AppDataSource.getRepository(Affiliate), await AppDataSource.getRepository(Affiliate).find());
+    this.affiliateInvitations = new DBBackedArray(
+      AppDataSource.getRepository(AffiliateInvitation),
+      await AppDataSource.getRepository(AffiliateInvitation).find(),
+    );
     this.programAffiliates = new DBBackedArray(
       AppDataSource.getRepository(ProgramAffiliate),
       await AppDataSource.getRepository(ProgramAffiliate).find(),
@@ -347,6 +479,30 @@ export class InMemoryDataStore {
       AppDataSource.getRepository(IntegrationOAuthState),
       await AppDataSource.getRepository(IntegrationOAuthState).find(),
     );
+    this.integrationPlatformConfigs = new DBBackedArray(
+      AppDataSource.getRepository(IntegrationPlatformConfig),
+      await AppDataSource.getRepository(IntegrationPlatformConfig).find(),
+    );
+    this.crmPipelineMappings = new DBBackedArray(
+      AppDataSource.getRepository(CrmPipelineMapping),
+      await AppDataSource.getRepository(CrmPipelineMapping).find(),
+    );
+    this.crmFieldMappings = new DBBackedArray(
+      AppDataSource.getRepository(CrmFieldMapping),
+      await AppDataSource.getRepository(CrmFieldMapping).find(),
+    );
+    this.crmEntityMappings = new DBBackedArray(
+      AppDataSource.getRepository(CrmEntityMapping),
+      await AppDataSource.getRepository(CrmEntityMapping).find(),
+    );
+    this.integrationSyncLogs = new DBBackedArray(
+      AppDataSource.getRepository(IntegrationSyncLog),
+      await AppDataSource.getRepository(IntegrationSyncLog).find(),
+    );
+    this.partnerDeals = new DBBackedArray(
+      AppDataSource.getRepository(PartnerDeal),
+      await AppDataSource.getRepository(PartnerDeal).find(),
+    );
     this.billingPlans = new DBBackedArray(AppDataSource.getRepository(BillingPlan), await AppDataSource.getRepository(BillingPlan).find());
     this.billingPlanProviderMappings = new DBBackedArray(
       AppDataSource.getRepository(BillingPlanProviderMapping),
@@ -375,6 +531,76 @@ export class InMemoryDataStore {
     this.billingInvoices = new DBBackedArray(
       AppDataSource.getRepository(BillingInvoice),
       await AppDataSource.getRepository(BillingInvoice).find(),
+    );
+    this.assets = new DBBackedArray(AppDataSource.getRepository(Asset), await AppDataSource.getRepository(Asset).find());
+    this.assetVersions = new DBBackedArray(
+      AppDataSource.getRepository(AssetVersion),
+      await AppDataSource.getRepository(AssetVersion).find(),
+    );
+    this.assetBundles = new DBBackedArray(
+      AppDataSource.getRepository(AssetBundle),
+      await AppDataSource.getRepository(AssetBundle).find(),
+    );
+    this.assetBundleItems = new DBBackedArray(
+      AppDataSource.getRepository(AssetBundleItem),
+      await AppDataSource.getRepository(AssetBundleItem).find(),
+    );
+    this.assetTags = new DBBackedArray(AppDataSource.getRepository(AssetTag), await AppDataSource.getRepository(AssetTag).find());
+    this.affiliateAssetActivities = new DBBackedArray(
+      AppDataSource.getRepository(AffiliateAssetActivity),
+      await AppDataSource.getRepository(AffiliateAssetActivity).find(),
+    );
+    this.affiliateAssetFavorites = new DBBackedArray(
+      AppDataSource.getRepository(AffiliateAssetFavorite),
+      await AppDataSource.getRepository(AffiliateAssetFavorite).find(),
+    );
+    this.partnerTiers = new DBBackedArray(
+      AppDataSource.getRepository(PartnerTier),
+      await AppDataSource.getRepository(PartnerTier).find(),
+    );
+    this.affiliateTiers = new DBBackedArray(
+      AppDataSource.getRepository(AffiliateTier),
+      await AppDataSource.getRepository(AffiliateTier).find(),
+    );
+    this.affiliateTierHistories = new DBBackedArray(
+      AppDataSource.getRepository(AffiliateTierHistory),
+      await AppDataSource.getRepository(AffiliateTierHistory).find(),
+    );
+    this.milestones = new DBBackedArray(
+      AppDataSource.getRepository(Milestone),
+      await AppDataSource.getRepository(Milestone).find(),
+    );
+    this.affiliateMilestoneAchievements = new DBBackedArray(
+      AppDataSource.getRepository(AffiliateMilestoneAchievement),
+      await AppDataSource.getRepository(AffiliateMilestoneAchievement).find(),
+    );
+    this.affiliatePerformanceSummaries = new DBBackedArray(
+      AppDataSource.getRepository(AffiliatePerformanceSummary),
+      await AppDataSource.getRepository(AffiliatePerformanceSummary).find(),
+    );
+    this.automationWorkflows = new DBBackedArray(
+      AppDataSource.getRepository(AutomationWorkflow),
+      await AppDataSource.getRepository(AutomationWorkflow).find(),
+    );
+    this.automationWorkflowVersions = new DBBackedArray(
+      AppDataSource.getRepository(AutomationWorkflowVersion),
+      await AppDataSource.getRepository(AutomationWorkflowVersion).find(),
+    );
+    this.automationExecutions = new DBBackedArray(
+      AppDataSource.getRepository(AutomationExecution),
+      await AppDataSource.getRepository(AutomationExecution).find(),
+    );
+    this.automationScheduledSteps = new DBBackedArray(
+      AppDataSource.getRepository(AutomationScheduledStep),
+      await AppDataSource.getRepository(AutomationScheduledStep).find(),
+    );
+    this.automationEmailTemplates = new DBBackedArray(
+      AppDataSource.getRepository(AutomationEmailTemplate),
+      await AppDataSource.getRepository(AutomationEmailTemplate).find(),
+    );
+    this.automationEmailLogs = new DBBackedArray(
+      AppDataSource.getRepository(AutomationEmailLog),
+      await AppDataSource.getRepository(AutomationEmailLog).find(),
     );
     this.roles = new DBBackedArray(AppDataSource.getRepository(RoleDefinition), await AppDataSource.getRepository(RoleDefinition).find());
     this.permissions = new DBBackedArray(AppDataSource.getRepository(PermissionDefinition), await AppDataSource.getRepository(PermissionDefinition).find());

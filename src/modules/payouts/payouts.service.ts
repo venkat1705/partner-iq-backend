@@ -140,12 +140,24 @@ export class PayoutsService {
       (i) => i.batchId === batchId && i.organizationId === organizationId,
     );
 
+    const sanitizeField = (value: string | undefined | null): string => {
+      if (!value) return '';
+      let str = String(value);
+      // Neutralize formula injection triggers (=, +, -, @, tab, carriage return)
+      if (/^[=+\-@\t\r]/.test(str)) {
+        str = `'${str}`;
+      }
+      return `"${str.replace(/"/g, '""')}"`;
+    };
+
     let csv = 'item_id,affiliate_id,email,company_name,amount_dollars,currency,status\n';
 
     for (const item of items) {
       const affiliate = dbStore.affiliates.find((a) => a.id === item.affiliateId);
       const amountDollars = (item.amount / 100).toFixed(2);
-      csv += `${item.id},${item.affiliateId},"${affiliate?.email || ''}","${affiliate?.companyName || ''}",${amountDollars},${item.currency},${item.status}\n`;
+      const safeEmail = sanitizeField(affiliate?.email);
+      const safeCompany = sanitizeField(affiliate?.companyName);
+      csv += `${item.id},${item.affiliateId},${safeEmail},${safeCompany},${amountDollars},${item.currency},${item.status}\n`;
     }
 
     return csv;

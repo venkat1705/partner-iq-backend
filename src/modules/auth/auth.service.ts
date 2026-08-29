@@ -135,7 +135,7 @@ export class AuthService {
     const jwtConfig = getJwtConfig();
     let decoded: any;
     try {
-      decoded = jwt.verify(rawRefreshToken, jwtConfig.refreshSecret);
+      decoded = jwt.verify(rawRefreshToken, jwtConfig.refreshSecret, { algorithms: ['HS256'] });
     } catch (err) {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }

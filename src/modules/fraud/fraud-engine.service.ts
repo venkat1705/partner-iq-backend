@@ -6,7 +6,10 @@ import {
   FraudAssessmentType,
   FraudDecision,
   FraudReviewStatus,
+  Role,
 } from '../../common/enums';
+import { MembershipStatus } from '../../common/enums/rbac';
+import { NotificationsService } from '../notifications/notifications.service';
 import { FRAUD_ENGINE_VERSION, FraudAssessmentResult, FraudContext } from './fraud.types';
 import { FraudDecisionService } from './fraud-decision.service';
 import { FraudPolicyService } from './fraud-policy.service';
@@ -20,6 +23,7 @@ export class FraudEngineService {
     private readonly policyService: FraudPolicyService,
     private readonly scoreService: FraudScoreService,
     private readonly decisionService: FraudDecisionService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async assess(context: FraudContext, assessmentType = FraudAssessmentType.INITIAL): Promise<FraudAssessmentResult> {
@@ -83,6 +87,7 @@ export class FraudEngineService {
 
     if (decision === FraudDecision.REVIEW || decision === FraudDecision.BLOCK || decision === FraudDecision.HOLD) {
       this.createReview(context, assessment.id, aggregate.score, aggregate.confidence, aggregate.riskLevel, decision, signals);
+      await this.notifyFraudReview(context, assessment.id, aggregate.score, decision, signals);
     }
 
     this.updateRollup(context, aggregate.score, decision);
@@ -181,6 +186,58 @@ export class FraudEngineService {
       metadata: { entityType: context.entityType, entityId: context.entityId, decision, score },
       createdAt: new Date(),
     });
+  }
+
+  private async notifyFraudReview(
+    context: FraudContext,
+    assessmentId: string,
+    score: number,
+    decision: FraudDecision,
+    signals: any[],
+  ) {
+    const alertRoles = new Set<Role>([Role.OWNER, Role.ADMIN, Role.RISK_ANALYST, Role.AFFILIATE_MANAGER]);
+    const recipients = dbStore.organizationMemberships.filter(
+      (membership) =>
+        membership.organizationId === context.organizationId &&
+        membership.status === MembershipStatus.ACTIVE &&
+        alertRoles.has(membership.role),
+    );
+
+    const topSignal = signals
+      .filter((signal) => signal.detected || signal.score > 0)
+      .sort((a, b) => b.score - a.score)[0];
+    const entityLabel = context.entityType.toLowerCase();
+    const title = decision === FraudDecision.REVIEW
+      ? 'Fraud review required'
+      : decision === FraudDecision.HOLD
+        ? 'Fraud hold applied'
+        : 'Fraud blocked';
+    const body = `${entityLabel} flagged with risk score ${score}${topSignal?.reason ? `: ${topSignal.reason}` : '.'}`;
+
+    await Promise.allSettled(
+      recipients.map((recipient) =>
+        this.notificationsService.createNotification({
+          userId: recipient.userId,
+          organizationId: context.organizationId,
+          type: 'fraud',
+          title,
+          body,
+          channel: 'in_app',
+          priority: decision === FraudDecision.REVIEW ? 'high' : 'urgent',
+          actionUrl: '/app/fraud',
+          metadata: {
+            assessmentId,
+            decision,
+            score,
+            entityType: context.entityType,
+            entityId: context.entityId,
+            programId: context.programId,
+            affiliateId: context.affiliateId,
+            topSignal: topSignal?.code,
+          },
+        }),
+      ),
+    );
   }
 
   private sanitizeMetadata(metadata?: Record<string, unknown>) {

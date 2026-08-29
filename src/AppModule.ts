@@ -16,6 +16,13 @@ import { AuditModule } from './modules/audit/audit.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { IntegrationsModule } from './modules/integrations/integrations.module';
 import { BillingModule } from './modules/billing/billing.module';
+import { MediaModule } from './modules/media/media.module';
+import { DeveloperPlatformModule } from './modules/developer-platform/developer-platform.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { AssetManagementModule } from './modules/asset-management/asset-management.module';
+import { PartnerDealsModule } from './modules/partner-deals/partner-deals.module';
+import { GamificationModule } from './modules/gamification/gamification.module';
+import { AutomationsModule } from './modules/automations/automations.module';
 
 @Module({
   imports: [
@@ -36,6 +43,14 @@ import { BillingModule } from './modules/billing/billing.module';
     AdminModule,
     IntegrationsModule,
     BillingModule,
+    MediaModule,
+    DeveloperPlatformModule,
+    NotificationsModule,
+    AssetManagementModule,
+    PartnerDealsModule,
+    GamificationModule,
+    AutomationsModule,
   ],
 })
 export class AppModule {}
+

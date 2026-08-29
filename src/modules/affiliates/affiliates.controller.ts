@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AffiliatesService } from './affiliates.service';
-import { CreateAffiliateDto, PublicApplyDto } from './dto/affiliate.dto';
+import { AcceptAffiliateInvitationDto, CreateAffiliateDto, CreateAffiliateInvitationDto, PublicApplyDto } from './dto/affiliate.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { OrganizationGuard } from '../../common/guards/organization.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
@@ -55,6 +55,72 @@ export class AffiliatesController {
     @Param('affiliateId') affiliateId: string,
   ) {
     return this.affiliatesService.findOne(organizationId, affiliateId);
+  }
+
+  @Post('api/v1/organizations/:organizationId/affiliate-invitations')
+  @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+  @RequirePermissions('manage.affiliates')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Invite affiliate partner to a program' })
+  async inviteAffiliate(
+    @Param('organizationId') organizationId: string,
+    @Body() dto: CreateAffiliateInvitationDto,
+    @CurrentUser() user: AuthUserPayload,
+  ) {
+    return this.affiliatesService.inviteAffiliate(organizationId, dto, user.userId);
+  }
+
+  @Get('api/v1/organizations/:organizationId/affiliate-invitations')
+  @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+  @RequirePermissions('manage.affiliates')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List affiliate invitations' })
+  async listAffiliateInvitations(@Param('organizationId') organizationId: string) {
+    return this.affiliatesService.listInvitations(organizationId);
+  }
+
+  @Post('api/v1/organizations/:organizationId/affiliate-invitations/:invitationId/resend')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+  @RequirePermissions('manage.affiliates')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Resend affiliate invitation' })
+  async resendAffiliateInvitation(
+    @Param('organizationId') organizationId: string,
+    @Param('invitationId') invitationId: string,
+    @CurrentUser() user: AuthUserPayload,
+  ) {
+    return this.affiliatesService.resendInvitation(organizationId, invitationId, user.userId);
+  }
+
+  @Post('api/v1/organizations/:organizationId/affiliate-invitations/:invitationId/revoke')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+  @RequirePermissions('manage.affiliates')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Revoke affiliate invitation' })
+  async revokeAffiliateInvitation(
+    @Param('organizationId') organizationId: string,
+    @Param('invitationId') invitationId: string,
+    @CurrentUser() user: AuthUserPayload,
+  ) {
+    return this.affiliatesService.revokeInvitation(organizationId, invitationId, user.userId);
+  }
+
+  @Get('api/v1/public/affiliate-invitations/:token')
+  @ApiOperation({ summary: 'Get public affiliate invitation details' })
+  async getPublicInvitation(@Param('token') token: string) {
+    return this.affiliatesService.getPublicInvitation(token);
+  }
+
+  @Post('api/v1/public/affiliate-invitations/:token/accept')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Accept affiliate invitation' })
+  async acceptPublicInvitation(
+    @Param('token') token: string,
+    @Body() dto: AcceptAffiliateInvitationDto,
+  ) {
+    return this.affiliatesService.acceptAffiliateInvitation(token, dto);
   }
 
   @Post('api/v1/affiliate-applications/apply')

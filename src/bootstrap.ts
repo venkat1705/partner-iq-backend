@@ -4,6 +4,7 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import express from 'express';
 import helmet from 'helmet';
+import { randomBytes } from 'crypto';
 import { AppModule } from './AppModule';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
@@ -11,13 +12,14 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
 import { getAppConfig } from './config/app.config';
 import { dbStore } from './database/store';
 import { runSeed } from './database/seeds/run-seed';
+import { NotificationGateway } from './modules/notifications/notifications.gateway';
 
 export async function createPartnerIqApp() {
   await runSeed();
   await dbStore.initialize();
 
   const appConfig = getAppConfig();
-  const app = await NestFactory.create(AppModule, { cors: true, rawBody: true });
+  const app = await NestFactory.create(AppModule, { cors: true, rawBody: true, bodyParser: false });
 
   app.enableCors({
     origin: appConfig.corsOrigins,
@@ -25,6 +27,19 @@ export async function createPartnerIqApp() {
   });
 
   app.use(cookieParser());
+  app.use((req, res, next) => {
+    const requestId = (req.headers['x-request-id'] as string) || `req_${randomBytes(12).toString('hex')}`;
+    req.headers['x-request-id'] = requestId;
+    res.setHeader('X-Request-ID', requestId);
+    next();
+  });
+  app.use(express.json({
+    limit: '10mb',
+    verify: (req: express.Request & { rawBody?: Buffer }, _res, buf) => {
+      req.rawBody = Buffer.from(buf);
+    },
+  }));
+  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
   app.use(
     helmet({
       contentSecurityPolicy: false,
@@ -41,23 +56,25 @@ export async function createPartnerIqApp() {
   app.useGlobalFilters(new GlobalExceptionFilter());
   app.useGlobalInterceptors(new LoggingInterceptor(), new TransformInterceptor());
 
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('PartnerIQ API')
-    .setDescription('Multi-Tenant B2B SaaS Affiliate & Partner Management Platform API')
-    .setVersion('1.0.0')
-    .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }, 'JWT')
-    .addApiKey({ type: 'apiKey', in: 'header', name: 'Authorization' }, 'ApiKey')
-    .build();
+  if (appConfig.enableSwagger) {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('PartnerIQ API')
+      .setDescription('PartnerIQ REST API v1, internal application APIs, SDK integration, and webhook documentation.')
+      .setVersion('1.0.0')
+      .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }, 'JWT')
+      .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'PartnerIQ secret API key' }, 'ApiKey')
+      .build();
 
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('api/docs', app, document);
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('api/docs', app, document);
+  }
 
   const expressApp = app.getHttpAdapter().getInstance();
   expressApp.get('/', (_req: express.Request, res: express.Response) => {
     res.json({
       name: 'PartnerIQ API',
       status: 'online',
-      docs: '/api/docs',
+      ...(appConfig.enableSwagger ? { docs: '/api/docs' } : {}),
     });
   });
 
@@ -68,8 +85,13 @@ export async function listen() {
   const logger = new Logger('PartnerIQServer');
   const appConfig = getAppConfig();
   const app = await createPartnerIqApp();
+  const gateway = app.get(NotificationGateway);
+  gateway.attachServer(app.getHttpServer());
 
   await app.listen(appConfig.port, '0.0.0.0');
   logger.log(`PartnerIQ API running on port ${appConfig.port}`);
-  logger.log(`Swagger documentation available at ${appConfig.appUrl}/api/docs`);
+  if (appConfig.enableSwagger) {
+    logger.log(`Swagger documentation available at ${appConfig.appUrl}/api/docs`);
+  }
+  logger.log(`Realtime notifications available at ${appConfig.appUrl}/notifications`);
 }

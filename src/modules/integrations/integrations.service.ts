@@ -132,6 +132,7 @@ export class IntegrationsService {
 
   integrationSummaries() {
     return [...dbStore.integrations]
+      .filter((integration) => integration.code === 'HUBSPOT')
       .sort((a, b) => a.displayOrder - b.displayOrder || a.name.localeCompare(b.name))
       .map((integration) => this.summarizeIntegration(integration));
   }

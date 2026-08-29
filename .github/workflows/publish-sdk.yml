@@ -1,0 +1,78 @@
+name: Publish SDKs to npm
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'SDK to publish'
+        required: true
+        default: 'both'
+        type: choice
+        options:
+          - both (Backend + Frontend)
+          - node (@partneriq-io/node - Backend)
+          - browser (@partneriq-io/browser - Frontend)
+      dry_run:
+        description: 'Dry run (validate build and packaging without publishing)'
+        required: true
+        type: boolean
+        default: false
+
+jobs:
+  build-and-test:
+    name: Build & Verify SDKs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run SDK Tests
+        run: npm run test:sdk
+
+      - name: Build Both SDKs
+        run: npm run build:sdks
+
+  publish:
+    name: Publish to npm
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # required for npm provenance
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install Root Dependencies
+        run: npm ci
+
+      - name: Publish Backend SDK (@partneriq-io/node)
+        if: ${{ inputs.dry_run != true && (inputs.package == 'both (Backend + Frontend)' || inputs.package == 'node (@partneriq-io/node - Backend)' || github.event_name == 'release') }}
+        working-directory: packages/partneriq-node
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish Frontend SDK (@partneriq-io/browser)
+        if: ${{ inputs.dry_run != true && (inputs.package == 'both (Backend + Frontend)' || inputs.package == 'browser (@partneriq-io/browser - Frontend)' || github.event_name == 'release') }}
+        working-directory: packages/partneriq-browser
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

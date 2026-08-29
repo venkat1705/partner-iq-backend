@@ -28,11 +28,13 @@ async function bootstrap() {
   await runSeed();
   await dbStore.initialize();
 
-  const app = await NestFactory.create(AppModule, { cors: true });
+  const app = await NestFactory.create(AppModule, { cors: true, bodyParser: false });
   const appConfig = getAppConfig();
 
   // Express Middlewares
   app.use(cookieParser());
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
   app.use(
     helmet({
       contentSecurityPolicy: false, // Disabled for local Swagger & iframe dev environment

@@ -7,6 +7,7 @@ import { FraudPolicyService } from './fraud-policy.service';
 import { FraudScoreService } from './fraud-score.service';
 import { FraudService } from './fraud.service';
 import { FraudSignalRegistry } from './fraud-signal-registry';
+import { NotificationsModule } from '../notifications/notifications.module';
 import {
   AffiliateHighRefundRateSignal,
   AffiliateTrustSignal,
@@ -43,6 +44,7 @@ const signalProviders = [
 ];
 
 @Module({
+  imports: [NotificationsModule],
   controllers: [FraudController],
   providers: [
     FraudService,

@@ -9,10 +9,12 @@ export interface AuthUserPayload {
   platformRole?: PlatformRole;
   isSuperAdmin?: boolean;
   organizationId?: string;
+  affiliateId?: string;
   role?: Role;
   programAccessType?: ProgramAccessType;
   programIds?: string[];
   apiKeyId?: string;
+  apiKeyEnvironment?: 'test' | 'live';
   scopes?: string[];
   isApiKey?: boolean;
 }

@@ -16,7 +16,12 @@
     "migration:revert": "typeorm-ts-node-esm migration:revert -d ./ormconfig.cjs",
     "migration:show": "typeorm-ts-node-esm migration:show -d ./ormconfig.cjs",
     "seed": "tsx src/database/seeds/run-seed.ts",
-    "test": "tsx src/tests/run-tests.ts"
+    "test": "tsx src/tests/run-tests.ts",
+    "build:node": "npm --prefix packages/partneriq-node run build",
+    "build:browser": "npm --prefix packages/partneriq-browser run build",
+    "build:sdks": "npm run build:node && npm run build:browser",
+    "test:sdk": "tsx src/tests/sdk-test.ts",
+    "test:security": "tsx src/tests/security-audit.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

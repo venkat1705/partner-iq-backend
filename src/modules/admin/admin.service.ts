@@ -324,6 +324,7 @@ export class AdminService {
   private getIntegrations() {
     const today = new Date().toISOString().slice(0, 10);
     return [...dbStore.integrations]
+      .filter((integration) => integration.code === 'HUBSPOT')
       .sort((a, b) => a.displayOrder - b.displayOrder || a.name.localeCompare(b.name))
       .map((integration) => {
         const connections = dbStore.organizationIntegrations.filter((item) => item.integrationId === integration.id);

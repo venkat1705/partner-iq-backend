@@ -1,0 +1,39 @@
+{
+  "name": "@partneriq-io/browser",
+  "version": "1.0.1",
+  "description": "Official Browser & Client-side Attribution SDK for PartnerIQ",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": ["dist", "README.md", "CHANGELOG.md"],
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=browser --outfile=dist/index.js --format=esm --sourcemap && esbuild src/index.ts --bundle --platform=browser --outfile=dist/index.cjs --format=cjs --sourcemap && tsc -p tsconfig.json",
+    "lint": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "npm run typecheck",
+    "prepublishOnly": "npm run build && npm pack --dry-run"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "partneriq",
+    "affiliate",
+    "referral",
+    "browser",
+    "attribution",
+    "tracking"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "typescript": "~5.8.2"
+  }
+}

@@ -6,9 +6,11 @@ export interface AppConfig {
   corsOrigins: string[];
   cookieSecure: boolean;
   cookieSameSite: 'lax' | 'strict' | 'none';
+  enableSwagger: boolean;
 }
 
 export const getAppConfig = (): AppConfig => {
+  const isProduction = process.env.NODE_ENV === 'production';
   const origins = process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim())
     : ['http://localhost:3000', 'http://localhost:3001'];
@@ -21,5 +23,6 @@ export const getAppConfig = (): AppConfig => {
     corsOrigins: origins,
     cookieSecure: process.env.AUTH_COOKIE_SECURE === 'true',
     cookieSameSite: (process.env.AUTH_COOKIE_SAME_SITE as 'lax' | 'strict' | 'none') || 'lax',
+    enableSwagger: process.env.ENABLE_SWAGGER !== undefined ? process.env.ENABLE_SWAGGER === 'true' : !isProduction,
   };
 };

@@ -12,6 +12,12 @@ import { CreateProgramDto, UpdateProgramDto } from './dto/program.dto';
 export class ProgramsService {
   async create(organizationId: string, createdByUserId: string, dto: CreateProgramDto) {
     const slug = dto.slug.toLowerCase().trim();
+    const payoutPolicy = (dto.policy?.payout || {}) as {
+      minimumPayoutAmount?: number;
+      payoutSchedule?: 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'MANUAL';
+      payoutDay?: string;
+      payoutMethods?: string[];
+    };
 
     const existing = dbStore.programs.find(
       (p) => p.organizationId === organizationId && p.slug === slug && !p.deletedAt,
@@ -27,13 +33,22 @@ export class ProgramsService {
       name: dto.name,
       slug,
       type: dto.type,
-      status: ProgramStatus.ACTIVE,
-      currency: dto.currency || 'USD',
+      status: dto.status || ProgramStatus.ACTIVE,
+      currency: dto.currency || 'INR',
       commissionType: dto.commissionType,
       defaultCommissionValue: dto.defaultCommissionValue ?? (dto.defaultCommissionRate || 10) * 100,
       attributionModel: dto.attributionModel,
-      cookieDurationDays: dto.cookieDurationDays || 30,
+      attributionWindowDays: dto.attributionWindowDays ?? dto.cookieDurationDays ?? 30,
+      cookieDurationDays: dto.cookieDurationDays || dto.attributionWindowDays || 30,
+      couponAttributionPriority: dto.couponAttributionPriority || 'PROMO_CODE',
+      attributionConfig: dto.attributionConfig || undefined,
       affiliateApprovalMode: dto.affiliateApprovalMode || 'AUTO',
+      minimumPayoutAmount: dto.minimumPayoutAmount ?? payoutPolicy.minimumPayoutAmount ?? 0,
+      payoutSchedule: dto.payoutSchedule || payoutPolicy.payoutSchedule || 'MONTHLY',
+      payoutDay: dto.payoutDay || payoutPolicy.payoutDay,
+      payoutMethods: dto.payoutMethods || payoutPolicy.payoutMethods || [],
+      logoUrl: dto.logoUrl,
+      bannerUrl: dto.bannerUrl,
       createdBy: createdByUserId,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -77,11 +92,26 @@ export class ProgramsService {
     const program = await this.findOne(organizationId, programId);
     const previous = { ...program };
 
+    // Prevent edits if any affiliates have already joined this program
+    const hasAffiliates = dbStore.programAffiliates.some((pa) => pa.programId === programId);
+    if (hasAffiliates) {
+      throw new BadRequestException('Cannot edit program after affiliates have joined');
+    }
+
     if (dto.name) program.name = dto.name;
     if (dto.defaultCommissionValue !== undefined) program.defaultCommissionValue = dto.defaultCommissionValue;
     if (dto.commissionType) program.commissionType = dto.commissionType;
     if (dto.attributionModel) program.attributionModel = dto.attributionModel;
+    if (dto.attributionWindowDays !== undefined) program.attributionWindowDays = dto.attributionWindowDays;
     if (dto.cookieDurationDays !== undefined) program.cookieDurationDays = dto.cookieDurationDays;
+    if (dto.couponAttributionPriority !== undefined) program.couponAttributionPriority = dto.couponAttributionPriority;
+    if (dto.attributionConfig !== undefined) program.attributionConfig = dto.attributionConfig;
+    if (dto.minimumPayoutAmount !== undefined) program.minimumPayoutAmount = dto.minimumPayoutAmount;
+    if (dto.payoutSchedule !== undefined) program.payoutSchedule = dto.payoutSchedule;
+    if (dto.payoutDay !== undefined) program.payoutDay = dto.payoutDay;
+    if (dto.payoutMethods !== undefined) program.payoutMethods = dto.payoutMethods;
+    if (dto.logoUrl !== undefined) program.logoUrl = dto.logoUrl;
+    if (dto.bannerUrl !== undefined) program.bannerUrl = dto.bannerUrl;
 
     program.updatedAt = new Date();
 
@@ -121,6 +151,12 @@ export class ProgramsService {
 
   async remove(organizationId: string, programId: string, actorId: string) {
     const program = await this.findOne(organizationId, programId);
+    // Prevent deletion/archival if any affiliates have joined this program
+    const hasAffiliates = dbStore.programAffiliates.some((pa) => pa.programId === programId);
+    if (hasAffiliates) {
+      throw new BadRequestException('Cannot delete program with joined affiliates');
+    }
+
     program.deletedAt = new Date();
     program.status = ProgramStatus.ARCHIVED;
     this.audit(organizationId, actorId, 'PROGRAM_ARCHIVED', 'program', program.id, { name: program.name });

@@ -1,4 +1,4 @@
-import { SetMetadata } from '@nestjs/common';
+import { applyDecorators, SetMetadata } from '@nestjs/common';
 
 export const PERMISSIONS_KEY = 'permissions';
 export const PERMISSIONS_MODE_KEY = 'permissionsMode';
@@ -6,6 +6,7 @@ export const PERMISSIONS_MODE_KEY = 'permissionsMode';
 export const RequirePermissions = (...permissions: string[]) => SetMetadata(PERMISSIONS_KEY, permissions);
 export const RequireAllPermissions = (...permissions: string[]) => SetMetadata(PERMISSIONS_KEY, permissions);
 export const RequireAnyPermission = (...permissions: string[]) =>
-  SetMetadata(PERMISSIONS_MODE_KEY, 'ANY')(
+  applyDecorators(
     SetMetadata(PERMISSIONS_KEY, permissions),
+    SetMetadata(PERMISSIONS_MODE_KEY, 'ANY'),
   );

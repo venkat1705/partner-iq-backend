@@ -4,7 +4,7 @@ import { dbStore } from '../database/store';
 import { SecurityUtils } from '../common/utils/security.utils';
 
 async function testSdk() {
-  console.log('🧪 Testing @partneriq/sdk Integration...\n');
+  console.log('🧪 Testing @partneriq-io/sdk Integration...\n');
 
   // Seed DB
   const { org } = await runSeed();

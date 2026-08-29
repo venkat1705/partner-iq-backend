@@ -2,6 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateCol
 import {
   ApplicationStatus,
   AffiliateStatus,
+  AffiliateInvitationStatus,
   AttributionModel,
   AuditAction,
   CommissionType,
@@ -31,6 +32,30 @@ import {
   IntegrationEventStatus,
   IntegrationStatus,
   OrganizationIntegrationStatus,
+  CrmHealthStatus,
+  PartnerDealCommissionStatus,
+  PartnerDealStatus,
+  AssetBundleStatus,
+  AssetBundleVisibility,
+  AssetSourceType,
+  AssetStatus,
+  AssetType,
+  AffiliateAssetActivityType,
+  TierEvaluationPeriod,
+  TierDowngradeMode,
+  CommissionRateEffectiveStrategy,
+  TierTransitionType,
+  GamificationMetric,
+  MilestoneRewardType,
+  MilestoneResetBehavior,
+  MilestoneRewardStatus,
+  AutomationTriggerType,
+  AutomationWorkflowStatus,
+  AutomationNodeType,
+  AutomationActionType,
+  AutomationExecutionStatus,
+  AutomationStepStatus,
+  AutomationEmailDeliveryStatus,
 } from '../common/enums';
 import {
   RoleType,
@@ -38,6 +63,11 @@ import {
   ProgramAccessType,
   PolicyEffect,
 } from '../common/enums/rbac';
+import type {
+  NotificationCategory,
+  NotificationChannel,
+  NotificationPriority,
+} from '../modules/notifications/notifications.types';
 
 @Entity('users')
 export class User {
@@ -94,8 +124,8 @@ export class Organization {
   name!: string;
 
   @Index({ unique: true })
-  @Column({ type: 'varchar', length: 255 })
-  slug!: string;
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  slug?: string;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   website?: string;
@@ -208,6 +238,77 @@ export class AuthSession {
   createdAt!: Date;
 }
 
+@Entity('notifications')
+export class Notification {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  userId!: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  organizationId?: string;
+
+  @Column({ type: 'varchar', length: 50, default: 'system' })
+  type!: NotificationCategory;
+
+  @Column({ type: 'varchar', length: 255 })
+  title!: string;
+
+  @Column({ type: 'text' })
+  body!: string;
+
+  @Column({ type: 'varchar', length: 50, default: 'in_app' })
+  channel!: NotificationChannel;
+
+  @Column({ type: 'varchar', length: 50, default: 'normal' })
+  priority!: NotificationPriority;
+
+  @Column({ type: 'boolean', default: false })
+  isRead!: boolean;
+
+  @Column({ type: 'varchar', length: 2000, nullable: true })
+  actionUrl?: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  metadata?: Record<string, unknown>;
+
+  @CreateDateColumn()
+  createdAt!: string;
+}
+
+@Entity('notification_preferences')
+@Unique(['userId', 'organizationId'])
+export class NotificationPreference {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  userId!: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  organizationId?: string;
+
+  @Column({ type: 'boolean', default: true })
+  enabled!: boolean;
+
+  @Column({ type: 'simple-json' })
+  channels!: Record<NotificationChannel, boolean>;
+
+  @Column({ type: 'simple-json' })
+  categories!: Record<NotificationCategory, boolean>;
+
+  @CreateDateColumn()
+  createdAt?: Date;
+
+  @UpdateDateColumn()
+  updatedAt?: Date;
+}
+
 @Entity('programs')
 export class Program {
   @PrimaryGeneratedColumn('uuid')
@@ -242,10 +343,37 @@ export class Program {
   attributionModel!: AttributionModel;
 
   @Column({ type: 'int', default: 30 })
+  attributionWindowDays!: number;
+
+  @Column({ type: 'int', default: 30 })
   cookieDurationDays!: number;
+
+  @Column({ type: 'varchar', length: 40, default: 'PROMO_CODE' })
+  couponAttributionPriority!: 'PROMO_CODE' | 'AFFILIATE' | 'LAST_CLICK';
+
+  @Column({ type: 'simple-json', nullable: true })
+  attributionConfig?: Record<string, unknown>;
 
   @Column({ type: 'varchar', length: 20, default: 'AUTO' })
   affiliateApprovalMode!: string;
+
+  @Column({ type: 'bigint', default: 0 })
+  minimumPayoutAmount!: number;
+
+  @Column({ type: 'varchar', length: 20, default: 'MONTHLY' })
+  payoutSchedule!: string;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  payoutDay?: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  payoutMethods?: string[];
+
+  @Column({ type: 'varchar', length: 1000, nullable: true })
+  logoUrl?: string;
+
+  @Column({ type: 'varchar', length: 1000, nullable: true })
+  bannerUrl?: string;
 
   @Column({ type: 'uuid' })
   createdBy!: string;
@@ -330,8 +458,91 @@ export class ProgramAffiliate {
   @Column({ type: 'int', nullable: true })
   commissionOverride?: number;
 
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  commissionOverrideType?: string;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  source?: string;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  primaryChannel?: string;
+
+  @Column({ type: 'int', nullable: true })
+  termsVersionAccepted?: number;
+
+  @Column({ type: 'timestamp', nullable: true })
+  termsAcceptedAt?: Date;
+
+  @Column({ type: 'uuid', nullable: true })
+  invitedBy?: string;
+
   @Column({ type: 'timestamp' })
   joinedAt!: Date;
+}
+
+@Entity('affiliate_invitations')
+export class AffiliateInvitation {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationId!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  programId!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  email!: string;
+
+  @Column({ type: 'varchar', length: 150 })
+  partnerName!: string;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  affiliateType?: string;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  primaryChannel?: string;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  customChannel?: string;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  commissionOverrideType?: string;
+
+  @Column({ type: 'bigint', nullable: true })
+  commissionOverrideValue?: number;
+
+  @Column({ type: 'text', nullable: true })
+  personalMessage?: string;
+
+  @Column({ type: 'varchar', length: 50, default: AffiliateInvitationStatus.PENDING })
+  status!: AffiliateInvitationStatus;
+
+  @Column({ type: 'varchar', length: 255 })
+  tokenHash!: string;
+
+  @Column({ type: 'timestamp' })
+  expiresAt!: Date;
+
+  @Column({ type: 'uuid' })
+  invitedBy!: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  acceptedBy?: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  acceptedAt?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  revokedAt?: Date;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
 }
 
 @Entity('affiliate_applications')
@@ -410,6 +621,370 @@ export class TrackingLink {
 
   @Column({ type: 'varchar', length: 50, default: TrackingLinkStatus.ACTIVE })
   status!: TrackingLinkStatus;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+}
+
+@Entity('asset_tags')
+@Unique(['organizationId', 'name'])
+export class AssetTag {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationId!: string;
+
+  @Column({ type: 'varchar', length: 80 })
+  name!: string;
+
+  @Column({ type: 'varchar', length: 90 })
+  slug!: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+}
+
+@Entity('assets')
+export class Asset {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationId!: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  programId?: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 255 })
+  name!: string;
+
+  @Column({ type: 'text', nullable: true })
+  description?: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 50 })
+  assetType!: AssetType;
+
+  @Column({ type: 'varchar', length: 30, default: AssetSourceType.FILE })
+  sourceType!: AssetSourceType;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  contentType?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  fileName?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  originalFileName?: string;
+
+  @Column({ type: 'varchar', length: 30, nullable: true })
+  fileExtension?: string;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  mimeType?: string;
+
+  @Column({ type: 'bigint', nullable: true })
+  fileSize?: number;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  storageProvider?: string;
+
+  @Column({ type: 'varchar', length: 1000, nullable: true })
+  storageKey?: string;
+
+  @Column({ type: 'varchar', length: 2000, nullable: true })
+  storageUrl?: string;
+
+  @Column({ type: 'varchar', length: 2000, nullable: true })
+  thumbnailUrl?: string;
+
+  @Column({ type: 'varchar', length: 2000, nullable: true })
+  previewUrl?: string;
+
+  @Column({ type: 'text', nullable: true })
+  textContent?: string;
+
+  @Column({ type: 'text', nullable: true })
+  htmlContent?: string;
+
+  @Column({ type: 'varchar', length: 2000, nullable: true })
+  externalUrl?: string;
+
+  @Column({ type: 'int', nullable: true })
+  width?: number;
+
+  @Column({ type: 'int', nullable: true })
+  height?: number;
+
+  @Column({ type: 'int', nullable: true })
+  duration?: number;
+
+  @Index()
+  @Column({ type: 'varchar', length: 12, nullable: true })
+  language?: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 12, nullable: true })
+  country?: string;
+
+  @Column({ type: 'simple-array', nullable: true })
+  tags?: string[];
+
+  @Column({ type: 'simple-json', nullable: true })
+  metadata?: Record<string, unknown>;
+
+  @Index()
+  @Column({ type: 'varchar', length: 40, default: AssetStatus.DRAFT })
+  status!: AssetStatus;
+
+  @Column({ type: 'boolean', default: false })
+  isPublicToAffiliates!: boolean;
+
+  @Column({ type: 'boolean', default: true })
+  isDownloadable!: boolean;
+
+  @Column({ type: 'boolean', default: true })
+  isCopyable!: boolean;
+
+  @Column({ type: 'int', default: 1 })
+  version!: number;
+
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  checksum?: string;
+
+  @Column({ type: 'uuid' })
+  createdBy!: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  updatedBy?: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  deletedAt?: Date;
+}
+
+@Entity('asset_versions')
+@Unique(['assetId', 'versionNumber'])
+export class AssetVersion {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  assetId!: string;
+
+  @Column({ type: 'int' })
+  versionNumber!: number;
+
+  @Column({ type: 'varchar', length: 1000, nullable: true })
+  storageKey?: string;
+
+  @Column({ type: 'varchar', length: 2000, nullable: true })
+  storageUrl?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  fileName?: string;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  mimeType?: string;
+
+  @Column({ type: 'bigint', nullable: true })
+  fileSize?: number;
+
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  checksum?: string;
+
+  @Column({ type: 'uuid' })
+  createdBy!: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @Column({ type: 'varchar', length: 1000, nullable: true })
+  changeNotes?: string;
+
+  @Column({ type: 'boolean', default: false })
+  isCurrent!: boolean;
+}
+
+@Entity('asset_bundles')
+@Unique(['organizationId', 'slug'])
+export class AssetBundle {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationId!: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  programId?: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  campaignId?: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  name!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  slug!: string;
+
+  @Column({ type: 'text', nullable: true })
+  description?: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  coverImageAssetId?: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 40, default: AssetBundleStatus.DRAFT })
+  status!: AssetBundleStatus;
+
+  @Index()
+  @Column({ type: 'varchar', length: 60, default: AssetBundleVisibility.ALL_PROGRAM_AFFILIATES })
+  visibility!: AssetBundleVisibility;
+
+  @Column({ type: 'timestamp', nullable: true })
+  startDate?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  endDate?: Date;
+
+  @Column({ type: 'varchar', length: 12, nullable: true })
+  language?: string;
+
+  @Column({ type: 'varchar', length: 12, nullable: true })
+  country?: string;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  partnerTierId?: string;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  affiliateSegmentId?: string;
+
+  @Column({ type: 'simple-array', nullable: true })
+  affiliateIds?: string[];
+
+  @Column({ type: 'int', default: 1000 })
+  displayOrder!: number;
+
+  @Column({ type: 'boolean', default: false })
+  featured!: boolean;
+
+  @Column({ type: 'uuid' })
+  createdBy!: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  updatedBy?: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  deletedAt?: Date;
+}
+
+@Entity('asset_bundle_items')
+@Unique(['assetBundleId', 'assetId'])
+export class AssetBundleItem {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  assetBundleId!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  assetId!: string;
+
+  @Column({ type: 'int', default: 1000 })
+  displayOrder!: number;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  customTitle?: string;
+
+  @Column({ type: 'text', nullable: true })
+  customDescription?: string;
+
+  @Column({ type: 'boolean', default: false })
+  isFeatured!: boolean;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @Column({ type: 'uuid' })
+  createdBy!: string;
+}
+
+@Entity('affiliate_asset_activities')
+export class AffiliateAssetActivity {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationId!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  affiliateId!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  assetId!: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  bundleId?: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 40 })
+  activityType!: AffiliateAssetActivityType;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  idempotencyKey?: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @Column({ type: 'simple-json', nullable: true })
+  metadata?: Record<string, unknown>;
+}
+
+@Entity('affiliate_asset_favorites')
+@Unique(['affiliateId', 'assetId', 'bundleId'])
+export class AffiliateAssetFavorite {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 36 })
+  organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 36 })
+  affiliateId!: string;
+
+  @Column({ type: 'varchar', length: 36, nullable: true })
+  assetId?: string;
+
+  @Column({ type: 'varchar', length: 36, nullable: true })
+  bundleId?: string;
 
   @CreateDateColumn()
   createdAt!: Date;
@@ -503,6 +1078,9 @@ export class Attribution {
   @Column({ type: 'varchar', length: 50, default: AttributionModel.LAST_CLICK })
   model!: AttributionModel;
 
+  @Column({ type: 'simple-json', nullable: true })
+  breakdown?: Array<Record<string, unknown>>;
+
   @Column({ type: 'timestamp' })
   expiresAt!: Date;
 
@@ -528,11 +1106,20 @@ export class ApiKey {
   @Column({ type: 'varchar', length: 255 })
   keyHash!: string;
 
+  @Column({ type: 'varchar', length: 10, default: 'live' })
+  environment!: string;
+
   @Column({ type: 'simple-array' })
   scopes!: string[];
 
+  @Column({ type: 'varchar', length: 20, default: 'ACTIVE' })
+  status!: string;
+
   @Column({ type: 'timestamp', nullable: true })
   lastUsedAt?: Date;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  lastUsedIpHash?: string;
 
   @Column({ type: 'timestamp', nullable: true })
   expiresAt?: Date;
@@ -555,6 +1142,10 @@ export class IdempotencyKey {
   @Index()
   @Column({ type: 'uuid' })
   organizationId!: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  apiKeyId?: string;
 
   @Column({ type: 'varchar', length: 255 })
   key!: string;
@@ -604,6 +1195,15 @@ export class Conversion {
   @Column({ type: 'varchar', length: 10 })
   currency!: string;
 
+  @Column({ type: 'varchar', length: 10, default: 'live' })
+  environment!: string;
+
+  @Column({ type: 'varchar', length: 50, default: 'PURCHASE' })
+  type!: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  metadata?: any;
+
   @Column({ type: 'varchar', length: 255, nullable: true })
   productId?: string;
 
@@ -627,11 +1227,14 @@ export class CommissionRule {
   organizationId!: string;
 
   @Index()
-  @Column({ type: 'uuid' })
-  programId!: string;
+  @Column({ type: 'uuid', nullable: true })
+  programId?: string;
 
   @Column({ type: 'varchar', length: 255 })
   name!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  slug!: string;
 
   @Column({ type: 'int' })
   priority!: number;
@@ -644,6 +1247,15 @@ export class CommissionRule {
 
   @Column({ type: 'int' })
   commissionValue!: number;
+
+  @Column({ type: 'int', default: 30 })
+  holdPeriodDays!: number;
+
+  @Column({ type: 'int', default: 1 })
+  version!: number;
+
+  @Column({ type: 'varchar', length: 50, default: 'ACTIVE' })
+  status!: string;
 
   @Column({ type: 'boolean', default: true })
   active!: boolean;
@@ -1223,17 +1835,23 @@ export class PublicKey {
   organizationId!: string;
 
   @Index()
-  @Column({ type: 'uuid' })
-  programId!: string;
+  @Column({ type: 'uuid', nullable: true })
+  programId?: string;
 
   @Column({ type: 'varchar', length: 255 })
   key!: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  publicKey?: string;
 
   @Column({ type: 'simple-array' })
   allowedDomains!: string[];
 
   @Column({ type: 'varchar', length: 20 })
   environment!: string;
+
+  @Column({ type: 'varchar', length: 20, default: 'ACTIVE' })
+  status!: string;
 
   @CreateDateColumn()
   createdAt!: Date;
@@ -1441,9 +2059,16 @@ export class IntegrationOAuthState {
   @Column({ type: 'uuid' })
   integrationId!: string;
 
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  userId?: string;
+
   @Index({ unique: true })
   @Column({ type: 'varchar', length: 255 })
   state!: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  nonce?: string;
 
   @Column({ type: 'varchar', length: 500, nullable: true })
   redirectUrl?: string;
@@ -1456,6 +2081,331 @@ export class IntegrationOAuthState {
 
   @CreateDateColumn()
   createdAt!: Date;
+}
+
+@Entity('integration_platform_configs')
+@Unique(['provider'])
+export class IntegrationPlatformConfig {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column({ type: 'varchar', length: 80 })
+  provider!: string;
+
+  @Column({ type: 'varchar', length: 50, default: IntegrationStatus.ACTIVE })
+  status!: IntegrationStatus;
+
+  @Column({ type: 'varchar', length: 2000 })
+  redirectUri!: string;
+
+  @Column({ type: 'simple-array' })
+  requiredScopes!: string[];
+
+  @Column({ type: 'simple-array', nullable: true })
+  optionalScopes?: string[];
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  appId?: string;
+
+  @Column({ type: 'varchar', length: 50, default: IntegrationEnvironment.LIVE })
+  environment!: IntegrationEnvironment;
+
+  @Column({ type: 'uuid', nullable: true })
+  secretReferenceId?: string;
+
+  @Column({ type: 'varchar', length: 12, nullable: true })
+  clientSecretLast4?: string;
+
+  @Column({ type: 'uuid' })
+  updatedBy!: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
+@Entity('crm_pipeline_mappings')
+@Unique(['organizationIntegrationId', 'externalPipelineId'])
+export class CrmPipelineMapping {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationId!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationIntegrationId!: string;
+
+  @Column({ type: 'varchar', length: 80 })
+  provider!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  externalPipelineId!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  externalPipelineLabel!: string;
+
+  @Column({ type: 'simple-json' })
+  stageMappings!: Record<string, PartnerDealStatus>;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  closedWonStageId?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  closedLostStageId?: string;
+
+  @Column({ type: 'boolean', default: true })
+  isActive!: boolean;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
+@Entity('crm_field_mappings')
+@Unique(['organizationIntegrationId', 'partnerIqField'])
+export class CrmFieldMapping {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationId!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationIntegrationId!: string;
+
+  @Column({ type: 'varchar', length: 120 })
+  partnerIqField!: string;
+
+  @Column({ type: 'varchar', length: 120 })
+  externalField!: string;
+
+  @Column({ type: 'boolean', default: false })
+  required!: boolean;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
+@Entity('crm_entity_mappings')
+@Unique(['organizationIntegrationId', 'entityType', 'partnerIqEntityId'])
+export class CrmEntityMapping {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationId!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationIntegrationId!: string;
+
+  @Column({ type: 'varchar', length: 40 })
+  entityType!: 'CONTACT' | 'COMPANY' | 'DEAL' | 'OWNER';
+
+  @Column({ type: 'uuid' })
+  partnerIqEntityId!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  externalEntityId!: string;
+
+  @Column({ type: 'varchar', length: 80 })
+  externalEntityType!: string;
+
+  @Column({ type: 'int', default: 1 })
+  syncVersion!: number;
+
+  @Column({ type: 'timestamp', nullable: true })
+  lastSyncedAt?: Date;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
+@Entity('integration_sync_logs')
+export class IntegrationSyncLog {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationId!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationIntegrationId!: string;
+
+  @Column({ type: 'varchar', length: 80 })
+  provider!: string;
+
+  @Column({ type: 'varchar', length: 80 })
+  operation!: string;
+
+  @Column({ type: 'varchar', length: 40 })
+  entityType!: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  entityId?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  externalEntityId?: string;
+
+  @Column({ type: 'varchar', length: 20 })
+  direction!: 'INBOUND' | 'OUTBOUND' | 'HEALTH';
+
+  @Column({ type: 'varchar', length: 30 })
+  status!: 'STARTED' | 'SUCCEEDED' | 'FAILED' | 'RETRYING' | 'IGNORED';
+
+  @Column({ type: 'int', default: 0 })
+  attempt!: number;
+
+  @Column({ type: 'int', nullable: true })
+  durationMs?: number;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  errorCode?: string;
+
+  @Column({ type: 'text', nullable: true })
+  errorMessage?: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  metadata?: Record<string, unknown>;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+}
+
+@Entity('partner_deals')
+export class PartnerDeal {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationId!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  programId!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  affiliateId!: string;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  campaignId?: string;
+
+  @Column({ type: 'varchar', length: 40 })
+  dealRegistrationNumber!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  companyName!: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  companyDomain?: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  contactFirstName?: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  contactLastName?: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 255 })
+  contactEmail!: string;
+
+  @Column({ type: 'varchar', length: 80, nullable: true })
+  contactPhone?: string;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  contactJobTitle?: string;
+
+  @Column({ type: 'bigint', default: 0 })
+  estimatedValue!: number;
+
+  @Column({ type: 'bigint', nullable: true })
+  actualValue?: number;
+
+  @Column({ type: 'varchar', length: 10, default: 'USD' })
+  currency!: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  expectedCloseDate?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  actualCloseDate?: Date;
+
+  @Column({ type: 'varchar', length: 50, default: PartnerDealStatus.SUBMITTED })
+  status!: PartnerDealStatus;
+
+  @Column({ type: 'varchar', length: 80, nullable: true })
+  crmProvider?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  crmDealId?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  crmPipelineId?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  crmStageId?: string;
+
+  @Column({ type: 'varchar', length: 50, default: PartnerDealCommissionStatus.NOT_ELIGIBLE })
+  commissionStatus!: PartnerDealCommissionStatus;
+
+  @Column({ type: 'varchar', length: 50, default: 'PENDING' })
+  attributionStatus!: string;
+
+  @Column({ type: 'timestamp' })
+  submittedAt!: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  approvedAt?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  rejectedAt?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  closedAt?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  protectedUntil?: Date;
+
+  @Column({ type: 'simple-json', nullable: true })
+  duplicateSignals?: Record<string, unknown>;
+
+  @Column({ type: 'text', nullable: true })
+  notes?: string;
+
+  @Column({ type: 'text', nullable: true })
+  rejectionReason?: string;
+
+  @Column({ type: 'uuid' })
+  createdBy!: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  approvedBy?: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
 }
 
 @Entity('billing_plans')
@@ -1829,3 +2779,688 @@ export class BillingInvoice {
   @Column({ type: 'timestamp', nullable: true })
   paidDate?: Date;
 }
+
+@Entity('partner_tiers')
+@Unique(['organizationId', 'programId', 'code'])
+export class PartnerTier {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationId!: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  programId?: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  name!: string;
+
+  @Column({ type: 'varchar', length: 100 })
+  code!: string;
+
+  @Column({ type: 'varchar', length: 1000, nullable: true })
+  description?: string;
+
+  @Column({ type: 'int', default: 1 })
+  level!: number;
+
+  @Column({ type: 'int', default: 0 })
+  displayOrder!: number;
+
+  @Column({ type: 'varchar', length: 100, default: 'award' })
+  icon!: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  badge?: string;
+
+  @Column({ type: 'varchar', length: 50, default: 'blue' })
+  colorToken!: string;
+
+  @Column({ type: 'varchar', length: 50, default: TierEvaluationPeriod.LIFETIME })
+  evaluationPeriod!: TierEvaluationPeriod;
+
+  @Column({ type: 'varchar', length: 50, default: TierDowngradeMode.DOWNGRADE_NEXT_PERIOD })
+  downgradeMode!: TierDowngradeMode;
+
+  @Column({ type: 'int', default: 7 })
+  gracePeriodDays!: number;
+
+  @Column({ type: 'varchar', length: 50, default: CommissionRateEffectiveStrategy.FUTURE_CONVERSIONS_ONLY })
+  commissionRateEffectiveStrategy!: CommissionRateEffectiveStrategy;
+
+  @Column({ type: 'int', nullable: true })
+  commissionRateOverride?: number; // In basis points (e.g. 2000 = 20%)
+
+  @Column({ type: 'int', nullable: true })
+  fixedCommissionOverride?: number; // In cents
+
+  @Column({ type: 'simple-json', nullable: true })
+  conditions?: Record<string, any>;
+
+  @Column({ type: 'simple-json', nullable: true })
+  rewardsConfig?: Record<string, any>;
+
+  @Column({ type: 'boolean', default: false })
+  isDefault!: boolean;
+
+  @Column({ type: 'boolean', default: true })
+  isActive!: boolean;
+
+  @Column({ type: 'boolean', default: true })
+  isVisibleToAffiliate!: boolean;
+
+  @Column({ type: 'uuid', nullable: true })
+  createdBy?: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  updatedBy?: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  deletedAt?: Date;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
+@Entity('affiliate_tiers')
+@Unique(['organizationId', 'programId', 'affiliateId'])
+export class AffiliateTier {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 36 })
+  organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 36 })
+  programId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 36 })
+  affiliateId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 36 })
+  currentTierId!: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  previousTierId?: string;
+
+  @Column({ type: 'timestamp' })
+  effectiveFrom!: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  effectiveTo?: Date;
+
+  @Column({ type: 'boolean', default: false })
+  isLocked!: boolean;
+
+  @Column({ type: 'uuid', nullable: true })
+  lockedBy?: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  lockedAt?: Date;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  lockReason?: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  gracePeriodExpiresAt?: Date;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
+@Entity('affiliate_tier_histories')
+export class AffiliateTierHistory {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationId!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  programId!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  affiliateId!: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  previousTierId?: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  newTierId!: string;
+
+  @Column({ type: 'varchar', length: 50, default: TierTransitionType.AUTOMATIC_UPGRADE })
+  transitionType!: TierTransitionType;
+
+  @Column({ type: 'varchar', length: 500 })
+  reason!: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  metricSnapshot?: Record<string, any>;
+
+  @Column({ type: 'simple-json', nullable: true })
+  ruleSnapshot?: Record<string, any>;
+
+  @Column({ type: 'int', nullable: true })
+  effectiveCommissionRate?: number;
+
+  @Column({ type: 'uuid', nullable: true })
+  createdBy?: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+}
+
+@Entity('milestones')
+@Unique(['organizationId', 'programId', 'code'])
+export class Milestone {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationId!: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  programId?: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  name!: string;
+
+  @Column({ type: 'varchar', length: 100 })
+  code!: string;
+
+  @Column({ type: 'varchar', length: 1000, nullable: true })
+  description?: string;
+
+  @Column({ type: 'varchar', length: 50, default: GamificationMetric.APPROVED_CONVERSIONS })
+  metric!: GamificationMetric;
+
+  @Column({ type: 'varchar', length: 50, default: 'GREATER_THAN_OR_EQUAL' })
+  operator!: string;
+
+  @Column({ type: 'int' })
+  targetValue!: number;
+
+  @Column({ type: 'int', nullable: true })
+  secondaryValue?: number;
+
+  @Column({ type: 'varchar', length: 50, default: 'LIFETIME' })
+  period!: string;
+
+  @Column({ type: 'varchar', length: 50, default: MilestoneResetBehavior.NONE })
+  resetBehavior!: MilestoneResetBehavior;
+
+  @Column({ type: 'boolean', default: false })
+  isRepeatable!: boolean;
+
+  @Column({ type: 'int', nullable: true })
+  repeatInterval?: number;
+
+  @Column({ type: 'varchar', length: 50, default: MilestoneRewardType.BADGE })
+  rewardType!: MilestoneRewardType;
+
+  @Column({ type: 'simple-json', nullable: true })
+  rewardConfig?: Record<string, any>;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  badgeIcon?: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  badgeName?: string;
+
+  @Column({ type: 'boolean', default: true })
+  isActive!: boolean;
+
+  @Column({ type: 'int', default: 0 })
+  displayOrder!: number;
+
+  @Column({ type: 'timestamp', nullable: true })
+  startDate?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  endDate?: Date;
+
+  @Column({ type: 'uuid', nullable: true })
+  createdBy?: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  updatedBy?: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
+@Entity('affiliate_milestone_achievements')
+@Unique(['organizationId', 'affiliateId', 'milestoneId', 'periodKey'])
+export class AffiliateMilestoneAchievement {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 36 })
+  organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 36 })
+  programId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 36 })
+  affiliateId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 36 })
+  milestoneId!: string;
+
+  @Column({ type: 'varchar', length: 50, default: 'LIFETIME' })
+  periodKey!: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  periodStart?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  periodEnd?: Date;
+
+  @Column({ type: 'int' })
+  metricValue!: number;
+
+  @Column({ type: 'int' })
+  targetValue!: number;
+
+  @Column({ type: 'timestamp' })
+  achievedAt!: Date;
+
+  @Column({ type: 'varchar', length: 50, default: MilestoneRewardStatus.COMPLETED })
+  rewardStatus!: MilestoneRewardStatus;
+
+  @Column({ type: 'timestamp', nullable: true })
+  rewardProcessedAt?: Date;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  rewardError?: string;
+
+  @Index({ unique: true })
+  @Column({ type: 'varchar', length: 191 })
+  idempotencyKey!: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+}
+
+@Entity('affiliate_performance_summaries')
+@Unique(['organizationId', 'programId', 'affiliateId', 'periodType', 'periodKey'])
+export class AffiliatePerformanceSummary {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 36 })
+  organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 36 })
+  programId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 36 })
+  affiliateId!: string;
+
+  @Column({ type: 'varchar', length: 50, default: 'LIFETIME' })
+  periodType!: string;
+
+  @Column({ type: 'varchar', length: 50, default: 'LIFETIME' })
+  periodKey!: string;
+
+  @Column({ type: 'timestamp' })
+  periodStart!: Date;
+
+  @Column({ type: 'timestamp' })
+  periodEnd!: Date;
+
+  @Column({ type: 'int', default: 0 })
+  clicks!: number;
+
+  @Column({ type: 'int', default: 0 })
+  trackingLinksCreated!: number;
+
+  @Column({ type: 'int', default: 0 })
+  approvedConversions!: number;
+
+  @Column({ type: 'int', default: 0 })
+  revenue!: number; // In cents
+
+  @Column({ type: 'int', default: 0 })
+  attributedRevenue!: number; // In cents
+
+  @Column({ type: 'int', default: 0 })
+  commissionEarned!: number; // In cents
+
+  @Column({ type: 'int', default: 0 })
+  qualifiedLeads!: number;
+
+  @Column({ type: 'int', default: 0 })
+  closedWonDeals!: number;
+
+  @Column({ type: 'int', default: 0 })
+  closedWonRevenue!: number; // In cents
+
+  @Column({ type: 'timestamp', nullable: true })
+  lastActivityAt?: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
+@Entity('automation_workflows')
+export class AutomationWorkflow {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationId!: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  programId?: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  name!: string;
+
+  @Column({ type: 'varchar', length: 1000, nullable: true })
+  description?: string;
+
+  @Column({ type: 'varchar', length: 50, default: AutomationTriggerType.AFFILIATE_JOINED_PROGRAM })
+  triggerType!: AutomationTriggerType;
+
+  @Column({ type: 'varchar', length: 50, default: AutomationWorkflowStatus.DRAFT })
+  status!: AutomationWorkflowStatus;
+
+  @Column({ type: 'int', default: 1 })
+  version!: number;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  goalType?: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  goalConfig?: Record<string, any>;
+
+  @Column({ type: 'int', default: 2 })
+  maxEmailsPerDay!: number;
+
+  @Column({ type: 'int', default: 5 })
+  maxEmailsPerWeek!: number;
+
+  @Column({ type: 'boolean', default: true })
+  quietHoursEnabled!: boolean;
+
+  @Column({ type: 'varchar', length: 10, default: '22:00' })
+  quietHoursStart!: string;
+
+  @Column({ type: 'varchar', length: 10, default: '08:00' })
+  quietHoursEnd!: string;
+
+  @Column({ type: 'simple-json' })
+  nodes!: Array<{
+    id: string;
+    type: AutomationNodeType;
+    name?: string;
+    config: Record<string, any>;
+    position?: { x: number; y: number };
+  }>;
+
+  @Column({ type: 'simple-json' })
+  edges!: Array<{
+    id: string;
+    sourceNodeId: string;
+    targetNodeId: string;
+    branchKey?: string;
+  }>;
+
+  @Column({ type: 'uuid', nullable: true })
+  createdBy?: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  updatedBy?: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
+@Entity('automation_workflow_versions')
+@Unique(['workflowId', 'version'])
+export class AutomationWorkflowVersion {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  workflowId!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationId!: string;
+
+  @Column({ type: 'int' })
+  version!: number;
+
+  @Column({ type: 'simple-json' })
+  definition!: Record<string, any>;
+
+  @Column({ type: 'uuid', nullable: true })
+  publishedBy?: string;
+
+  @CreateDateColumn()
+  publishedAt!: Date;
+}
+
+@Entity('automation_executions')
+export class AutomationExecution {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationId!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  workflowId!: string;
+
+  @Column({ type: 'int', default: 1 })
+  workflowVersion!: number;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  affiliateId!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  programId!: string;
+
+  @Column({ type: 'varchar', length: 50, default: AutomationExecutionStatus.RUNNING })
+  status!: AutomationExecutionStatus;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  currentNodeId?: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  context?: Record<string, any>;
+
+  @Column({ type: 'timestamp' })
+  startedAt!: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  completedAt?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  cancelledAt?: Date;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  cancelReason?: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
+@Entity('automation_scheduled_steps')
+export class AutomationScheduledStep {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  executionId!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  workflowId!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationId!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  affiliateId!: string;
+
+  @Column({ type: 'varchar', length: 100 })
+  nodeId!: string;
+
+  @Index()
+  @Column({ type: 'timestamp' })
+  executeAt!: Date;
+
+  @Column({ type: 'varchar', length: 50, default: AutomationStepStatus.PENDING })
+  status!: AutomationStepStatus;
+
+  @Column({ type: 'int', default: 0 })
+  attemptCount!: number;
+
+  @Column({ type: 'varchar', length: 1000, nullable: true })
+  lastError?: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
+@Entity('automation_email_templates')
+@Unique(['organizationId', 'code'])
+export class AutomationEmailTemplate {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationId!: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  programId?: string;
+
+  @Column({ type: 'varchar', length: 100 })
+  code!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  name!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  subject!: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  preheader?: string;
+
+  @Column({ type: 'text' })
+  bodyHtml!: string;
+
+  @Column({ type: 'text' })
+  bodyText!: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  ctaText?: string;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  ctaUrl?: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  senderName?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  replyTo?: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
+@Entity('automation_email_logs')
+export class AutomationEmailLog {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationId!: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  executionId?: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  affiliateId!: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  templateId?: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  toEmail!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  subject!: string;
+
+  @Column({ type: 'varchar', length: 50, default: AutomationEmailDeliveryStatus.SENT })
+  status!: AutomationEmailDeliveryStatus;
+
+  @Column({ type: 'timestamp', nullable: true })
+  sentAt?: Date;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  error?: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+}
+

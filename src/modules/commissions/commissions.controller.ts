@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CommissionsService } from './commissions.service';
-import { CreateCommissionRuleDto } from './dto/commission.dto';
+import { CreateCommissionRuleDto, TestCommissionRulesDto } from './dto/commission.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { OrganizationGuard } from '../../common/guards/organization.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
@@ -43,5 +43,37 @@ export class CommissionsController {
   @ApiOperation({ summary: 'List commission rules' })
   async getRules(@Param('organizationId') organizationId: string) {
     return this.commissionsService.getRules(organizationId);
+  }
+
+  @Get('programs/:programId/rules')
+  @RequirePermissions('view.commissions')
+  @ApiOperation({ summary: 'List commission rules for a program' })
+  async getProgramRules(
+    @Param('organizationId') organizationId: string,
+    @Param('programId') programId: string,
+  ) {
+    return this.commissionsService.getRules(organizationId, programId);
+  }
+
+  @Post('programs/:programId/rules')
+  @RequirePermissions('manage.commissions')
+  @ApiOperation({ summary: 'Create program-scoped commission rule' })
+  async createProgramRule(
+    @Param('organizationId') organizationId: string,
+    @Param('programId') programId: string,
+    @Body() dto: CreateCommissionRuleDto,
+  ) {
+    return this.commissionsService.createRule(organizationId, { ...dto, programId });
+  }
+
+  @Post('programs/:programId/rules/test')
+  @RequirePermissions('view.commissions')
+  @ApiOperation({ summary: 'Test program-scoped commission rules' })
+  async testProgramRules(
+    @Param('organizationId') organizationId: string,
+    @Param('programId') programId: string,
+    @Body() dto: TestCommissionRulesDto,
+  ) {
+    return this.commissionsService.testRules(organizationId, programId, dto);
   }
 }
