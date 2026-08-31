@@ -9,6 +9,7 @@ import { dbStore } from '../../database/store';
 import { RequestWithUser } from '../interfaces/request-with-user.interface';
 import { MembershipStatus } from '../enums/rbac';
 import { Role } from '../enums';
+import { EnvironmentUtils } from '../utils/environment.utils';
 
 @Injectable()
 export class OrganizationGuard implements CanActivate {
@@ -68,11 +69,27 @@ export class OrganizationGuard implements CanActivate {
     }
 
     // Attach role and tenantId to user payload
+    const headerEnvRaw = (request.headers['x-partneriq-environment'] || request.query?.environment) as string | undefined;
+    const environment = EnvironmentUtils.normalizeEnvironment(headerEnvRaw || 'LIVE');
+
     request.user.organizationId = organizationId;
     request.user.role = membership.role;
     request.user.programAccessType = membership.programAccessType;
     request.user.programIds = membership.programIds || [];
     request.tenantId = organizationId;
+    request.environment = environment;
+
+    request.partnerIqContext = {
+      userId: user.userId,
+      email: user.email,
+      organizationId,
+      environment,
+      isApiKey: false,
+      role: membership.role,
+      roles: [membership.role],
+      programAccessType: membership.programAccessType,
+      programIds: membership.programIds || [],
+    };
 
     return true;
   }

@@ -16,15 +16,19 @@ export class SubscriptionService {
   async current(organizationId: string) {
     await this.plans.ensureDefaultPlans();
     this.expireStalePendingCheckouts(organizationId);
+    this.expireStaleTrials(organizationId);
     const subscription = dbStore.billingSubscriptions
       .filter((item) =>
         item.organizationId === organizationId &&
         item.rowStatus === 'ACTIVE' &&
         [
+          SubscriptionStatus.TRIALING,
           SubscriptionStatus.ACTIVE,
           SubscriptionStatus.PAST_DUE,
           SubscriptionStatus.CANCEL_PENDING,
           SubscriptionStatus.PAUSED,
+          SubscriptionStatus.TRIAL_EXPIRED,
+          SubscriptionStatus.RESTRICTED,
         ].includes(item.status as SubscriptionStatus),
       )
       .sort((a, b) => {
@@ -180,6 +184,23 @@ export class SubscriptionService {
         item.status = SubscriptionStatus.EXPIRED;
         item.rowStatus = 'INACTIVE';
         item.modifiedDate = new Date();
+      });
+  }
+
+  private expireStaleTrials(organizationId: string) {
+    const now = new Date();
+    dbStore.billingSubscriptions
+      .filter((item) =>
+        item.organizationId === organizationId &&
+        item.rowStatus === 'ACTIVE' &&
+        item.status === SubscriptionStatus.TRIALING,
+      )
+      .forEach((item) => {
+        const trialEnd = item.trialEndsAt || item.trialEnd;
+        if (trialEnd && new Date(trialEnd).getTime() <= now.getTime()) {
+          item.status = SubscriptionStatus.TRIAL_EXPIRED;
+          item.modifiedDate = now;
+        }
       });
   }
 

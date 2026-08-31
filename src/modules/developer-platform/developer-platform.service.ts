@@ -2,7 +2,8 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { v4 as uuidv4 } from 'uuid';
 import { dbStore, PublicKeyEntity } from '../../database/store';
 import { SecurityUtils } from '../../common/utils/security.utils';
-import { AuditAction, TrackingLinkStatus } from '../../common/enums';
+import { AuditAction, EnvironmentType, TrackingLinkStatus } from '../../common/enums';
+import { EnvironmentUtils } from '../../common/utils/environment.utils';
 import {
   AttachOrderDto,
   BrowserReferralDto,
@@ -12,11 +13,16 @@ import {
 
 @Injectable()
 export class DeveloperPlatformService {
-  listPrograms(organizationId: string, environment: 'test' | 'live') {
+  listPrograms(organizationId: string, environment: 'test' | 'live' | EnvironmentType) {
+    const currentEnvironment = EnvironmentUtils.normalizeEnvironment(environment);
     return this.withCursor(
       dbStore.programs
-        .filter((p) => p.organizationId === organizationId && !p.deletedAt)
-        .map((program) => ({ ...program, environment })),
+        .filter((p) =>
+          p.organizationId === organizationId &&
+          (p.environment === currentEnvironment || (!p.environment && currentEnvironment === EnvironmentType.LIVE)) &&
+          !p.deletedAt,
+        )
+        .map((program) => ({ ...program, environment: currentEnvironment === EnvironmentType.TEST ? 'test' : 'live' })),
     );
   }
 

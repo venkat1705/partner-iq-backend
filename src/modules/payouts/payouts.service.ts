@@ -1,10 +1,11 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { dbStore, PayoutBatchEntity, PayoutItemEntity } from '../../database/store';
-import { PayoutStatus, LedgerEntryType, AuditAction, FraudDecision } from '../../common/enums';
+import { PayoutStatus, LedgerEntryType, AuditAction, FraudDecision, EnvironmentType } from '../../common/enums';
 import { LedgerService } from '../ledger/ledger.service';
 import { FraudService } from '../fraud/fraud.service';
 import { CreatePayoutBatchDto } from './dto/payout.dto';
+import { EnvironmentUtils } from '../../common/utils/environment.utils';
 
 @Injectable()
 export class PayoutsService {
@@ -13,14 +14,23 @@ export class PayoutsService {
     private readonly fraudService: FraudService,
   ) {}
 
-  async createBatch(organizationId: string, createdByUserId: string, dto: CreatePayoutBatchDto) {
+  async createBatch(
+    organizationId: string,
+    createdByUserId: string,
+    dto: CreatePayoutBatchDto,
+    environment: EnvironmentType = EnvironmentType.LIVE,
+  ) {
     const batchId = uuidv4();
     let totalAmount = 0;
     const items: PayoutItemEntity[] = [];
 
-    // Find all affiliates with positive earned balances
+    // Find all affiliates with positive earned balances in this environment
     const accounts = dbStore.ledgerAccounts.filter(
-      (a) => a.organizationId === organizationId && a.type === 'EARNED' && a.balance > 0,
+      (a) =>
+        a.organizationId === organizationId &&
+        (a.environment === environment || (!a.environment && environment === EnvironmentType.LIVE)) &&
+        a.type === 'EARNED' &&
+        a.balance > 0,
     );
 
     const eligibleAccounts = dto.affiliateIds
@@ -28,7 +38,7 @@ export class PayoutsService {
       : accounts;
 
     if (eligibleAccounts.length === 0) {
-      throw new BadRequestException('No eligible affiliate balances available for payout');
+      throw new BadRequestException(`No eligible affiliate balances available for payout in ${environment} mode.`);
     }
 
     for (const acc of eligibleAccounts) {
@@ -39,6 +49,7 @@ export class PayoutsService {
         id: uuidv4(),
         batchId,
         organizationId,
+        environment,
         affiliateId: acc.affiliateId!,
         amount,
         currency: acc.currency,
@@ -52,6 +63,7 @@ export class PayoutsService {
     const batch: PayoutBatchEntity = {
       id: batchId,
       organizationId,
+      environment,
       status: PayoutStatus.DRAFT,
       totalAmount,
       currency: 'USD',
@@ -76,19 +88,28 @@ export class PayoutsService {
       action: AuditAction.PAYOUT_CREATED,
       resourceType: 'payout_batch',
       resourceId: batch.id,
+      metadata: { environment, totalAmount },
       createdAt: new Date(),
     });
 
     return { batch, items };
   }
 
-  async processBatch(organizationId: string, batchId: string, actorId: string) {
+  async processBatch(
+    organizationId: string,
+    batchId: string,
+    actorId: string,
+    environment?: EnvironmentType,
+  ) {
     const batch = dbStore.payoutBatches.find(
-      (b) => b.id === batchId && b.organizationId === organizationId,
+      (b) =>
+        b.id === batchId &&
+        b.organizationId === organizationId &&
+        (!environment || b.environment === environment || (!b.environment && environment === EnvironmentType.LIVE)),
     );
 
     if (!batch) {
-      throw new NotFoundException('Payout batch not found');
+      throw new NotFoundException('Payout batch not found in current environment');
     }
 
     const fraudResult = await this.fraudService.evaluatePayout(batch);
@@ -101,16 +122,23 @@ export class PayoutsService {
     batch.status = PayoutStatus.COMPLETED;
     batch.updatedAt = new Date();
 
+    const isSimulated = batch.environment === EnvironmentType.TEST;
     const items = dbStore.payoutItems.filter((i) => i.batchId === batchId);
+
     for (const item of items) {
       item.status = PayoutStatus.COMPLETED;
+      if (isSimulated) {
+        item.providerReference = `sim_test_${uuidv4().substring(0, 8)}`;
+      }
 
       // Post payout ledger transaction
       await this.ledgerService.recordTransaction(
         organizationId,
         item.affiliateId,
         LedgerEntryType.PAYOUT_COMPLETED,
-        `Payout batch ${batchId} executed`,
+        isSimulated
+          ? `[SIMULATED TEST] Payout batch ${batchId} executed`
+          : `Payout batch ${batchId} executed`,
         item.id,
         item.amount,
       );
@@ -121,17 +149,39 @@ export class PayoutsService {
       organizationId,
       actorType: 'USER',
       actorId,
-      action: AuditAction.PAYOUT_APPROVED,
+      action: AuditAction.PAYOUT_COMPLETED,
       resourceType: 'payout_batch',
       resourceId: batch.id,
       metadata: {
-        itemCount: items.length,
+        environment: batch.environment,
+        simulated: isSimulated,
         totalAmount: batch.totalAmount,
-        currency: batch.currency,
       },
       createdAt: new Date(),
     });
 
+    return { success: true, batch, isSimulated };
+  }
+
+  async findAll(organizationId: string, environment: EnvironmentType = EnvironmentType.LIVE) {
+    return dbStore.payoutBatches.filter(
+      (b) =>
+        b.organizationId === organizationId &&
+        (b.environment === environment || (!b.environment && environment === EnvironmentType.LIVE)),
+    );
+  }
+
+  async findOne(organizationId: string, batchId: string, environment?: EnvironmentType) {
+    const batch = dbStore.payoutBatches.find(
+      (b) =>
+        b.id === batchId &&
+        b.organizationId === organizationId &&
+        (!environment || b.environment === environment || (!b.environment && environment === EnvironmentType.LIVE)),
+    );
+    if (!batch) {
+      throw new NotFoundException('Payout batch not found');
+    }
+    const items = dbStore.payoutItems.filter((i) => i.batchId === batchId);
     return { batch, items };
   }
 
@@ -163,7 +213,11 @@ export class PayoutsService {
     return csv;
   }
 
-  async getBatches(organizationId: string) {
-    return dbStore.payoutBatches.filter((b) => b.organizationId === organizationId);
+  async getBatches(organizationId: string, environment: EnvironmentType = EnvironmentType.LIVE) {
+    return dbStore.payoutBatches.filter(
+      (b) =>
+        b.organizationId === organizationId &&
+        (b.environment === environment || (!b.environment && environment === EnvironmentType.LIVE)),
+    );
   }
 }

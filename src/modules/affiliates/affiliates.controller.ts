@@ -16,6 +16,9 @@ import { OrganizationGuard } from '../../common/guards/organization.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { CurrentEnvironment } from '../../common/decorators/environment.decorator';
+import { EnvironmentGuard } from '../../common/guards/environment.guard';
+import { EnvironmentType } from '../../common/enums';
 import type { AuthUserPayload } from '../../common/interfaces/request-with-user.interface';
 
 @ApiTags('Affiliates & Applications')
@@ -24,7 +27,7 @@ export class AffiliatesController {
   constructor(private readonly affiliatesService: AffiliatesService) {}
 
   @Post('api/v1/organizations/:organizationId/affiliates')
-  @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+  @UseGuards(JwtAuthGuard, OrganizationGuard, EnvironmentGuard, PermissionsGuard)
   @RequirePermissions('manage.affiliates')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Add affiliate directly to organization' })
@@ -32,33 +35,38 @@ export class AffiliatesController {
     @Param('organizationId') organizationId: string,
     @Body() dto: CreateAffiliateDto,
     @CurrentUser() user: AuthUserPayload,
+    @CurrentEnvironment() environment: EnvironmentType,
   ) {
-    return this.affiliatesService.create(organizationId, dto, user.userId);
+    return this.affiliatesService.create(organizationId, dto, user.userId, false, environment);
   }
 
   @Get('api/v1/organizations/:organizationId/affiliates')
-  @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+  @UseGuards(JwtAuthGuard, OrganizationGuard, EnvironmentGuard, PermissionsGuard)
   @RequirePermissions('manage.affiliates')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List all affiliates for organization' })
-  async findAll(@Param('organizationId') organizationId: string) {
-    return this.affiliatesService.findAll(organizationId);
+  async findAll(
+    @Param('organizationId') organizationId: string,
+    @CurrentEnvironment() environment: EnvironmentType,
+  ) {
+    return this.affiliatesService.findAll(organizationId, environment);
   }
 
   @Get('api/v1/organizations/:organizationId/affiliates/:affiliateId')
-  @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+  @UseGuards(JwtAuthGuard, OrganizationGuard, EnvironmentGuard, PermissionsGuard)
   @RequirePermissions('manage.affiliates')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get specific affiliate details' })
   async findOne(
     @Param('organizationId') organizationId: string,
     @Param('affiliateId') affiliateId: string,
+    @CurrentEnvironment() environment: EnvironmentType,
   ) {
-    return this.affiliatesService.findOne(organizationId, affiliateId);
+    return this.affiliatesService.findOne(organizationId, affiliateId, environment);
   }
 
   @Post('api/v1/organizations/:organizationId/affiliate-invitations')
-  @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+  @UseGuards(JwtAuthGuard, OrganizationGuard, EnvironmentGuard, PermissionsGuard)
   @RequirePermissions('manage.affiliates')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Invite affiliate partner to a program' })
@@ -66,17 +74,21 @@ export class AffiliatesController {
     @Param('organizationId') organizationId: string,
     @Body() dto: CreateAffiliateInvitationDto,
     @CurrentUser() user: AuthUserPayload,
+    @CurrentEnvironment() environment: EnvironmentType,
   ) {
-    return this.affiliatesService.inviteAffiliate(organizationId, dto, user.userId);
+    return this.affiliatesService.inviteAffiliate(organizationId, dto, user.userId, environment);
   }
 
   @Get('api/v1/organizations/:organizationId/affiliate-invitations')
-  @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+  @UseGuards(JwtAuthGuard, OrganizationGuard, EnvironmentGuard, PermissionsGuard)
   @RequirePermissions('manage.affiliates')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List affiliate invitations' })
-  async listAffiliateInvitations(@Param('organizationId') organizationId: string) {
-    return this.affiliatesService.listInvitations(organizationId);
+  async listAffiliateInvitations(
+    @Param('organizationId') organizationId: string,
+    @CurrentEnvironment() environment: EnvironmentType,
+  ) {
+    return this.affiliatesService.listInvitations(organizationId, environment);
   }
 
   @Post('api/v1/organizations/:organizationId/affiliate-invitations/:invitationId/resend')

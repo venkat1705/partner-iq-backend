@@ -7,10 +7,12 @@ import { RequirePermissions } from '../../../common/decorators/require-permissio
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import type { AuthUserPayload } from '../../../common/interfaces/request-with-user.interface';
 import { BillingService } from '../services/billing.service';
-import { CheckoutDto, VerifyPaymentDto } from '../dto/billing.dto';
+import { CheckoutDto, PricingPreviewDto, ValidateBillingCouponDto, VerifyPaymentDto } from '../dto/billing.dto';
 import { SubscriptionService } from '../services/subscription.service';
 import { PaymentService } from '../services/payment.service';
 import { InvoiceService } from '../services/invoice.service';
+import { TrialService } from '../services/trial.service';
+import { BillingPricingService } from '../services/billing-pricing.service';
 
 @ApiTags('Organization Billing')
 @Controller('api/v1/organizations/:organizationId/billing')
@@ -22,7 +24,38 @@ export class BillingController {
     private readonly subscriptions: SubscriptionService,
     private readonly payments: PaymentService,
     private readonly invoices: InvoiceService,
+    private readonly trialService: TrialService,
+    private readonly pricing: BillingPricingService,
   ) {}
+
+  @Get('trial')
+  @RequirePermissions('billing.view')
+  @ApiOperation({ summary: 'Get trial status and countdown' })
+  getTrialStatus(@Param('organizationId') organizationId: string) {
+    return this.trialService.getTrialStatus(organizationId);
+  }
+
+  @Post('trial/start')
+  @RequirePermissions('billing.subscribe')
+  @ApiOperation({ summary: 'Start 14-day free trial for organization' })
+  startTrial(
+    @Param('organizationId') organizationId: string,
+    @CurrentUser() user: AuthUserPayload,
+    @Body() body?: { planCode?: string },
+  ) {
+    return this.trialService.startTrial(organizationId, user.userId, body?.planCode);
+  }
+
+  @Post('trial/extend')
+  @RequirePermissions('billing.manage')
+  @ApiOperation({ summary: 'Admin extension of trial' })
+  extendTrial(
+    @Param('organizationId') organizationId: string,
+    @CurrentUser() user: AuthUserPayload,
+    @Body() body: { days: number },
+  ) {
+    return this.trialService.extendTrial(organizationId, body.days, user.userId);
+  }
 
   @Get('subscription')
   @RequirePermissions('billing.view')
@@ -41,6 +74,20 @@ export class BillingController {
     @Headers('idempotency-key') idempotencyKey?: string,
   ) {
     return this.billing.checkout(organizationId, user.userId, dto, idempotencyKey);
+  }
+
+  @Post('pricing/preview')
+  @RequirePermissions('billing.view')
+  @ApiOperation({ summary: 'Preview authoritative billing price with optional coupon' })
+  pricingPreview(@Param('organizationId') organizationId: string, @Body() dto: PricingPreviewDto) {
+    return this.pricing.quote({ organizationId, ...dto });
+  }
+
+  @Post('coupons/validate')
+  @RequirePermissions('billing.view')
+  @ApiOperation({ summary: 'Validate a PartnerIQ billing coupon and return a safe customer message' })
+  validateCoupon(@Param('organizationId') organizationId: string, @Body() dto: ValidateBillingCouponDto) {
+    return this.pricing.quote({ organizationId, ...dto });
   }
 
   @Post('verify')

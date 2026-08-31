@@ -32,6 +32,7 @@ import {
   IntegrationStatus,
   FraudSensitivity,
   FraudSignalCode,
+  EnvironmentType,
 } from '../../common/enums';
 import { MembershipStatus, RoleType, ProgramAccessType } from '../../common/enums/rbac';
 import { PERMISSIONS, BUILT_IN_ROLES } from '../../common/constants/permission-catalog';
@@ -269,7 +270,7 @@ export async function runSeed() {
         name: dk.name,
         prefix: dk.prefix,
         keyHash: hash,
-        environment: dk.environment,
+        environment: dk.environment === 'test' ? EnvironmentType.TEST : EnvironmentType.LIVE,
         scopes: [
           'programs:read',
           'conversions:write',

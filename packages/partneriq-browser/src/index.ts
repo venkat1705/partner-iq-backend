@@ -101,6 +101,18 @@ export const PartnerIQ = {
   },
 };
 
+type PartnerIQApiPayload = {
+  success?: boolean;
+  data?: {
+    anonymousId?: string;
+    attributionId?: string;
+    [key: string]: unknown;
+  };
+  anonymousId?: string;
+  attributionId?: string;
+  error?: { message?: string };
+};
+
 async function request(path: string, body: unknown) {
   const cfg = requireState();
   const response = await fetch(`${cfg.apiUrl}${path}`, {
@@ -113,7 +125,7 @@ async function request(path: string, body: unknown) {
     body: JSON.stringify(body),
     credentials: 'omit',
   });
-  const payload = await response.json().catch(() => null);
+  const payload = await response.json().catch(() => null) as PartnerIQApiPayload | null;
   if (!response.ok || payload?.success === false) {
     throw new Error(payload?.error?.message || `PartnerIQ browser request failed with ${response.status}`);
   }

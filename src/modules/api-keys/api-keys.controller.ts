@@ -15,11 +15,14 @@ import { OrganizationGuard } from '../../common/guards/organization.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { CurrentEnvironment } from '../../common/decorators/environment.decorator';
+import { EnvironmentGuard } from '../../common/guards/environment.guard';
+import { EnvironmentType } from '../../common/enums';
 import type { AuthUserPayload } from '../../common/interfaces/request-with-user.interface';
 
 @ApiTags('API Keys')
 @Controller('api/v1/organizations/:organizationId/api-keys')
-@UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+@UseGuards(JwtAuthGuard, OrganizationGuard, EnvironmentGuard, PermissionsGuard)
 @ApiBearerAuth()
 export class ApiKeysController {
   constructor(private readonly apiKeysService: ApiKeysService) {}
@@ -30,16 +33,20 @@ export class ApiKeysController {
   async create(
     @Param('organizationId') organizationId: string,
     @CurrentUser() user: AuthUserPayload,
+    @CurrentEnvironment() environment: EnvironmentType,
     @Body() dto: CreateApiKeyDto,
   ) {
-    return this.apiKeysService.create(organizationId, user.userId, dto);
+    return this.apiKeysService.create(organizationId, user.userId, dto, environment);
   }
 
   @Get()
   @RequirePermissions('manage.api_keys')
   @ApiOperation({ summary: 'List all API keys for organization' })
-  async findAll(@Param('organizationId') organizationId: string) {
-    return this.apiKeysService.findAll(organizationId);
+  async findAll(
+    @Param('organizationId') organizationId: string,
+    @CurrentEnvironment() environment: EnvironmentType,
+  ) {
+    return this.apiKeysService.findAll(organizationId, environment);
   }
 
   @Delete(':apiKeyId')
@@ -49,7 +56,8 @@ export class ApiKeysController {
     @Param('organizationId') organizationId: string,
     @Param('apiKeyId') apiKeyId: string,
     @CurrentUser() user: AuthUserPayload,
+    @CurrentEnvironment() environment: EnvironmentType,
   ) {
-    return this.apiKeysService.revoke(organizationId, apiKeyId, user.userId);
+    return this.apiKeysService.revoke(organizationId, apiKeyId, user.userId, environment);
   }
 }

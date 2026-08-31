@@ -89,6 +89,18 @@ export class SecurityUtils {
     return decrypted;
   }
 
+  static generatePkceVerifier(length = 64): string {
+    return crypto.randomBytes(length).toString('base64url').slice(0, length);
+  }
+
+  static generatePkceChallenge(verifier: string): string {
+    return crypto.createHash('sha256').update(verifier).digest('base64url');
+  }
+
+  static generateNonce(length = 32): string {
+    return crypto.randomBytes(length).toString('base64url');
+  }
+
   static sanitizeForLogging(obj: any): any {
     if (!obj || typeof obj !== 'object') return obj;
     const sensitiveKeys = [
@@ -99,14 +111,30 @@ export class SecurityUtils {
       'authorization',
       'apiKey',
       'secret',
+      'clientSecret',
+      'client_secret',
       'cookie',
+      'set-cookie',
       'webhookSecret',
       'keyHash',
+      'code',
+      'authCode',
+      'idToken',
+      'id_token',
+      'codeVerifier',
+      'code_verifier',
+      'codeChallenge',
+      'code_challenge',
     ];
 
     const copy = Array.isArray(obj) ? [...obj] : { ...obj };
     for (const key of Object.keys(copy)) {
-      if (sensitiveKeys.some((s) => key.toLowerCase().includes(s.toLowerCase()))) {
+      const lowerKey = key.toLowerCase();
+      if (
+        sensitiveKeys.some(
+          (s) => lowerKey === s.toLowerCase() || lowerKey.includes(s.toLowerCase()),
+        )
+      ) {
         copy[key] = '[REDACTED]';
       } else if (typeof copy[key] === 'object' && copy[key] !== null) {
         copy[key] = this.sanitizeForLogging(copy[key]);

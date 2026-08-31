@@ -147,6 +147,15 @@ export class ConversionsResource {
   }
 
   /**
+   * List conversions for an organization.
+   */
+  async list(organizationId: string) {
+    return this.client.request(`/api/v1/organizations/${organizationId}/conversions`, {
+      method: 'GET',
+    });
+  }
+
+  /**
    * Get conversion status by PartnerIQ conversion ID or external order ID.
    */
   async get(conversionId: string) {

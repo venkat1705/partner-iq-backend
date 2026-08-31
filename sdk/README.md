@@ -1,9 +1,9 @@
-# @partneriq-io/sdk
+# @partneriq/sdk
 
 > Official Node.js & TypeScript SDK for PartnerIQ — The B2B SaaS Partner & Affiliate Management Engine.
 
-[![npm version](https://img.shields.io/npm/v/@partneriq-io/sdk.svg)](https://www.npmjs.com/package/@partneriq-io/sdk)
-[![license](https://img.shields.io/npm/l/@partneriq-io/sdk.svg)](https://github.com/partneriq-io/partneriq-node/blob/main/LICENSE)
+[![npm version](https://img.shields.io/npm/v/@partneriq/sdk.svg)](https://www.npmjs.com/package/@partneriq/sdk)
+[![license](https://img.shields.io/npm/l/@partneriq/sdk.svg)](https://github.com/partneriq/partneriq-node/blob/main/LICENSE)
 
 ## Features
 
@@ -18,11 +18,11 @@
 ## Installation
 
 ```bash
-npm install @partneriq-io/sdk
+npm install @partneriq/sdk
 # or
-yarn add @partneriq-io/sdk
+yarn add @partneriq/sdk
 # or
-pnpm add @partneriq-io/sdk
+pnpm add @partneriq/sdk
 ```
 
 ---
@@ -32,9 +32,11 @@ pnpm add @partneriq-io/sdk
 ### 1. Initialize the Client
 
 ```typescript
-import { PartnerIQ } from '@partneriq-io/sdk';
+import { PartnerIQ } from '@partneriq/sdk';
 
 const partneriq = new PartnerIQ({
+  apiKey: process.env.PARTNERIQ_API_KEY!, // e.g., 'pi_live_...'
+  baseUrl: 'https://api.partneriq.io',     // Optional (defaults to http://localhost:3000)
   apiKey: process.env.PARTNERIQ_API_KEY!, // e.g., 'pi_live_sk_...'
   baseUrl: 'https://api.partneriq.io',     // Optional (defaults to http://localhost:5000 in dev)
 });
@@ -47,7 +49,7 @@ const partneriq = new PartnerIQ({
 When a customer completes a purchase or upgrades a subscription in your SaaS product, notify PartnerIQ:
 
 ```typescript
-import { PartnerIQ } from '@partneriq-io/sdk';
+import { PartnerIQ } from '@partneriq/sdk';
 
 const partneriq = new PartnerIQ({
   apiKey: process.env.PARTNERIQ_API_KEY!,
@@ -100,7 +102,7 @@ Verify incoming PartnerIQ webhook notifications using HMAC SHA-256:
 
 ```typescript
 import express from 'express';
-import { PartnerIQ } from '@partneriq-io/sdk';
+import { PartnerIQ } from '@partneriq/sdk';
 
 const app = express();
 const partneriq = new PartnerIQ({ apiKey: process.env.PARTNERIQ_API_KEY! });

@@ -9,6 +9,8 @@ import { SubscriptionService } from './subscription.service';
 import { PaymentProviderFactory } from '../providers/payment-provider.factory';
 import { PaymentProviderRouter } from '../providers/payment-provider.router';
 import { RazorpayProvider } from '../providers/razorpay.provider';
+import { BillingPricingService } from './billing-pricing.service';
+import { BillingCouponService } from './billing-coupon.service';
 
 @Injectable()
 export class BillingService {
@@ -19,11 +21,22 @@ export class BillingService {
     private readonly subscriptions: SubscriptionService,
     private readonly providerFactory: PaymentProviderFactory,
     private readonly razorpayProvider: RazorpayProvider,
+    private readonly pricing: BillingPricingService,
+    private readonly coupons: BillingCouponService,
   ) {}
 
   async checkout(organizationId: string, userId: string, dto: CheckoutDto, idempotencyKey?: string) {
     this.subscriptions.expireStalePendingCheckouts(organizationId);
-    const plan = await this.plans.getActivePlan(dto.planId, dto.billingInterval);
+    const quote = await this.pricing.quote({
+      organizationId,
+      planId: dto.planId,
+      billingInterval: dto.billingInterval,
+      couponCode: dto.couponCode,
+    });
+    if (!quote.valid) {
+      throw new BadRequestException({ code: quote.code, message: quote.message });
+    }
+    const plan = quote.plan;
     if (plan.code === 'FREE' || plan.code === 'ENTERPRISE') {
       throw new BadRequestException({ code: 'PLAN_NOT_PURCHASABLE', message: 'This plan does not use online checkout.' });
     }
@@ -74,6 +87,17 @@ export class BillingService {
       providerSubscriptionId = providerSubscription.id;
     }
 
+    const redemption = await this.coupons.reserve({
+      organizationId,
+      userId,
+      planId: plan.id,
+      billingInterval: dto.billingInterval,
+      couponCode: dto.couponCode,
+      idempotencyKey: idempotencyKey || requestHash,
+      provider: providerType,
+      providerSubscriptionId,
+    });
+
     const subscription = this.subscriptions.createPending({
       organizationId,
       planId: plan.id,
@@ -83,10 +107,11 @@ export class BillingService {
       billingInterval: dto.billingInterval,
       userId,
     });
+    this.coupons.attachReservation(redemption?.id, subscription.id, providerSubscriptionId);
 
     if (!useRazorpaySubscriptions) {
       const order = await provider.createOrder({
-        amount: plan.price,
+        amount: quote.totalMinor,
         currency: plan.currency,
         receipt: `sub_${organizationId.slice(0, 8)}_${Date.now()}`,
         notes: {
@@ -94,6 +119,7 @@ export class BillingService {
           planId: plan.id,
           billingInterval: dto.billingInterval,
           internalSubscriptionId: subscription.id,
+          couponRedemptionId: redemption?.id,
         },
       });
       providerOrderId = order.id;
@@ -102,12 +128,16 @@ export class BillingService {
     const response = {
       provider: providerType,
       plan,
+      pricing: quote,
+      couponRedemption: redemption
+        ? { id: redemption.id, status: redemption.status, expiresAt: redemption.expiresAt }
+        : null,
       subscription,
       checkout: {
         key: providerType === PaymentProviderType.RAZORPAY ? this.razorpayProvider.getCheckoutKey() : '',
         orderId: providerOrderId,
         subscriptionId: providerSubscriptionId,
-        amount: plan.price,
+        amount: quote.totalMinor,
         currency: plan.currency,
         name: 'PartnerIQ',
         description: `${plan.name} ${dto.billingInterval.toLowerCase()}`,
@@ -175,6 +205,7 @@ export class BillingService {
 
     if (subscription && paymentDetails.status === 'captured') {
       this.subscriptions.activateSubscription(subscription.id);
+      this.coupons.consumeForSubscription(subscription.id, dto.razorpay_payment_id);
     }
 
     return {

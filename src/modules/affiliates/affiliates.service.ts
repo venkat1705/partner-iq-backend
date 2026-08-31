@@ -5,8 +5,9 @@ import {
 } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { dbStore, AffiliateEntity, ProgramAffiliateEntity, AffiliateApplicationEntity, TrackingLinkEntity } from '../../database/store';
-import { AffiliateStatus, AffiliateInvitationStatus, ApplicationStatus, AuditAction, ProgramStatus, TrackingLinkStatus, AutomationTriggerType, TierTransitionType } from '../../common/enums';
+import { AffiliateStatus, AffiliateInvitationStatus, ApplicationStatus, AuditAction, ProgramStatus, TrackingLinkStatus, AutomationTriggerType, TierTransitionType, EnvironmentType } from '../../common/enums';
 import { SecurityUtils } from '../../common/utils/security.utils';
+import { EnvironmentUtils } from '../../common/utils/environment.utils';
 import { getAppConfig } from '../../config/app.config';
 import { AcceptAffiliateInvitationDto, CreateAffiliateDto, CreateAffiliateInvitationDto, InvitationCommissionType, PublicApplyDto } from './dto/affiliate.dto';
 import { BrevoEmailService } from '../memberships/brevo-email.service';
@@ -21,7 +22,7 @@ export class AffiliatesService {
     private readonly automationEngineService: AutomationEngineService,
   ) {}
 
-  async create(organizationId: string, dto: CreateAffiliateDto, actorId?: string, skipAudit = false) {
+  async create(organizationId: string, dto: CreateAffiliateDto, actorId?: string, skipAudit = false, environment: EnvironmentType = EnvironmentType.LIVE) {
     const email = dto.email.toLowerCase().trim();
 
     let affiliate = dbStore.affiliates.find(
@@ -45,11 +46,18 @@ export class AffiliatesService {
       dbStore.affiliates.push(affiliate);
     }
 
-    const referralCode = SecurityUtils.generateReferralCode(affiliate.displayName || 'PARTNER');
+    const referralCode = SecurityUtils.generateRandomCode(10).toLowerCase();
+
+    const program = dbStore.programs.find((p) => p.id === dto.programId && p.organizationId === organizationId && !p.deletedAt);
+    if (!program) {
+      throw new NotFoundException('Program not found');
+    }
+    EnvironmentUtils.assertEnvironmentIntegrity(program, { organizationId, environment }, 'affiliate membership');
 
     const progAffiliate: ProgramAffiliateEntity = {
       id: uuidv4(),
       organizationId,
+      environment,
       programId: dto.programId,
       affiliateId: affiliate.id,
       status: AffiliateStatus.ACTIVE,
@@ -72,6 +80,7 @@ export class AffiliatesService {
         dbStore.affiliateTiers.push({
           id: uuidv4(),
           organizationId,
+          environment,
           programId: dto.programId,
           affiliateId: affiliate.id,
           currentTierId: defaultTier.id,
@@ -83,6 +92,7 @@ export class AffiliatesService {
         dbStore.affiliateTierHistories.push({
           id: uuidv4(),
           organizationId,
+          environment,
           programId: dto.programId,
           affiliateId: affiliate.id,
           newTierId: defaultTier.id,
@@ -100,6 +110,7 @@ export class AffiliatesService {
     const trackingLink: TrackingLinkEntity = {
       id: uuidv4(),
       organizationId,
+      environment,
       programId: dto.programId,
       affiliateId: affiliate.id,
       destinationUrl: 'https://example.com',
@@ -140,10 +151,15 @@ export class AffiliatesService {
     return { affiliate, programAffiliate: progAffiliate, trackingLink };
   }
 
-  async inviteAffiliate(organizationId: string, dto: CreateAffiliateInvitationDto, actorId: string) {
+  async inviteAffiliate(organizationId: string, dto: CreateAffiliateInvitationDto, actorId: string, environment: EnvironmentType = EnvironmentType.LIVE) {
     const email = dto.email.toLowerCase().trim();
     const partnerName = dto.partnerName.trim();
-    const program = dbStore.programs.find((item) => item.id === dto.programId && item.organizationId === organizationId && !item.deletedAt);
+    const program = dbStore.programs.find((item) =>
+      item.id === dto.programId &&
+      item.organizationId === organizationId &&
+      (item.environment === environment || (!item.environment && environment === EnvironmentType.LIVE)) &&
+      !item.deletedAt,
+    );
     if (!program) {
       throw new NotFoundException('Program not found');
     }
@@ -173,6 +189,7 @@ export class AffiliatesService {
     const invitation = {
       id: uuidv4(),
       organizationId,
+      environment,
       programId: program.id,
       email,
       partnerName,
@@ -216,10 +233,10 @@ export class AffiliatesService {
     };
   }
 
-  async listInvitations(organizationId: string) {
+  async listInvitations(organizationId: string, environment: EnvironmentType = EnvironmentType.LIVE) {
     this.expireOldInvitations();
     return dbStore.affiliateInvitations
-      .filter((item) => item.organizationId === organizationId)
+      .filter((item) => item.organizationId === organizationId && (item.environment === environment || (!item.environment && environment === EnvironmentType.LIVE)))
       .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
       .map((item) => this.serializeInvitation(item));
   }
@@ -358,11 +375,16 @@ export class AffiliatesService {
     };
   }
 
-  async findAll(organizationId: string) {
-    return dbStore.affiliates.filter((a) => a.organizationId === organizationId);
+  async findAll(organizationId: string, environment: EnvironmentType = EnvironmentType.LIVE) {
+    const affiliateIds = new Set(
+      dbStore.programAffiliates
+        .filter((pa) => pa.organizationId === organizationId && (pa.environment === environment || (!pa.environment && environment === EnvironmentType.LIVE)))
+        .map((pa) => pa.affiliateId),
+    );
+    return dbStore.affiliates.filter((a) => a.organizationId === organizationId && affiliateIds.has(a.id));
   }
 
-  async findOne(organizationId: string, affiliateId: string) {
+  async findOne(organizationId: string, affiliateId: string, environment: EnvironmentType = EnvironmentType.LIVE) {
     const affiliate = dbStore.affiliates.find(
       (a) => a.id === affiliateId && a.organizationId === organizationId,
     );
@@ -372,11 +394,11 @@ export class AffiliatesService {
     }
 
     const programs = dbStore.programAffiliates.filter(
-      (pa) => pa.affiliateId === affiliate.id && pa.organizationId === organizationId,
+      (pa) => pa.affiliateId === affiliate.id && pa.organizationId === organizationId && (pa.environment === environment || (!pa.environment && environment === EnvironmentType.LIVE)),
     );
 
     const links = dbStore.trackingLinks.filter(
-      (tl) => tl.affiliateId === affiliate.id && tl.organizationId === organizationId,
+      (tl) => tl.affiliateId === affiliate.id && tl.organizationId === organizationId && (tl.environment === environment || (!tl.environment && environment === EnvironmentType.LIVE)),
     );
 
     return { ...affiliate, programs, links };
@@ -387,6 +409,7 @@ export class AffiliatesService {
     const app: AffiliateApplicationEntity = {
       id: uuidv4(),
       organizationId: dto.organizationId,
+      environment: EnvironmentType.LIVE,
       programId: dto.programId,
       email: dto.email.toLowerCase().trim(),
       name: dto.name,

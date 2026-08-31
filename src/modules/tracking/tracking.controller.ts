@@ -17,6 +17,9 @@ import { OrganizationGuard } from '../../common/guards/organization.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { CurrentEnvironment } from '../../common/decorators/environment.decorator';
+import { EnvironmentGuard } from '../../common/guards/environment.guard';
+import { EnvironmentType } from '../../common/enums';
 import type { AuthUserPayload } from '../../common/interfaces/request-with-user.interface';
 
 @ApiTags('Tracking & Redirects')
@@ -25,7 +28,7 @@ export class TrackingController {
   constructor(private readonly trackingService: TrackingService) {}
 
   @Post('api/v1/organizations/:organizationId/tracking-links')
-  @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+  @UseGuards(JwtAuthGuard, OrganizationGuard, EnvironmentGuard, PermissionsGuard)
   @RequirePermissions('manage.links')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a new tracking link for an affiliate' })
@@ -33,17 +36,21 @@ export class TrackingController {
     @Param('organizationId') organizationId: string,
     @Body() dto: CreateTrackingLinkDto,
     @CurrentUser() user: AuthUserPayload,
+    @CurrentEnvironment() environment: EnvironmentType,
   ) {
-    return this.trackingService.createLink(organizationId, dto, user.userId);
+    return this.trackingService.createLink(organizationId, dto, user.userId, environment);
   }
 
   @Get('api/v1/organizations/:organizationId/tracking-links')
-  @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+  @UseGuards(JwtAuthGuard, OrganizationGuard, EnvironmentGuard, PermissionsGuard)
   @RequirePermissions('manage.links')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List tracking links for organization' })
-  async getLinks(@Param('organizationId') organizationId: string) {
-    return this.trackingService.getLinks(organizationId);
+  async getLinks(
+    @Param('organizationId') organizationId: string,
+    @CurrentEnvironment() environment: EnvironmentType,
+  ) {
+    return this.trackingService.getLinks(organizationId, environment);
   }
 
   @Get('r/:shortCode')

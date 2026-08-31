@@ -133,6 +133,7 @@ export class MembershipsService {
       email,
       role,
       status: 'Pending',
+      token,
       invitedAt: invitation.createdAt,
       expiresAt: invitation.expiresAt,
       inviteUrl: process.env.BREVO_API_KEY ? undefined : inviteUrl,

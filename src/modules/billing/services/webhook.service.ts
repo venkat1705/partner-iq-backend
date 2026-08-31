@@ -5,12 +5,14 @@ import { dbStore } from '../../../database/store';
 import { PaymentEventStatus, PaymentProviderType, PaymentStatus, SubscriptionStatus } from '../enums/billing.enums';
 import { PaymentProviderFactory } from '../providers/payment-provider.factory';
 import { SubscriptionService } from './subscription.service';
+import { BillingCouponService } from './billing-coupon.service';
 
 @Injectable()
 export class BillingWebhookService {
   constructor(
     private readonly providerFactory: PaymentProviderFactory,
     private readonly subscriptions: SubscriptionService,
+    private readonly coupons: BillingCouponService,
   ) {}
 
   async handleRazorpay(payload: Buffer, signature: string) {
@@ -104,6 +106,9 @@ export class BillingWebhookService {
     if (subscription && !subscription.providerSubscriptionId) {
       this.subscriptions.activateSubscription(subscription.id);
     }
+    if (subscription) {
+      this.coupons.consumeForSubscription(subscription.id, entity.id);
+    }
   }
 
   private async handlePaymentFailed(payload: any) {
@@ -115,6 +120,7 @@ export class BillingWebhookService {
     if (subscription) {
       subscription.status = SubscriptionStatus.PAST_DUE;
       subscription.modifiedDate = new Date();
+      this.coupons.releaseExpiredReservations();
     }
     dbStore.billingPayments.push({
       id: uuidv4(),

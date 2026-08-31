@@ -338,7 +338,7 @@ export class AuthService {
     return { success: true, message: 'Password changed successfully. Please log in again.' };
   }
 
-  private async createSessionAndTokens(user: User, userAgent?: string, ipAddress?: string) {
+  public async createSessionAndTokens(user: User, userAgent?: string, ipAddress?: string) {
     const { authSessions } = await this.repositories();
     const jwtConfig = getJwtConfig();
     const session = authSessions.create({
@@ -380,7 +380,7 @@ export class AuthService {
     };
   }
 
-  private isConfiguredSuperAdmin(email: string) {
+  public isConfiguredSuperAdmin(email: string) {
     const superAdminEmails = (process.env.SUPER_ADMIN_EMAILS || 'admin@partneriq.demo')
       .split(',')
       .map((value) => value.trim().toLowerCase())

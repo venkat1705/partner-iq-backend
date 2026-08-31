@@ -16,6 +16,9 @@ import { OrganizationGuard } from '../../common/guards/organization.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { CurrentEnvironment } from '../../common/decorators/environment.decorator';
+import { EnvironmentGuard } from '../../common/guards/environment.guard';
+import { EnvironmentType } from '../../common/enums';
 import type { AuthUserPayload } from '../../common/interfaces/request-with-user.interface';
 import { RequireApiScopes } from '../../common/decorators/require-api-scopes.decorator';
 
@@ -47,16 +50,19 @@ export class ConversionsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get a conversion by PartnerIQ id or externalId' })
   async getPublicConversion(@Param('id') conversionId: string, @CurrentUser() user: AuthUserPayload) {
-    return this.conversionsService.findOne(user.organizationId!, conversionId);
+    return this.conversionsService.findOne(user.organizationId!, conversionId, user.apiKeyEnvironment as EnvironmentType);
   }
 
   @Get('api/v1/organizations/:organizationId/conversions')
-  @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+  @UseGuards(JwtAuthGuard, OrganizationGuard, EnvironmentGuard, PermissionsGuard)
   @RequirePermissions('view.conversions')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List conversions for organization' })
-  async findAll(@Param('organizationId') organizationId: string) {
-    return this.conversionsService.findAll(organizationId);
+  async findAll(
+    @Param('organizationId') organizationId: string,
+    @CurrentEnvironment() environment: EnvironmentType,
+  ) {
+    return this.conversionsService.findAll(organizationId, environment);
   }
 
   @Post('api/v1/conversions/:id/refund')
@@ -69,6 +75,6 @@ export class ConversionsController {
     @CurrentUser() user: AuthUserPayload,
     @Body() dto: RefundConversionDto,
   ) {
-    return this.conversionsService.refundConversion(user.organizationId!, conversionId, dto);
+    return this.conversionsService.refundConversion(user.organizationId!, conversionId, dto, user.apiKeyEnvironment as EnvironmentType);
   }
 }

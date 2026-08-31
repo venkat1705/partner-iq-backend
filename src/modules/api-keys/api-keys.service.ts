@@ -6,13 +6,15 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import { dbStore, ApiKeyEntity } from '../../database/store';
 import { SecurityUtils } from '../../common/utils/security.utils';
-import { AuditAction } from '../../common/enums';
+import { AuditAction, EnvironmentType } from '../../common/enums';
 import { API_KEY_SCOPES, API_KEY_SCOPE_PRESETS, CreateApiKeyDto } from './dto/api-key.dto';
+import { EnvironmentUtils } from '../../common/utils/environment.utils';
 
 @Injectable()
 export class ApiKeysService {
-  async create(organizationId: string, createdByUserId: string, dto: CreateApiKeyDto) {
-    const environment = dto.environment || 'live';
+  async create(organizationId: string, createdByUserId: string, dto: CreateApiKeyDto, requestedEnvironment?: EnvironmentType) {
+    const environment = requestedEnvironment || EnvironmentUtils.normalizeEnvironment(dto.environment || 'LIVE');
+    const keyEnvironment = environment === EnvironmentType.TEST ? 'test' : 'live';
     const requestedScopes = dto.scopes?.length
       ? dto.scopes
       : dto.preset
@@ -23,7 +25,7 @@ export class ApiKeysService {
       throw new BadRequestException(`Unsupported API key scope: ${invalidScope}`);
     }
 
-    const { key, prefix, hash } = SecurityUtils.generateApiKey(environment);
+    const { key, prefix, hash } = SecurityUtils.generateApiKey(keyEnvironment);
 
     const apiKey: ApiKeyEntity = {
       id: uuidv4(),
@@ -65,14 +67,17 @@ export class ApiKeysService {
     };
   }
 
-  async findAll(organizationId: string) {
+  async findAll(organizationId: string, environment: EnvironmentType = EnvironmentType.LIVE) {
     return dbStore.apiKeys
-      .filter((k) => k.organizationId === organizationId)
+      .filter((k) =>
+        k.organizationId === organizationId &&
+        EnvironmentUtils.normalizeEnvironment((k as any).environment || ((k.prefix || '').includes('_test_') ? 'TEST' : 'LIVE')) === environment,
+      )
       .map((k) => ({
         id: k.id,
         name: k.name,
         prefix: k.prefix,
-        environment: (k as any).environment || (k.prefix.includes('_test_') ? 'test' : 'live'),
+        environment: EnvironmentUtils.normalizeEnvironment((k as any).environment || (k.prefix.includes('_test_') ? 'TEST' : 'LIVE')) === EnvironmentType.TEST ? 'test' : 'live',
         scopes: k.scopes,
         status: (k as any).status || (k.revokedAt ? 'REVOKED' : 'ACTIVE'),
         lastUsedAt: k.lastUsedAt,
@@ -82,9 +87,12 @@ export class ApiKeysService {
       }));
   }
 
-  async revoke(organizationId: string, apiKeyId: string, userId: string) {
+  async revoke(organizationId: string, apiKeyId: string, userId: string, environment: EnvironmentType = EnvironmentType.LIVE) {
     const apiKey = dbStore.apiKeys.find(
-      (k) => k.id === apiKeyId && k.organizationId === organizationId,
+      (k) =>
+        k.id === apiKeyId &&
+        k.organizationId === organizationId &&
+        EnvironmentUtils.normalizeEnvironment((k as any).environment || ((k.prefix || '').includes('_test_') ? 'TEST' : 'LIVE')) === environment,
     );
 
     if (!apiKey) {

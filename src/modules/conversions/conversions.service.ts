@@ -11,8 +11,10 @@ import { FraudService } from '../fraud/fraud.service';
 import { CommissionsService } from '../commissions/commissions.service';
 import { LedgerService } from '../ledger/ledger.service';
 import { PerformanceAggregationService } from '../gamification/performance/performance-aggregation.service';
-import { AutomationTriggerType, ConversionStatus, FraudDecision, AuditAction } from '../../common/enums';
+import { AutomationTriggerType, ConversionStatus, FraudDecision, AuditAction, EnvironmentType, LedgerEntryType } from '../../common/enums';
 import { CreateConversionDto, RefundConversionDto } from './dto/conversion.dto';
+import { EnvironmentUtils } from '../../common/utils/environment.utils';
+import { AutomationEngineService } from '../automations/engine/automation-engine.service';
 
 @Injectable()
 export class ConversionsService {
@@ -20,16 +22,17 @@ export class ConversionsService {
     private readonly fraudService: FraudService,
     private readonly commissionsService: CommissionsService,
     private readonly ledgerService: LedgerService,
-    private readonly performanceAggregationService: PerformanceAggregationService,
-    private readonly automationEngineService: AutomationEngineService,
+    private readonly performanceAggregationService?: PerformanceAggregationService,
+    private readonly automationEngineService?: AutomationEngineService,
   ) {}
 
   async createConversion(
     organizationId: string,
     dto: CreateConversionDto,
     idempotencyKey?: string,
-    context?: { apiKeyId?: string; environment?: 'test' | 'live' },
+    context?: { apiKeyId?: string; environment?: 'test' | 'live' | EnvironmentType },
   ) {
+    const environment = EnvironmentUtils.normalizeEnvironment(context?.environment);
     const requestHash = crypto.createHash('sha256').update(JSON.stringify(dto)).digest('hex');
     this.validateMetadata(dto.metadata);
 
@@ -38,6 +41,7 @@ export class ConversionsService {
       const existingKey = dbStore.idempotencyKeys.find(
         (k) =>
           k.organizationId === organizationId &&
+          (k as any).environment === environment &&
           (k as any).apiKeyId === context?.apiKeyId &&
           k.key === idempotencyKey,
       );
@@ -54,36 +58,41 @@ export class ConversionsService {
       }
     }
 
-    // Check if externalId already exists for this org
+    // Check if externalId already exists for this org in this environment
     const existingConversion = dbStore.conversions.find(
       (c) =>
         c.organizationId === organizationId &&
         c.externalId === dto.externalId &&
-        ((c as any).environment || 'live') === (context?.environment || 'live'),
+        (c.environment === environment || (!c.environment && environment === EnvironmentType.LIVE)),
     );
 
     if (existingConversion) {
-      throw new ConflictException(`Conversion with externalId '${dto.externalId}' already exists`);
+      throw new ConflictException(`Conversion with externalId '${dto.externalId}' already exists in ${environment} environment.`);
     }
 
-    // Resolve attribution using deterministic model rules instead of assuming a single click.
-    const program = dbStore.programs.find((p) => p.organizationId === organizationId && !p.deletedAt);
-    const attribution = this.resolveAttribution(organizationId, dto.customerExternalId, dto.attributionId, program?.id);
+    // Resolve attribution using deterministic model rules within environment
+    const program = dbStore.programs.find(
+      (p) =>
+        p.organizationId === organizationId &&
+        (p.environment === environment || (!p.environment && environment === EnvironmentType.LIVE)) &&
+        !p.deletedAt,
+    );
+    const attribution = this.resolveAttribution(organizationId, dto.customerExternalId, dto.attributionId, program?.id, environment);
     const programId = attribution?.programId || program?.id;
     if (!programId) {
-      throw new BadRequestException('No active program found for conversion');
+      throw new BadRequestException(`No active program found for conversion in ${environment} environment.`);
     }
 
     const conversion: ConversionEntity = {
       id: uuidv4(),
       organizationId,
+      environment,
       programId,
       affiliateId: attribution?.affiliateId,
       externalId: dto.externalId,
       customerExternalId: dto.customerExternalId,
       amount: dto.amount,
       currency: dto.currency || 'USD',
-      environment: context?.environment || 'live',
       type: dto.type || 'PURCHASE',
       metadata: dto.metadata,
       productId: dto.productId,
@@ -118,13 +127,14 @@ export class ConversionsService {
       const previousApprovedConversions = dbStore.conversions.filter(
         (c) =>
           c.organizationId === organizationId &&
+          c.environment === environment &&
           c.programId === conversion.programId &&
           c.id !== conversion.id &&
           c.status === ConversionStatus.APPROVED,
       ).length;
 
       // 1. Real-time gamification performance & tier & milestone evaluation
-      await this.performanceAggregationService.recordApprovedConversion(
+      await this.performanceAggregationService?.recordApprovedConversion(
         organizationId,
         conversion.programId,
         attribution.affiliateId,
@@ -134,7 +144,7 @@ export class ConversionsService {
 
       // 2. Trigger automations
       if (previousApprovedConversions === 0) {
-        await this.automationEngineService.handleEvent(
+        await this.automationEngineService?.handleEvent(
           AutomationTriggerType.FIRST_CONVERSION,
           organizationId,
           conversion.programId,
@@ -143,7 +153,7 @@ export class ConversionsService {
         );
       }
 
-      await this.automationEngineService.handleEvent(
+      await this.automationEngineService?.handleEvent(
         AutomationTriggerType.APPROVED_CONVERSION,
         organizationId,
         conversion.programId,
@@ -163,6 +173,7 @@ export class ConversionsService {
       const ikRecord: IdempotencyKeyEntity = {
         id: uuidv4(),
         organizationId,
+        environment,
         apiKeyId: context?.apiKeyId,
         key: idempotencyKey,
         requestHash,
@@ -177,9 +188,13 @@ export class ConversionsService {
     return responsePayload;
   }
 
-  async refundConversion(organizationId: string, conversionId: string, dto: RefundConversionDto) {
+  async refundConversion(organizationId: string, conversionId: string, dto: RefundConversionDto, environment: EnvironmentType | 'test' | 'live' = EnvironmentType.LIVE) {
+    const currentEnvironment = EnvironmentUtils.normalizeEnvironment(environment);
     const conversion = dbStore.conversions.find(
-      (c) => (c.id === conversionId || c.externalId === conversionId) && c.organizationId === organizationId,
+      (c) =>
+        (c.id === conversionId || c.externalId === conversionId) &&
+        c.organizationId === organizationId &&
+        (c.environment === currentEnvironment || (!c.environment && currentEnvironment === EnvironmentType.LIVE)),
     );
 
     if (!conversion) {
@@ -222,13 +237,21 @@ export class ConversionsService {
     return { conversion, commissionStatus: 'REFUNDED', message: 'Conversion refunded and commission clawed back' };
   }
 
-  async findAll(organizationId: string) {
-    return dbStore.conversions.filter((c) => c.organizationId === organizationId);
+  async findAll(organizationId: string, environment: EnvironmentType | 'test' | 'live' = EnvironmentType.LIVE) {
+    const currentEnvironment = EnvironmentUtils.normalizeEnvironment(environment);
+    return dbStore.conversions.filter((c) =>
+      c.organizationId === organizationId &&
+      (c.environment === currentEnvironment || (!c.environment && currentEnvironment === EnvironmentType.LIVE)),
+    );
   }
 
-  async findOne(organizationId: string, id: string) {
+  async findOne(organizationId: string, id: string, environment: EnvironmentType | 'test' | 'live' = EnvironmentType.LIVE) {
+    const currentEnvironment = EnvironmentUtils.normalizeEnvironment(environment);
     const conversion = dbStore.conversions.find(
-      (c) => c.organizationId === organizationId && (c.id === id || c.externalId === id),
+      (c) =>
+        c.organizationId === organizationId &&
+        (c.environment === currentEnvironment || (!c.environment && currentEnvironment === EnvironmentType.LIVE)) &&
+        (c.id === id || c.externalId === id),
     );
     if (!conversion) {
       throw new NotFoundException('Conversion not found');
@@ -241,9 +264,11 @@ export class ConversionsService {
     customerExternalId: string,
     explicitAttributionId?: string,
     fallbackProgramId?: string,
+    environment: EnvironmentType = EnvironmentType.LIVE,
   ) {
     const candidates = dbStore.attributions.filter((a) => {
       if (a.organizationId !== organizationId) return false;
+      if (a.environment && a.environment !== environment) return false;
       if (a.expiresAt <= new Date()) return false;
       if (explicitAttributionId && a.id === explicitAttributionId) return true;
       if (fallbackProgramId && a.programId !== fallbackProgramId) return false;
@@ -251,7 +276,15 @@ export class ConversionsService {
     });
 
     if (!candidates.length) {
-      return dbStore.attributions.find((a) => a.organizationId === organizationId && a.id === explicitAttributionId && a.expiresAt > new Date()) || undefined;
+      return (
+        dbStore.attributions.find(
+          (a) =>
+            a.organizationId === organizationId &&
+            a.id === explicitAttributionId &&
+            (!a.environment || a.environment === environment) &&
+            a.expiresAt > new Date(),
+        ) || undefined
+      );
     }
 
     const ordered = [...candidates].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());

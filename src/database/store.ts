@@ -21,6 +21,7 @@ import {
 import { AppDataSource, initializeDataSource } from './data-source';
 import {
   User,
+  UserIdentity,
   Organization,
   OrganizationMembership,
   AuthSession,
@@ -65,9 +66,16 @@ import {
   CrmEntityMapping,
   IntegrationSyncLog,
   PartnerDeal,
+  OrganizationTrial,
   BillingPlan,
   BillingPlanProviderMapping,
   BillingPlanFeature,
+  BillingPromotion,
+  BillingCoupon,
+  BillingCouponPlan,
+  BillingCouponOrganization,
+  BillingCouponRedemption,
+  BillingSubscriptionDiscount,
   BillingSubscription,
   BillingPayment,
   BillingPaymentEvent,
@@ -102,6 +110,7 @@ import {
 } from './schema-rbac';
 
 export type UserEntity = User;
+export type UserIdentityEntity = UserIdentity;
 export type OrganizationEntity = Organization;
 export type OrganizationMembershipEntity = OrganizationMembership;
 export type AuthSessionEntity = AuthSession;
@@ -146,9 +155,16 @@ export type CrmFieldMappingEntity = CrmFieldMapping;
 export type CrmEntityMappingEntity = CrmEntityMapping;
 export type IntegrationSyncLogEntity = IntegrationSyncLog;
 export type PartnerDealEntity = PartnerDeal;
+export type OrganizationTrialEntity = OrganizationTrial;
 export type BillingPlanEntity = BillingPlan;
 export type BillingPlanProviderMappingEntity = BillingPlanProviderMapping;
 export type BillingPlanFeatureEntity = BillingPlanFeature;
+export type BillingPromotionEntity = BillingPromotion;
+export type BillingCouponEntity = BillingCoupon;
+export type BillingCouponPlanEntity = BillingCouponPlan;
+export type BillingCouponOrganizationEntity = BillingCouponOrganization;
+export type BillingCouponRedemptionEntity = BillingCouponRedemption;
+export type BillingSubscriptionDiscountEntity = BillingSubscriptionDiscount;
 export type BillingSubscriptionEntity = BillingSubscription;
 export type BillingPaymentEntity = BillingPayment;
 export type BillingPaymentEventEntity = BillingPaymentEvent;
@@ -182,9 +198,50 @@ export type OrganizationInvitationEntity = import('./schema-rbac').OrganizationI
 class DBBackedArray<T extends object> extends Array<T> {
   private repo: Repository<T>;
 
+  private static isBillingPlans<T extends object>(repo: Repository<T>) {
+    return repo.metadata.tableName === 'billing_plans';
+  }
+
+  private static conflictPathsFor<T extends object>(repo: Repository<T>) {
+    return DBBackedArray.isBillingPlans(repo)
+      ? ['code', 'billingInterval', 'currency']
+      : ['id'];
+  }
+
+  private static async persistEntity<T extends object>(repo: Repository<T>, item: T) {
+    if (DBBackedArray.isBillingPlans(repo)) {
+      const plan = item as any;
+      if (plan.code && plan.billingInterval && plan.currency) {
+        const existing = await repo.findOne({
+          where: {
+            code: plan.code,
+            billingInterval: plan.billingInterval,
+            currency: plan.currency,
+          } as any,
+        });
+
+        if (existing) {
+          const saved = await repo.save({
+            ...plan,
+            id: (existing as any).id,
+            createdDate: (existing as any).createdDate || plan.createdDate,
+          });
+          Object.assign(item, saved);
+          return;
+        }
+      }
+
+      const saved = await repo.save(item);
+      Object.assign(item, saved);
+      return;
+    }
+
+    await repo.upsert(item, DBBackedArray.conflictPathsFor(repo) as any);
+  }
+
   private persist(items: T | T[]) {
     const values = Array.isArray(items) ? items : [items];
-    this.repo.upsert(values, ['id'] as any).catch((err) => {
+    Promise.all(values.map((item) => DBBackedArray.persistEntity(this.repo, item))).catch((err) => {
       console.error('dbStore save error:', err);
     });
   }
@@ -211,7 +268,7 @@ class DBBackedArray<T extends object> extends Array<T> {
       set(target, property, value) {
         const result = Reflect.set(target, property, value);
         if (property !== 'id') {
-          repo.upsert(target as T, ['id'] as any).catch((err) => {
+          DBBackedArray.persistEntity(repo, target as T).catch((err) => {
             console.error('dbStore save error:', err);
           });
         }
@@ -286,6 +343,7 @@ export class InMemoryDataStore {
   private initialized = false;
 
   users: UserEntity[] = [];
+  userIdentities: UserIdentityEntity[] = [];
   organizations: OrganizationEntity[] = [];
   organizationMemberships: OrganizationMembershipEntity[] = [];
   authSessions: AuthSessionEntity[] = [];
@@ -330,9 +388,16 @@ export class InMemoryDataStore {
   crmEntityMappings: CrmEntityMappingEntity[] = [];
   integrationSyncLogs: IntegrationSyncLogEntity[] = [];
   partnerDeals: PartnerDealEntity[] = [];
+  organizationTrials: OrganizationTrialEntity[] = [];
   billingPlans: BillingPlanEntity[] = [];
   billingPlanProviderMappings: BillingPlanProviderMappingEntity[] = [];
   billingPlanFeatures: BillingPlanFeatureEntity[] = [];
+  billingPromotions: BillingPromotionEntity[] = [];
+  billingCoupons: BillingCouponEntity[] = [];
+  billingCouponPlans: BillingCouponPlanEntity[] = [];
+  billingCouponOrganizations: BillingCouponOrganizationEntity[] = [];
+  billingCouponRedemptions: BillingCouponRedemptionEntity[] = [];
+  billingSubscriptionDiscounts: BillingSubscriptionDiscountEntity[] = [];
   billingSubscriptions: BillingSubscriptionEntity[] = [];
   billingPayments: BillingPaymentEntity[] = [];
   billingPaymentEvents: BillingPaymentEventEntity[] = [];
@@ -375,6 +440,10 @@ export class InMemoryDataStore {
     await initializeDataSource();
 
     this.users = new DBBackedArray(AppDataSource.getRepository(User), await AppDataSource.getRepository(User).find());
+    this.userIdentities = new DBBackedArray(
+      AppDataSource.getRepository(UserIdentity),
+      await AppDataSource.getRepository(UserIdentity).find(),
+    );
     this.organizations = new DBBackedArray(
       AppDataSource.getRepository(Organization),
       await AppDataSource.getRepository(Organization).find(),
@@ -503,6 +572,10 @@ export class InMemoryDataStore {
       AppDataSource.getRepository(PartnerDeal),
       await AppDataSource.getRepository(PartnerDeal).find(),
     );
+    this.organizationTrials = new DBBackedArray(
+      AppDataSource.getRepository(OrganizationTrial),
+      await AppDataSource.getRepository(OrganizationTrial).find(),
+    );
     this.billingPlans = new DBBackedArray(AppDataSource.getRepository(BillingPlan), await AppDataSource.getRepository(BillingPlan).find());
     this.billingPlanProviderMappings = new DBBackedArray(
       AppDataSource.getRepository(BillingPlanProviderMapping),
@@ -511,6 +584,30 @@ export class InMemoryDataStore {
     this.billingPlanFeatures = new DBBackedArray(
       AppDataSource.getRepository(BillingPlanFeature),
       await AppDataSource.getRepository(BillingPlanFeature).find(),
+    );
+    this.billingPromotions = new DBBackedArray(
+      AppDataSource.getRepository(BillingPromotion),
+      await AppDataSource.getRepository(BillingPromotion).find(),
+    );
+    this.billingCoupons = new DBBackedArray(
+      AppDataSource.getRepository(BillingCoupon),
+      await AppDataSource.getRepository(BillingCoupon).find(),
+    );
+    this.billingCouponPlans = new DBBackedArray(
+      AppDataSource.getRepository(BillingCouponPlan),
+      await AppDataSource.getRepository(BillingCouponPlan).find(),
+    );
+    this.billingCouponOrganizations = new DBBackedArray(
+      AppDataSource.getRepository(BillingCouponOrganization),
+      await AppDataSource.getRepository(BillingCouponOrganization).find(),
+    );
+    this.billingCouponRedemptions = new DBBackedArray(
+      AppDataSource.getRepository(BillingCouponRedemption),
+      await AppDataSource.getRepository(BillingCouponRedemption).find(),
+    );
+    this.billingSubscriptionDiscounts = new DBBackedArray(
+      AppDataSource.getRepository(BillingSubscriptionDiscount),
+      await AppDataSource.getRepository(BillingSubscriptionDiscount).find(),
     );
     this.billingSubscriptions = new DBBackedArray(
       AppDataSource.getRepository(BillingSubscription),

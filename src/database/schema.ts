@@ -1,5 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index, Unique } from 'typeorm';
 import {
+  EnvironmentType,
+  SubscriptionStatus,
   ApplicationStatus,
   AffiliateStatus,
   AffiliateInvitationStatus,
@@ -78,14 +80,17 @@ export class User {
   @Column({ type: 'varchar', length: 255 })
   email!: string;
 
-  @Column({ type: 'varchar', length: 255 })
-  passwordHash!: string;
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  passwordHash?: string;
 
   @Column({ type: 'varchar', length: 100 })
   firstName!: string;
 
   @Column({ type: 'varchar', length: 100 })
   lastName!: string;
+
+  @Column({ type: 'varchar', length: 1024, nullable: true })
+  avatarUrl?: string;
 
   @Column({ type: 'varchar', length: 50, default: UserStatus.ACTIVE })
   status!: UserStatus;
@@ -113,6 +118,52 @@ export class User {
 
   @Column({ type: 'timestamp', nullable: true })
   deletedAt?: Date;
+}
+
+@Entity('user_identities')
+@Unique(['provider', 'providerUserId'])
+export class UserIdentity {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  userId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 50 })
+  provider!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 255 })
+  providerUserId!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  email!: string;
+
+  @Column({ type: 'boolean', default: false })
+  emailVerified!: boolean;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  displayName?: string;
+
+  @Column({ type: 'varchar', length: 1024, nullable: true })
+  avatarUrl?: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  providerMetadata?: any;
+
+  @CreateDateColumn()
+  linkedAt!: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  lastLoginAt?: Date;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
 }
 
 @Entity('organizations')
@@ -310,6 +361,8 @@ export class NotificationPreference {
 }
 
 @Entity('programs')
+@Index(['organizationId', 'environment'])
+@Index(['organizationId', 'environment', 'status'])
 export class Program {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -317,6 +370,10 @@ export class Program {
   @Index()
   @Column({ type: 'uuid' })
   organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20, default: EnvironmentType.LIVE })
+  environment?: EnvironmentType;
 
   @Column({ type: 'varchar', length: 255 })
   name!: string;
@@ -433,6 +490,7 @@ export class Affiliate {
 }
 
 @Entity('program_affiliates')
+@Index(['organizationId', 'environment'])
 export class ProgramAffiliate {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -440,6 +498,10 @@ export class ProgramAffiliate {
   @Index()
   @Column({ type: 'uuid' })
   organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20, default: EnvironmentType.LIVE })
+  environment?: EnvironmentType;
 
   @Index()
   @Column({ type: 'uuid' })
@@ -481,6 +543,7 @@ export class ProgramAffiliate {
 }
 
 @Entity('affiliate_invitations')
+@Index(['organizationId', 'environment'])
 export class AffiliateInvitation {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -488,6 +551,10 @@ export class AffiliateInvitation {
   @Index()
   @Column({ type: 'uuid' })
   organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20, default: EnvironmentType.LIVE })
+  environment?: EnvironmentType;
 
   @Index()
   @Column({ type: 'uuid' })
@@ -546,6 +613,7 @@ export class AffiliateInvitation {
 }
 
 @Entity('affiliate_applications')
+@Index(['organizationId', 'environment'])
 export class AffiliateApplication {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -553,6 +621,10 @@ export class AffiliateApplication {
   @Index()
   @Column({ type: 'uuid' })
   organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20, default: EnvironmentType.LIVE })
+  environment?: EnvironmentType;
 
   @Index()
   @Column({ type: 'uuid' })
@@ -590,6 +662,7 @@ export class AffiliateApplication {
 }
 
 @Entity('tracking_links')
+@Index(['organizationId', 'environment'])
 export class TrackingLink {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -597,6 +670,10 @@ export class TrackingLink {
   @Index()
   @Column({ type: 'uuid' })
   organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20, default: EnvironmentType.LIVE })
+  environment?: EnvironmentType;
 
   @Index()
   @Column({ type: 'uuid' })
@@ -647,6 +724,7 @@ export class AssetTag {
 }
 
 @Entity('assets')
+@Index(['organizationId', 'environment'])
 export class Asset {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -654,6 +732,10 @@ export class Asset {
   @Index()
   @Column({ type: 'uuid' })
   organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20, default: EnvironmentType.LIVE })
+  environment?: EnvironmentType;
 
   @Index()
   @Column({ type: 'uuid', nullable: true })
@@ -991,6 +1073,8 @@ export class AffiliateAssetFavorite {
 }
 
 @Entity('clicks')
+@Index(['organizationId', 'environment'])
+@Index(['organizationId', 'environment', 'createdAt'])
 export class Click {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -998,6 +1082,10 @@ export class Click {
   @Index()
   @Column({ type: 'uuid' })
   organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20, default: EnvironmentType.LIVE })
+  environment?: EnvironmentType;
 
   @Index()
   @Column({ type: 'uuid' })
@@ -1049,6 +1137,7 @@ export class Click {
 }
 
 @Entity('attributions')
+@Index(['organizationId', 'environment'])
 export class Attribution {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -1056,6 +1145,10 @@ export class Attribution {
   @Index()
   @Column({ type: 'uuid' })
   organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20, default: EnvironmentType.LIVE })
+  environment?: EnvironmentType;
 
   @Index()
   @Column({ type: 'uuid' })
@@ -1089,6 +1182,7 @@ export class Attribution {
 }
 
 @Entity('api_keys')
+@Index(['organizationId', 'environment'])
 export class ApiKey {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -1106,8 +1200,9 @@ export class ApiKey {
   @Column({ type: 'varchar', length: 255 })
   keyHash!: string;
 
-  @Column({ type: 'varchar', length: 10, default: 'live' })
-  environment!: string;
+  @Index()
+  @Column({ type: 'varchar', length: 20, default: EnvironmentType.LIVE })
+  environment?: EnvironmentType;
 
   @Column({ type: 'simple-array' })
   scopes!: string[];
@@ -1135,6 +1230,7 @@ export class ApiKey {
 }
 
 @Entity('idempotency_keys')
+@Index(['organizationId', 'environment', 'key'])
 export class IdempotencyKey {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -1142,6 +1238,10 @@ export class IdempotencyKey {
   @Index()
   @Column({ type: 'uuid' })
   organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20, default: EnvironmentType.LIVE })
+  environment?: EnvironmentType;
 
   @Index()
   @Column({ type: 'uuid', nullable: true })
@@ -1167,6 +1267,8 @@ export class IdempotencyKey {
 }
 
 @Entity('conversions')
+@Index(['organizationId', 'environment'])
+@Index(['organizationId', 'environment', 'createdAt'])
 export class Conversion {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -1174,6 +1276,10 @@ export class Conversion {
   @Index()
   @Column({ type: 'uuid' })
   organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20, default: EnvironmentType.LIVE })
+  environment?: EnvironmentType;
 
   @Index()
   @Column({ type: 'uuid' })
@@ -1195,9 +1301,6 @@ export class Conversion {
   @Column({ type: 'varchar', length: 10 })
   currency!: string;
 
-  @Column({ type: 'varchar', length: 10, default: 'live' })
-  environment!: string;
-
   @Column({ type: 'varchar', length: 50, default: 'PURCHASE' })
   type!: string;
 
@@ -1218,6 +1321,7 @@ export class Conversion {
 }
 
 @Entity('commission_rules')
+@Index(['organizationId', 'environment'])
 export class CommissionRule {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -1225,6 +1329,10 @@ export class CommissionRule {
   @Index()
   @Column({ type: 'uuid' })
   organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20, default: EnvironmentType.LIVE })
+  environment?: EnvironmentType;
 
   @Index()
   @Column({ type: 'uuid', nullable: true })
@@ -1274,6 +1382,8 @@ export class CommissionRule {
 }
 
 @Entity('commissions')
+@Index(['organizationId', 'environment'])
+@Index(['organizationId', 'environment', 'createdAt'])
 export class Commission {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -1281,6 +1391,10 @@ export class Commission {
   @Index()
   @Column({ type: 'uuid' })
   organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20, default: EnvironmentType.LIVE })
+  environment?: EnvironmentType;
 
   @Index()
   @Column({ type: 'uuid' })
@@ -1320,6 +1434,7 @@ export class Commission {
 }
 
 @Entity('ledger_accounts')
+@Index(['organizationId', 'environment'])
 export class LedgerAccount {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -1327,6 +1442,10 @@ export class LedgerAccount {
   @Index()
   @Column({ type: 'uuid' })
   organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20, default: EnvironmentType.LIVE })
+  environment?: EnvironmentType;
 
   @Index()
   @Column({ type: 'uuid', nullable: true })
@@ -1349,6 +1468,7 @@ export class LedgerAccount {
 }
 
 @Entity('ledger_transactions')
+@Index(['organizationId', 'environment'])
 export class LedgerTransaction {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -1356,6 +1476,10 @@ export class LedgerTransaction {
   @Index()
   @Column({ type: 'uuid' })
   organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20, default: EnvironmentType.LIVE })
+  environment?: EnvironmentType;
 
   @Column({ type: 'varchar', length: 50 })
   type!: LedgerEntryType;
@@ -1394,6 +1518,7 @@ export class LedgerEntry {
 }
 
 @Entity('fraud_reviews')
+@Index(['organizationId', 'environment'])
 export class FraudReview {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -1401,6 +1526,10 @@ export class FraudReview {
   @Index()
   @Column({ type: 'uuid' })
   organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20, default: EnvironmentType.LIVE })
+  environment?: EnvironmentType;
 
   @Index()
   @Column({ type: 'uuid' })
@@ -1461,7 +1590,8 @@ export class FraudReview {
 }
 
 @Entity('fraud_settings')
-@Unique(['organizationId', 'programId'])
+@Unique(['organizationId', 'programId', 'environment'])
+@Index(['organizationId', 'environment'])
 export class FraudSettings {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -1469,6 +1599,10 @@ export class FraudSettings {
   @Index()
   @Column({ type: 'uuid' })
   organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20, default: EnvironmentType.LIVE })
+  environment?: EnvironmentType;
 
   @Index()
   @Column({ type: 'uuid', nullable: true })
@@ -1509,6 +1643,7 @@ export class FraudSettings {
 }
 
 @Entity('fraud_assessments')
+@Index(['organizationId', 'environment'])
 export class FraudAssessment {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -1516,6 +1651,10 @@ export class FraudAssessment {
   @Index()
   @Column({ type: 'uuid' })
   organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20, default: EnvironmentType.LIVE })
+  environment?: EnvironmentType;
 
   @Index()
   @Column({ type: 'uuid' })
@@ -1598,6 +1737,7 @@ export class FraudSignal {
 }
 
 @Entity('affiliate_trust_history')
+@Index(['organizationId', 'affiliateId'])
 export class AffiliateTrustHistory {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -1627,7 +1767,8 @@ export class AffiliateTrustHistory {
 }
 
 @Entity('fraud_metric_rollups')
-@Unique(['organizationId', 'programId', 'date'])
+@Unique(['organizationId', 'programId', 'date', 'environment'])
+@Index(['organizationId', 'environment'])
 export class FraudMetricRollup {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -1635,6 +1776,10 @@ export class FraudMetricRollup {
   @Index()
   @Column({ type: 'uuid' })
   organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20, default: EnvironmentType.LIVE })
+  environment?: EnvironmentType;
 
   @Index()
   @Column({ type: 'uuid', nullable: true })
@@ -1666,6 +1811,7 @@ export class FraudMetricRollup {
 }
 
 @Entity('payout_batches')
+@Index(['organizationId', 'environment'])
 export class PayoutBatch {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -1673,6 +1819,10 @@ export class PayoutBatch {
   @Index()
   @Column({ type: 'uuid' })
   organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20, default: EnvironmentType.LIVE })
+  environment?: EnvironmentType;
 
   @Column({ type: 'varchar', length: 50 })
   status!: PayoutStatus;
@@ -1694,6 +1844,7 @@ export class PayoutBatch {
 }
 
 @Entity('payout_items')
+@Index(['organizationId', 'environment'])
 export class PayoutItem {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -1705,6 +1856,10 @@ export class PayoutItem {
   @Index()
   @Column({ type: 'uuid' })
   organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20, default: EnvironmentType.LIVE })
+  environment?: EnvironmentType;
 
   @Index()
   @Column({ type: 'uuid' })
@@ -1727,6 +1882,7 @@ export class PayoutItem {
 }
 
 @Entity('webhook_endpoints')
+@Index(['organizationId', 'environment'])
 export class WebhookEndpoint {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -1734,6 +1890,10 @@ export class WebhookEndpoint {
   @Index()
   @Column({ type: 'uuid' })
   organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20, default: EnvironmentType.LIVE })
+  environment?: EnvironmentType;
 
   @Column({ type: 'varchar', length: 2000 })
   url!: string;
@@ -1755,6 +1915,7 @@ export class WebhookEndpoint {
 }
 
 @Entity('webhook_deliveries')
+@Index(['endpointId', 'environment'])
 export class WebhookDelivery {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -1762,6 +1923,10 @@ export class WebhookDelivery {
   @Index()
   @Column({ type: 'uuid' })
   endpointId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20, default: EnvironmentType.LIVE })
+  environment?: EnvironmentType;
 
   @Column({ type: 'varchar', length: 255 })
   eventId!: string;
@@ -2291,6 +2456,7 @@ export class IntegrationSyncLog {
 }
 
 @Entity('partner_deals')
+@Index(['organizationId', 'environment'])
 export class PartnerDeal {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -2298,6 +2464,10 @@ export class PartnerDeal {
   @Index()
   @Column({ type: 'uuid' })
   organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20, default: EnvironmentType.LIVE })
+  environment?: EnvironmentType;
 
   @Index()
   @Column({ type: 'uuid' })
@@ -2524,6 +2694,348 @@ export class BillingPlanFeature {
   modifiedDate!: Date;
 }
 
+@Entity('billing_promotions')
+@Unique(['code'])
+export class BillingPromotion {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column({ type: 'varchar', length: 120 })
+  name!: string;
+
+  @Column({ type: 'varchar', length: 80 })
+  code!: string;
+
+  @Column({ type: 'text', nullable: true })
+  description?: string;
+
+  @Column({ type: 'varchar', length: 80, nullable: true })
+  campaignType?: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  startsAt?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  endsAt?: Date;
+
+  @Index()
+  @Column({ type: 'varchar', length: 40, default: 'DRAFT' })
+  status!: string;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  utmCampaign?: string;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  utmSource?: string;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  utmMedium?: string;
+
+  @Column({ type: 'varchar', length: 2000, nullable: true })
+  landingPage?: string;
+
+  @CreateDateColumn()
+  createdDate!: Date;
+
+  @UpdateDateColumn()
+  modifiedDate!: Date;
+}
+
+@Entity('billing_coupons')
+@Unique(['normalizedCode'])
+@Index(['status'])
+@Index(['validFrom'])
+@Index(['validUntil'])
+export class BillingCoupon {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column({ type: 'varchar', length: 120 })
+  code!: string;
+
+  @Column({ type: 'varchar', length: 120 })
+  normalizedCode!: string;
+
+  @Column({ type: 'varchar', length: 160 })
+  name!: string;
+
+  @Column({ type: 'text', nullable: true })
+  description?: string;
+
+  @Column({ type: 'varchar', length: 40 })
+  discountType!: string;
+
+  @Column({ type: 'int', nullable: true })
+  discountValue?: number;
+
+  @Column({ type: 'varchar', length: 10, nullable: true })
+  currency?: string;
+
+  @Column({ type: 'varchar', length: 40, default: 'ONE_TIME' })
+  durationType!: string;
+
+  @Column({ type: 'int', nullable: true })
+  durationCycles?: number;
+
+  @Column({ type: 'int', nullable: true })
+  trialExtensionDays?: number;
+
+  @Column({ type: 'int', nullable: true })
+  freeMonths?: number;
+
+  @Column({ type: 'timestamp', nullable: true })
+  validFrom?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  validUntil?: Date;
+
+  @Column({ type: 'int', nullable: true })
+  maxRedemptions?: number;
+
+  @Column({ type: 'int', nullable: true })
+  maxRedemptionsPerOrganization?: number;
+
+  @Column({ type: 'int', nullable: true })
+  minimumPurchaseAmount?: number;
+
+  @Column({ type: 'varchar', length: 40, default: 'DRAFT' })
+  status!: string;
+
+  @Column({ type: 'boolean', default: false })
+  isPublic!: boolean;
+
+  @Column({ type: 'boolean', default: false })
+  isStackable!: boolean;
+
+  @Column({ type: 'boolean', default: false })
+  firstTimeCustomersOnly!: boolean;
+
+  @Column({ type: 'varchar', length: 40, default: 'ALL_PLANS' })
+  planEligibility!: string;
+
+  @Column({ type: 'varchar', length: 40, default: 'ALL' })
+  billingCycleEligibility!: string;
+
+  @Column({ type: 'varchar', length: 60, default: 'ANY_ORGANIZATION' })
+  customerEligibility!: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  promotionId?: string;
+
+  @Column({ type: 'varchar', length: 40, default: 'PRESERVE_IF_ELIGIBLE' })
+  planChangePolicy!: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  advancedRules?: Record<string, any>;
+
+  @Column({ type: 'uuid', nullable: true })
+  createdBy?: string;
+
+  @CreateDateColumn()
+  createdDate!: Date;
+
+  @Column({ type: 'uuid', nullable: true })
+  modifiedBy?: string;
+
+  @UpdateDateColumn()
+  modifiedDate!: Date;
+
+  @Column({ type: 'int', default: 1 })
+  rowVersion!: number;
+}
+
+@Entity('billing_coupon_plans')
+@Unique(['couponId', 'planId'])
+export class BillingCouponPlan {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  couponId!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  planId!: string;
+}
+
+@Entity('billing_coupon_organizations')
+@Unique(['couponId', 'organizationId'])
+export class BillingCouponOrganization {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  couponId!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationId!: string;
+}
+
+@Entity('billing_coupon_redemptions')
+@Index(['couponId', 'status'])
+@Index(['organizationId', 'redeemedAt'])
+@Unique(['organizationId', 'idempotencyKey'])
+export class BillingCouponRedemption {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  couponId!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationId!: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  subscriptionId?: string;
+
+  @Column({ type: 'uuid' })
+  planId!: string;
+
+  @Column({ type: 'varchar', length: 20 })
+  billingCycle!: string;
+
+  @Column({ type: 'varchar', length: 10 })
+  currency!: string;
+
+  @Column({ type: 'int' })
+  originalSubtotal!: number;
+
+  @Column({ type: 'int', default: 0 })
+  discountAmount!: number;
+
+  @Column({ type: 'int' })
+  discountedSubtotal!: number;
+
+  @Column({ type: 'int', default: 0 })
+  taxAmount!: number;
+
+  @Column({ type: 'int' })
+  finalAmount!: number;
+
+  @Column({ type: 'varchar', length: 40 })
+  durationType!: string;
+
+  @Column({ type: 'int', nullable: true })
+  remainingCycles?: number;
+
+  @Index()
+  @Column({ type: 'varchar', length: 40, default: 'RESERVED' })
+  status!: string;
+
+  @Column({ type: 'varchar', length: 30, nullable: true })
+  provider?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  providerPaymentId?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  providerSubscriptionId?: string;
+
+  @Column({ type: 'varchar', length: 191 })
+  idempotencyKey!: string;
+
+  @Column({ type: 'simple-json' })
+  pricingSnapshot!: Record<string, any>;
+
+  @Column({ type: 'timestamp' })
+  reservedAt!: Date;
+
+  @Column({ type: 'timestamp' })
+  expiresAt!: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  redeemedAt?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  cancelledAt?: Date;
+
+  @CreateDateColumn()
+  createdDate!: Date;
+}
+
+@Entity('billing_subscription_discounts')
+@Unique(['subscriptionId', 'couponRedemptionId'])
+export class BillingSubscriptionDiscount {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  subscriptionId!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  couponRedemptionId!: string;
+
+  @Column({ type: 'varchar', length: 40 })
+  discountType!: string;
+
+  @Column({ type: 'int', nullable: true })
+  discountValue?: number;
+
+  @Column({ type: 'timestamp' })
+  startsAt!: Date;
+
+  @Column({ type: 'int', nullable: true })
+  totalCycles?: number;
+
+  @Column({ type: 'int', default: 0 })
+  cyclesConsumed!: number;
+
+  @Column({ type: 'varchar', length: 40, default: 'ACTIVE' })
+  status!: string;
+
+  @Column({ type: 'simple-json' })
+  snapshot!: Record<string, any>;
+
+  @CreateDateColumn()
+  createdDate!: Date;
+
+  @UpdateDateColumn()
+  modifiedDate!: Date;
+}
+
+@Entity('organization_trials')
+export class OrganizationTrial {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index({ unique: true })
+  @Column({ type: 'uuid' })
+  organizationId!: string;
+
+  @Column({ type: 'boolean', default: false })
+  trialUsed!: boolean;
+
+  @Column({ type: 'timestamp' })
+  firstTrialStartedAt!: Date;
+
+  @Column({ type: 'timestamp' })
+  firstTrialEndedAt!: Date;
+
+  @Column({ type: 'int', default: 0 })
+  extendedByAdminDays!: number;
+
+  @Column({ type: 'timestamp', nullable: true })
+  grantedByAdminAt?: Date;
+
+  @Column({ type: 'uuid', nullable: true })
+  grantedByAdminUserId?: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
 @Entity('billing_subscriptions')
 @Unique(['organizationId', 'providerSubscriptionId'])
 export class BillingSubscription {
@@ -2538,7 +3050,7 @@ export class BillingSubscription {
   @Column({ type: 'uuid' })
   planId!: string;
 
-  @Column({ type: 'varchar', length: 30 })
+  @Column({ type: 'varchar', length: 30, default: 'INTERNAL' })
   provider!: string;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
@@ -2555,6 +3067,9 @@ export class BillingSubscription {
   @Column({ type: 'varchar', length: 20, default: 'MONTHLY' })
   billingInterval!: string;
 
+  @Column({ type: 'varchar', length: 20, default: 'MONTHLY' })
+  billingCycle!: string;
+
   @Column({ type: 'timestamp', nullable: true })
   currentPeriodStart?: Date;
 
@@ -2566,6 +3081,12 @@ export class BillingSubscription {
 
   @Column({ type: 'timestamp', nullable: true })
   trialEnd?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  trialStartedAt?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  trialEndsAt?: Date;
 
   @Column({ type: 'boolean', default: false })
   cancelAtPeriodEnd!: boolean;
@@ -2781,7 +3302,8 @@ export class BillingInvoice {
 }
 
 @Entity('partner_tiers')
-@Unique(['organizationId', 'programId', 'code'])
+@Unique(['organizationId', 'programId', 'code', 'environment'])
+@Index(['organizationId', 'environment'])
 export class PartnerTier {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -2789,6 +3311,10 @@ export class PartnerTier {
   @Index()
   @Column({ type: 'uuid' })
   organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20, default: EnvironmentType.LIVE })
+  environment?: EnvironmentType;
 
   @Index()
   @Column({ type: 'uuid', nullable: true })
@@ -2868,7 +3394,8 @@ export class PartnerTier {
 }
 
 @Entity('affiliate_tiers')
-@Unique(['organizationId', 'programId', 'affiliateId'])
+@Unique(['organizationId', 'programId', 'affiliateId', 'environment'])
+@Index(['organizationId', 'environment'])
 export class AffiliateTier {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -2876,6 +3403,10 @@ export class AffiliateTier {
   @Index()
   @Column({ type: 'varchar', length: 36 })
   organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20, default: EnvironmentType.LIVE })
+  environment?: EnvironmentType;
 
   @Index()
   @Column({ type: 'varchar', length: 36 })
@@ -2921,6 +3452,7 @@ export class AffiliateTier {
 }
 
 @Entity('affiliate_tier_histories')
+@Index(['organizationId', 'environment'])
 export class AffiliateTierHistory {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -2928,6 +3460,10 @@ export class AffiliateTierHistory {
   @Index()
   @Column({ type: 'uuid' })
   organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20, default: EnvironmentType.LIVE })
+  environment?: EnvironmentType;
 
   @Index()
   @Column({ type: 'uuid' })
@@ -2967,7 +3503,8 @@ export class AffiliateTierHistory {
 }
 
 @Entity('milestones')
-@Unique(['organizationId', 'programId', 'code'])
+@Unique(['organizationId', 'programId', 'code', 'environment'])
+@Index(['organizationId', 'environment'])
 export class Milestone {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -2975,6 +3512,10 @@ export class Milestone {
   @Index()
   @Column({ type: 'uuid' })
   organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20, default: EnvironmentType.LIVE })
+  environment?: EnvironmentType;
 
   @Index()
   @Column({ type: 'uuid', nullable: true })
@@ -3051,7 +3592,8 @@ export class Milestone {
 }
 
 @Entity('affiliate_milestone_achievements')
-@Unique(['organizationId', 'affiliateId', 'milestoneId', 'periodKey'])
+@Unique(['organizationId', 'affiliateId', 'milestoneId', 'periodKey', 'environment'])
+@Index(['organizationId', 'environment'])
 export class AffiliateMilestoneAchievement {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -3059,6 +3601,10 @@ export class AffiliateMilestoneAchievement {
   @Index()
   @Column({ type: 'varchar', length: 36 })
   organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20, default: EnvironmentType.LIVE })
+  environment?: EnvironmentType;
 
   @Index()
   @Column({ type: 'varchar', length: 36 })
@@ -3108,7 +3654,8 @@ export class AffiliateMilestoneAchievement {
 }
 
 @Entity('affiliate_performance_summaries')
-@Unique(['organizationId', 'programId', 'affiliateId', 'periodType', 'periodKey'])
+@Unique(['organizationId', 'programId', 'affiliateId', 'periodType', 'periodKey', 'environment'])
+@Index(['organizationId', 'environment'])
 export class AffiliatePerformanceSummary {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -3116,6 +3663,10 @@ export class AffiliatePerformanceSummary {
   @Index()
   @Column({ type: 'varchar', length: 36 })
   organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20, default: EnvironmentType.LIVE })
+  environment?: EnvironmentType;
 
   @Index()
   @Column({ type: 'varchar', length: 36 })
@@ -3172,6 +3723,7 @@ export class AffiliatePerformanceSummary {
 }
 
 @Entity('automation_workflows')
+@Index(['organizationId', 'environment'])
 export class AutomationWorkflow {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -3179,6 +3731,10 @@ export class AutomationWorkflow {
   @Index()
   @Column({ type: 'uuid' })
   organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20, default: EnvironmentType.LIVE })
+  environment?: EnvironmentType;
 
   @Index()
   @Column({ type: 'uuid', nullable: true })
@@ -3278,6 +3834,7 @@ export class AutomationWorkflowVersion {
 }
 
 @Entity('automation_executions')
+@Index(['organizationId', 'environment'])
 export class AutomationExecution {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -3285,6 +3842,10 @@ export class AutomationExecution {
   @Index()
   @Column({ type: 'uuid' })
   organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20, default: EnvironmentType.LIVE })
+  environment?: EnvironmentType;
 
   @Index()
   @Column({ type: 'uuid' })
@@ -3330,6 +3891,7 @@ export class AutomationExecution {
 }
 
 @Entity('automation_scheduled_steps')
+@Index(['organizationId', 'environment'])
 export class AutomationScheduledStep {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -3345,6 +3907,10 @@ export class AutomationScheduledStep {
   @Index()
   @Column({ type: 'uuid' })
   organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20, default: EnvironmentType.LIVE })
+  environment?: EnvironmentType;
 
   @Index()
   @Column({ type: 'uuid' })
@@ -3463,4 +4029,3 @@ export class AutomationEmailLog {
   @CreateDateColumn()
   createdAt!: Date;
 }
-

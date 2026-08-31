@@ -5,7 +5,7 @@
     "emitDecoratorMetadata": true,
     "useDefineForClassFields": false,
     "module": "ESNext",
-    "lib": ["ES2022"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
     "moduleResolution": "node",
     "isolatedModules": false,

@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { dbStore, OrganizationEntity, OrganizationMembershipEntity } from '../../database/store';
-import { OrganizationStatus, Role, ProgramType, ProgramStatus, CommissionType, AttributionModel, AuditAction } from '../../common/enums';
+import { OrganizationStatus, Role, ProgramType, ProgramStatus, CommissionType, AttributionModel, AuditAction, EnvironmentType } from '../../common/enums';
 import { MembershipStatus, ProgramAccessType } from '../../common/enums/rbac';
 import {
   CreateOrganizationDto,
@@ -14,9 +14,12 @@ import {
   OnboardingOrgDto,
   OnboardingProgramDto,
 } from './dto/organization.dto';
+import { TrialService } from '../billing/services/trial.service';
 
 @Injectable()
 export class OrganizationsService {
+  constructor(private readonly trialService?: TrialService) {}
+
   async create(userId: string, dto: CreateOrganizationDto) {
     const slug = this.slugify(dto.slug || dto.name);
 
@@ -58,6 +61,13 @@ export class OrganizationsService {
     };
 
     dbStore.organizationMemberships.push(membership);
+
+    // Start 14-day free trial for new organization
+    try {
+      await this.trialService?.startTrial(org.id, userId, 'PRO');
+    } catch (err) {
+      // Non-blocking if trial already exists or fails
+    }
 
     // Audit log
     dbStore.auditLogs.push({
@@ -155,6 +165,7 @@ export class OrganizationsService {
     const program = {
       id: uuidv4(),
       organizationId: org.id,
+      environment: EnvironmentType.TEST,
       name: dto.programName,
       slug: dto.programName.toLowerCase().replace(/\s+/g, '-'),
       type: ProgramType.AFFILIATE,

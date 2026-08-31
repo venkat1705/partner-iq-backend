@@ -6,7 +6,7 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import * as crypto from 'crypto';
 import { dbStore, TrackingLinkEntity, ClickEntity, AttributionEntity } from '../../database/store';
-import { AuditAction, FraudStatus, TrackingLinkStatus } from '../../common/enums';
+import { AuditAction, EnvironmentType, FraudStatus, TrackingLinkStatus } from '../../common/enums';
 import { SecurityUtils } from '../../common/utils/security.utils';
 import { FraudService } from '../fraud/fraud.service';
 import { PerformanceAggregationService } from '../gamification/performance/performance-aggregation.service';
@@ -18,17 +18,17 @@ import { CreateTrackingLinkDto, BrowserClickDto, IdentifyCustomerDto } from './d
 export class TrackingService {
   constructor(
     private readonly fraudService: FraudService,
-    private readonly performanceAggregationService: PerformanceAggregationService,
-    private readonly automationEngineService: AutomationEngineService,
+    private readonly performanceAggregationService?: PerformanceAggregationService,
+    private readonly automationEngineService?: AutomationEngineService,
   ) {}
 
-  async createLink(organizationId: string, dto: CreateTrackingLinkDto, actorId?: string) {
+  async createLink(organizationId: string, dto: CreateTrackingLinkDto, actorId?: string, environment: EnvironmentType = EnvironmentType.LIVE) {
     const shortCode = (
       dto.customCode || SecurityUtils.generateRandomCode(6)
     ).toLowerCase();
 
     const existing = dbStore.trackingLinks.find(
-      (l) => l.shortCode === shortCode,
+      (l) => l.shortCode === shortCode && l.organizationId === organizationId && (l.environment === environment || (!l.environment && environment === EnvironmentType.LIVE)),
     );
 
     if (existing) {
@@ -38,6 +38,7 @@ export class TrackingService {
     const link: TrackingLinkEntity = {
       id: uuidv4(),
       organizationId,
+      environment,
       programId: dto.programId,
       affiliateId: dto.affiliateId,
       campaignId: dto.campaignId,
@@ -50,14 +51,14 @@ export class TrackingService {
     dbStore.trackingLinks.push(link);
 
     // 1. Performance Aggregation
-    await this.performanceAggregationService.recordTrackingLinkCreated(
+    await this.performanceAggregationService?.recordTrackingLinkCreated(
       organizationId,
       dto.programId,
       dto.affiliateId,
     );
 
     // 2. Trigger Automations
-    await this.automationEngineService.handleEvent(
+    await this.automationEngineService?.handleEvent(
       AutomationTriggerType.TRACKING_LINK_CREATED,
       organizationId,
       dto.programId,
@@ -85,18 +86,19 @@ export class TrackingService {
     return link;
   }
 
-  async getLinks(organizationId: string) {
+  async getLinks(organizationId: string, environment: EnvironmentType = EnvironmentType.LIVE) {
     return dbStore.trackingLinks
-      .filter((l) => l.organizationId === organizationId)
+      .filter((l) => l.organizationId === organizationId && (l.environment === environment || (!l.environment && environment === EnvironmentType.LIVE)))
       .map((link) => {
         const {
           __dbStoreProxy: _proxyMarker,
           ...publicLink
         } = link as TrackingLinkEntity & { __dbStoreProxy?: boolean };
-        const clicks = dbStore.clicks.filter((click) => click.trackingLinkId === link.id);
+        const clicks = dbStore.clicks.filter((click) => click.trackingLinkId === link.id && (click.environment === environment || (!click.environment && environment === EnvironmentType.LIVE)));
         const conversions = dbStore.conversions.filter(
           (conversion) =>
             conversion.organizationId === organizationId &&
+            (conversion.environment === environment || (!conversion.environment && environment === EnvironmentType.LIVE)) &&
             conversion.programId === link.programId &&
             conversion.affiliateId === link.affiliateId,
         );
@@ -134,6 +136,7 @@ export class TrackingService {
     const click: ClickEntity = {
       id: uuidv4(),
       organizationId: link.organizationId,
+      environment: link.environment || EnvironmentType.LIVE,
       programId: link.programId,
       affiliateId: link.affiliateId,
       trackingLinkId: link.id,
@@ -153,7 +156,7 @@ export class TrackingService {
     dbStore.clicks.push(click);
 
     // Record click in performance summary
-    this.performanceAggregationService.recordClick(link.organizationId, link.programId, link.affiliateId);
+    this.performanceAggregationService?.recordClick(link.organizationId, link.programId, link.affiliateId);
 
     this.fraudService.evaluateClick(click.id, ipAddress).catch((error) => {
       console.error('click fraud assessment failed:', error?.message || error);
@@ -166,6 +169,7 @@ export class TrackingService {
     const attribution: AttributionEntity = {
       id: uuidv4(),
       organizationId: link.organizationId,
+      environment: link.environment || EnvironmentType.LIVE,
       programId: link.programId,
       affiliateId: link.affiliateId,
       clickId: click.id,

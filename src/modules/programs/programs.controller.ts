@@ -18,6 +18,8 @@ import { OrganizationGuard } from '../../common/guards/organization.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { CurrentEnvironment } from '../../common/decorators/environment.decorator';
+import { EnvironmentType } from '../../common/enums';
 import type { AuthUserPayload } from '../../common/interfaces/request-with-user.interface';
 
 @ApiTags('Partner Programs')
@@ -33,26 +35,31 @@ export class ProgramsController {
   async create(
     @Param('organizationId') organizationId: string,
     @CurrentUser() user: AuthUserPayload,
+    @CurrentEnvironment() environment: EnvironmentType,
     @Body() dto: CreateProgramDto,
   ) {
-    return this.programsService.create(organizationId, user.userId, dto);
+    return this.programsService.create(organizationId, user.userId, dto, environment);
   }
 
   @Get()
   @RequirePermissions('manage.programs')
-  @ApiOperation({ summary: 'List all partner programs in organization' })
-  async findAll(@Param('organizationId') organizationId: string) {
-    return this.programsService.findAll(organizationId);
+  @ApiOperation({ summary: 'List all partner programs in organization for current environment' })
+  async findAll(
+    @Param('organizationId') organizationId: string,
+    @CurrentEnvironment() environment: EnvironmentType,
+  ) {
+    return this.programsService.findAll(organizationId, environment);
   }
 
   @Get(':programId')
   @RequirePermissions('manage.programs')
-  @ApiOperation({ summary: 'Get specific partner program details' })
+  @ApiOperation({ summary: 'Get specific partner program details in current environment' })
   async findOne(
     @Param('organizationId') organizationId: string,
     @Param('programId') programId: string,
+    @CurrentEnvironment() environment: EnvironmentType,
   ) {
-    return this.programsService.findOne(organizationId, programId);
+    return this.programsService.findOne(organizationId, programId, environment);
   }
 
   @Patch(':programId')
@@ -63,8 +70,22 @@ export class ProgramsController {
     @Param('programId') programId: string,
     @Body() dto: UpdateProgramDto,
     @CurrentUser() user: AuthUserPayload,
+    @CurrentEnvironment() environment: EnvironmentType,
   ) {
-    return this.programsService.update(organizationId, programId, dto, user.userId);
+    return this.programsService.update(organizationId, programId, dto, user.userId, environment);
+  }
+
+  @Post(':programId/copy-to-live')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('manage.programs')
+  @ApiOperation({ summary: 'Clone test program configuration to live environment' })
+  async copyToLive(
+    @Param('organizationId') organizationId: string,
+    @Param('programId') programId: string,
+    @CurrentUser() user: AuthUserPayload,
+    @Body() body?: { newName?: string; newSlug?: string },
+  ) {
+    return this.programsService.copyToLive(organizationId, programId, user.userId, body);
   }
 
   @Post(':programId/pause')
@@ -75,8 +96,9 @@ export class ProgramsController {
     @Param('organizationId') organizationId: string,
     @Param('programId') programId: string,
     @CurrentUser() user: AuthUserPayload,
+    @CurrentEnvironment() environment: EnvironmentType,
   ) {
-    return this.programsService.pause(organizationId, programId, user.userId);
+    return this.programsService.pause(organizationId, programId, user.userId, environment);
   }
 
   @Post(':programId/activate')
@@ -87,8 +109,9 @@ export class ProgramsController {
     @Param('organizationId') organizationId: string,
     @Param('programId') programId: string,
     @CurrentUser() user: AuthUserPayload,
+    @CurrentEnvironment() environment: EnvironmentType,
   ) {
-    return this.programsService.activate(organizationId, programId, user.userId);
+    return this.programsService.activate(organizationId, programId, user.userId, environment);
   }
 
   @Delete(':programId')
@@ -98,7 +121,9 @@ export class ProgramsController {
     @Param('organizationId') organizationId: string,
     @Param('programId') programId: string,
     @CurrentUser() user: AuthUserPayload,
+    @CurrentEnvironment() environment: EnvironmentType,
   ) {
-    return this.programsService.remove(organizationId, programId, user.userId);
+    return this.programsService.remove(organizationId, programId, user.userId, environment);
   }
 }
+

@@ -21,7 +21,8 @@
     "build:browser": "npm --prefix packages/partneriq-browser run build",
     "build:sdks": "npm run build:node && npm run build:browser",
     "test:sdk": "tsx src/tests/sdk-test.ts",
-    "test:security": "tsx src/tests/security-audit.test.ts"
+    "test:security": "tsx src/tests/security-audit.test.ts",
+    "test:oauth": "tsx src/tests/oauth.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

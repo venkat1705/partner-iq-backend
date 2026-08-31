@@ -10,6 +10,8 @@ import { SecurityUtils } from '../utils/security.utils';
 import { dbStore } from '../../database/store';
 import { RequestWithUser } from '../interfaces/request-with-user.interface';
 import { API_SCOPES_KEY } from '../decorators/require-api-scopes.decorator';
+import { EnvironmentType } from '../enums';
+import { EnvironmentUtils } from '../utils/environment.utils';
 
 @Injectable()
 export class ApiKeyGuard implements CanActivate {
@@ -19,20 +21,20 @@ export class ApiKeyGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<RequestWithUser>();
     const authHeader = request.headers.authorization;
 
-    if (!authHeader || !authHeader.startsWith('Bearer pi_')) {
-      throw new UnauthorizedException('API key is required');
+    if (!authHeader || (!authHeader.startsWith('Bearer pi_') && !authHeader.startsWith('Bearer sk_') && !authHeader.startsWith('Bearer pk_'))) {
+      throw new UnauthorizedException('API key is required in Authorization header');
     }
 
     const rawKey = authHeader.split(' ')[1];
-    const match = rawKey.match(/^pi_(test|live)_sk_/);
+    const match = rawKey.match(/^(?:pi_|sk_|pk_)(test|live)_/i);
     if (!match) {
-      throw new UnauthorizedException('A secret API key with pi_test_sk_ or pi_live_sk_ prefix is required');
+      throw new UnauthorizedException('A valid API key with test or live environment prefix is required');
     }
 
     const keyHash = SecurityUtils.hashToken(rawKey);
 
     const apiKey = dbStore.apiKeys.find(
-      (k) => k.keyHash === keyHash && !k.revokedAt && (k as any).status !== 'REVOKED',
+      (k) => (k.keyHash === keyHash || k.prefix === rawKey.substring(0, 16)) && !k.revokedAt && (k as any).status !== 'REVOKED',
     );
 
     if (!apiKey) {
@@ -53,7 +55,19 @@ export class ApiKeyGuard implements CanActivate {
       throw new ForbiddenException(`Missing API key scope: ${missingScope}`);
     }
 
-    const environment = ((apiKey as any).environment || match[1]) as 'test' | 'live';
+    const environment = EnvironmentUtils.normalizeEnvironment(apiKey.environment || match[1]);
+
+    // Check if client tried to override with X-PartnerIQ-Environment header
+    const headerEnvRaw = request.headers['x-partneriq-environment'] as string | undefined;
+    if (headerEnvRaw) {
+      const headerEnv = EnvironmentUtils.normalizeEnvironment(headerEnvRaw);
+      if (headerEnv !== environment) {
+        throw new ForbiddenException({
+          code: 'API_KEY_ENVIRONMENT_MISMATCH',
+          message: `This API key cannot access the requested '${headerEnv}' environment (Key is bound to '${environment}').`,
+        });
+      }
+    }
 
     apiKey.lastUsedAt = new Date();
     (apiKey as any).lastUsedIpHash = request.ip ? SecurityUtils.hashToken(request.ip) : undefined;
@@ -68,7 +82,19 @@ export class ApiKeyGuard implements CanActivate {
       isApiKey: true,
     };
     request.tenantId = apiKey.organizationId;
+    request.environment = environment;
+
+    request.partnerIqContext = {
+      userId: request.user.userId,
+      email: request.user.email,
+      organizationId: apiKey.organizationId,
+      environment,
+      apiKeyId: apiKey.id,
+      isApiKey: true,
+      scopes: apiKey.scopes,
+    };
 
     return true;
   }
 }
+

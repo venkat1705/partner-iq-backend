@@ -564,7 +564,7 @@ export class TierEvaluatorService {
       commissionEarned,
       qualifiedLeads: 0,
       closedWonDeals: deals.length,
-      closedWonRevenue: deals.reduce((sum, d) => sum + (d.dealValue || 0), 0),
+      closedWonRevenue: deals.reduce((sum, d) => sum + (d.actualValue || d.estimatedValue || 0), 0),
     };
   }
 }

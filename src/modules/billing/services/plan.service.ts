@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { dbStore, BillingPlanEntity } from '../../../database/store';
+import { AppDataSource } from '../../../database/data-source';
+import { BillingPlan } from '../../../database/schema';
 import { BillingInterval, PaymentProviderType } from '../enums/billing.enums';
 import { CreatePlanDto } from '../dto/billing.dto';
 
@@ -16,6 +18,10 @@ const BUILT_IN_PLAN_DEFAULTS = [
 @Injectable()
 export class PlanService {
   async ensureDefaultPlans() {
+    const planRepo = AppDataSource.isInitialized
+      ? AppDataSource.getRepository(BillingPlan)
+      : null;
+
     for (const interval of [BillingInterval.MONTHLY, BillingInterval.YEARLY]) {
       for (const item of BUILT_IN_PLAN_DEFAULTS) {
         const price = this.builtInPrice(item.code, interval);
@@ -51,7 +57,26 @@ export class PlanService {
             createdDate: new Date(),
             modifiedDate: new Date(),
           } as BillingPlanEntity;
-          dbStore.billingPlans.push(plan);
+          if (planRepo) {
+            const existingPlan = await planRepo.findOne({
+              where: {
+                code: plan.code,
+                billingInterval: plan.billingInterval,
+                currency: plan.currency,
+              } as any,
+            });
+
+            if (existingPlan) {
+              Object.assign(existingPlan, plan, { id: existingPlan.id });
+              plan = await planRepo.save(existingPlan) as BillingPlanEntity;
+            } else {
+              plan = await planRepo.save(plan as BillingPlan) as BillingPlanEntity;
+            }
+          }
+
+          if (!dbStore.billingPlans.some((existing) => existing.id === plan.id)) {
+            dbStore.billingPlans.push(plan);
+          }
         }
         if (item.code !== 'FREE' && item.code !== 'ENTERPRISE') {
           const mapping = dbStore.billingPlanProviderMappings.find(
@@ -136,18 +161,19 @@ export class PlanService {
     const defaults = BUILT_IN_PLAN_DEFAULTS.find((item) => item.code === plan.code);
     if (!defaults || plan.currency !== 'INR') return plan;
 
-    plan.name = defaults.name;
-    plan.description = defaults.description;
-    plan.price = this.builtInPrice(defaults.code, billingInterval);
-    plan.billingInterval = billingInterval;
-    plan.billingIntervalCount = billingInterval === BillingInterval.YEARLY ? 12 : 1;
-    plan.trialDays = defaults.code === 'FREE' ? 0 : 14;
-    plan.isActive = true;
-    plan.isPublic = true;
-    plan.sortOrder = defaults.sortOrder;
-    plan.rowStatus = 'ACTIVE';
-    plan.modifiedDate = new Date();
-    return plan;
+    return {
+      ...plan,
+      name: defaults.name,
+      description: defaults.description,
+      price: this.builtInPrice(defaults.code, billingInterval),
+      billingInterval,
+      billingIntervalCount: billingInterval === BillingInterval.YEARLY ? 12 : 1,
+      trialDays: defaults.code === 'FREE' ? 0 : 14,
+      isActive: true,
+      isPublic: true,
+      sortOrder: defaults.sortOrder,
+      rowStatus: 'ACTIVE',
+    } as BillingPlanEntity;
   }
 
   private builtInPrice(code: string, interval: BillingInterval) {
