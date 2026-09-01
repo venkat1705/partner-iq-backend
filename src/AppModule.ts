@@ -23,6 +23,7 @@ import { AssetManagementModule } from './modules/asset-management/asset-manageme
 import { PartnerDealsModule } from './modules/partner-deals/partner-deals.module';
 import { GamificationModule } from './modules/gamification/gamification.module';
 import { AutomationsModule } from './modules/automations/automations.module';
+import { DemoBookingsModule } from './modules/demo-bookings/demo-bookings.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { AutomationsModule } from './modules/automations/automations.module';
     PartnerDealsModule,
     GamificationModule,
     AutomationsModule,
+    DemoBookingsModule,
   ],
 })
 export class AppModule {}

@@ -1990,6 +1990,70 @@ export class AuditLog {
   createdAt!: Date;
 }
 
+@Entity('demo_bookings')
+export class DemoBooking {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column({ type: 'varchar', length: 120 })
+  firstName!: string;
+
+  @Column({ type: 'varchar', length: 120 })
+  lastName!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 255 })
+  email!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  company!: string;
+
+  @Column({ type: 'varchar', length: 80 })
+  partnerCount!: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  phone?: string;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  website?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  jobTitle?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  businessModel?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  companySize?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  programStatus?: string;
+
+  @Column({ type: 'simple-array', nullable: true })
+  interests?: string[];
+
+  @Column({ type: 'text' })
+  challenge!: string;
+
+  @Column({ type: 'timestamp' })
+  scheduledAt!: Date;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  timezone?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  host?: string;
+
+  @Column({ type: 'varchar', length: 40, default: 'new' })
+  status!: 'new' | 'confirmed' | 'completed' | 'rescheduled' | 'cancelled';
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
 @Entity('public_keys')
 export class PublicKey {
   @PrimaryGeneratedColumn('uuid')

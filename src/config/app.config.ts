@@ -18,7 +18,7 @@ export const getAppConfig = (): AppConfig => {
   const isProduction = process.env.NODE_ENV === 'production';
   const origins = process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim())
-    : ['http://localhost:3000', 'http://localhost:3001'];
+    : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002'];
   const appUrl = process.env.APP_URL || 'http://localhost:5000';
 
   return {

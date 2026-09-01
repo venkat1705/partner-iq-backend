@@ -38,6 +38,31 @@ export class GoogleCallbackQueryDto {
   @IsOptional()
   @IsString()
   error_description?: string;
+
+  @ApiPropertyOptional({ description: 'OAuth scopes returned by Google on successful authorization' })
+  @IsOptional()
+  @IsString()
+  scope?: string;
+
+  @ApiPropertyOptional({ description: 'Google account selector index returned by Google' })
+  @IsOptional()
+  @IsString()
+  authuser?: string;
+
+  @ApiPropertyOptional({ description: 'Prompt behavior echoed by Google in some OAuth callbacks' })
+  @IsOptional()
+  @IsString()
+  prompt?: string;
+
+  @ApiPropertyOptional({ description: 'Issuer returned by Google in some OpenID Connect callbacks' })
+  @IsOptional()
+  @IsString()
+  iss?: string;
+
+  @ApiPropertyOptional({ description: 'Hosted domain returned by Google Workspace accounts' })
+  @IsOptional()
+  @IsString()
+  hd?: string;
 }
 
 export class GoogleTokenExchangeDto {

@@ -54,6 +54,7 @@ import {
   WebhookEndpoint,
   WebhookDelivery,
   AuditLog,
+  DemoBooking,
   PublicKey,
   Integration,
   OrganizationIntegration,
@@ -143,6 +144,7 @@ export type PayoutItemEntity = PayoutItem;
 export type WebhookEndpointEntity = WebhookEndpoint;
 export type WebhookDeliveryEntity = WebhookDelivery;
 export type AuditLogEntity = AuditLog;
+export type DemoBookingEntity = DemoBooking;
 export type PublicKeyEntity = PublicKey;
 export type IntegrationEntity = Integration;
 export type OrganizationIntegrationEntity = OrganizationIntegration;
@@ -376,6 +378,7 @@ export class InMemoryDataStore {
   webhookEndpoints: WebhookEndpointEntity[] = [];
   webhookDeliveries: WebhookDeliveryEntity[] = [];
   auditLogs: AuditLogEntity[] = [];
+  demoBookings: DemoBookingEntity[] = [];
   publicKeys: PublicKeyEntity[] = [];
   integrations: IntegrationEntity[] = [];
   organizationIntegrations: OrganizationIntegrationEntity[] = [];
@@ -530,6 +533,7 @@ export class InMemoryDataStore {
       await AppDataSource.getRepository(WebhookDelivery).find(),
     );
     this.auditLogs = new DBBackedArray(AppDataSource.getRepository(AuditLog), await AppDataSource.getRepository(AuditLog).find());
+    this.demoBookings = new DBBackedArray(AppDataSource.getRepository(DemoBooking), await AppDataSource.getRepository(DemoBooking).find());
     this.publicKeys = new DBBackedArray(AppDataSource.getRepository(PublicKey), await AppDataSource.getRepository(PublicKey).find());
     this.integrations = new DBBackedArray(AppDataSource.getRepository(Integration), await AppDataSource.getRepository(Integration).find());
     this.organizationIntegrations = new DBBackedArray(

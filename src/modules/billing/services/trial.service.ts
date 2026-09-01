@@ -43,6 +43,14 @@ export class TrialService {
       throw new NotFoundException('Organization not found');
     }
 
+    const paidSubscription = this.findCurrentPaidSubscription(organizationId);
+    if (paidSubscription) {
+      throw new BadRequestException({
+        code: 'ACTIVE_SUBSCRIPTION_EXISTS',
+        message: 'This organization already has an active paid subscription.',
+      });
+    }
+
     // 2. Prevent trial abuse
     let trialRecord = dbStore.organizationTrials.find((t) => t.organizationId === organizationId);
     if (trialRecord && trialRecord.trialUsed) {
@@ -154,9 +162,11 @@ export class TrialService {
   async getTrialStatus(organizationId: string): Promise<TrialStatusResult> {
     await this.planService.ensureDefaultPlans();
 
-    const subscription = dbStore.billingSubscriptions
-      .filter((s) => s.organizationId === organizationId && s.rowStatus === 'ACTIVE')
-      .sort((a, b) => new Date(b.createdDate).getTime() - new Date(a.createdDate).getTime())[0];
+    const subscription =
+      this.findCurrentPaidSubscription(organizationId) ||
+      dbStore.billingSubscriptions
+        .filter((s) => s.organizationId === organizationId && s.rowStatus === 'ACTIVE')
+        .sort((a, b) => new Date(b.createdDate).getTime() - new Date(a.createdDate).getTime())[0];
 
     const plan = subscription
       ? dbStore.billingPlans.find((p) => p.id === subscription.planId)
@@ -256,5 +266,28 @@ export class TrialService {
     });
 
     return this.getTrialStatus(organizationId);
+  }
+
+  private findCurrentPaidSubscription(organizationId: string): BillingSubscriptionEntity | undefined {
+    const paidStatuses = [
+      SubscriptionStatus.ACTIVE,
+      SubscriptionStatus.PAST_DUE,
+      SubscriptionStatus.CANCEL_PENDING,
+      SubscriptionStatus.PAUSED,
+    ];
+
+    return dbStore.billingSubscriptions
+      .filter((subscription) =>
+        subscription.organizationId === organizationId &&
+        subscription.rowStatus === 'ACTIVE' &&
+        paidStatuses.includes(subscription.status as SubscriptionStatus),
+      )
+      .sort((a, b) => {
+        const planA = dbStore.billingPlans.find((plan) => plan.id === a.planId);
+        const planB = dbStore.billingPlans.find((plan) => plan.id === b.planId);
+        const rankDiff = this.planService.rank(planB?.code) - this.planService.rank(planA?.code);
+        if (rankDiff !== 0) return rankDiff;
+        return new Date(b.modifiedDate || b.createdDate).getTime() - new Date(a.modifiedDate || a.createdDate).getTime();
+      })[0];
   }
 }

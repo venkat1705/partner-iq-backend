@@ -56,17 +56,21 @@ export async function createPartnerIqApp() {
   app.useGlobalFilters(new GlobalExceptionFilter());
   app.useGlobalInterceptors(new LoggingInterceptor(), new TransformInterceptor());
 
+  let openApiDocument: ReturnType<typeof SwaggerModule.createDocument> | null = null;
+
   if (appConfig.enableSwagger) {
     const swaggerConfig = new DocumentBuilder()
       .setTitle('PartnerIQ API')
       .setDescription('PartnerIQ REST API v1, internal application APIs, SDK integration, and webhook documentation.')
       .setVersion('1.0.0')
+      .addServer(appConfig.appUrl, 'Local API')
+      .addServer('https://api.partneriq.in', 'Production API')
       .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }, 'JWT')
       .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'PartnerIQ secret API key' }, 'ApiKey')
       .build();
 
-    const document = SwaggerModule.createDocument(app, swaggerConfig);
-    SwaggerModule.setup('api/docs', app, document);
+    openApiDocument = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('api/docs', app, openApiDocument);
   }
 
   const expressApp = app.getHttpAdapter().getInstance();
@@ -74,9 +78,15 @@ export async function createPartnerIqApp() {
     res.json({
       name: 'PartnerIQ API',
       status: 'online',
-      ...(appConfig.enableSwagger ? { docs: '/api/docs' } : {}),
+      ...(appConfig.enableSwagger ? { docs: '/api/docs', openapi: '/openapi.json' } : {}),
     });
   });
+
+  if (openApiDocument) {
+    expressApp.get('/openapi.json', (_req: express.Request, res: express.Response) => {
+      res.json(openApiDocument);
+    });
+  }
 
   return app;
 }
