@@ -1,6 +1,8 @@
 import { dbStore } from '../store';
 import { initializeDataSource } from '../data-source';
 import {
+  EmailDesignTemplate,
+  EmailDesignSettings,
   FraudSettings,
   Integration,
   Organization,
@@ -37,6 +39,8 @@ import {
 import { MembershipStatus, RoleType, ProgramAccessType } from '../../common/enums/rbac';
 import { PERMISSIONS, BUILT_IN_ROLES } from '../../common/constants/permission-catalog';
 import { v4 as uuidv4 } from 'uuid';
+import path from 'path';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 export async function runSeed() {
   console.log('🌱 Seeding PartnerIQ database...');
@@ -48,6 +52,8 @@ export async function runSeed() {
   const programs = dataSource.getRepository(Program);
   const fraudSettings = dataSource.getRepository(FraudSettings);
   const integrations = dataSource.getRepository(Integration);
+  const emailDesignTemplates = dataSource.getRepository(EmailDesignTemplate);
+  const emailDesignSettings = dataSource.getRepository(EmailDesignSettings);
   const rolesRepo = dataSource.getRepository(RoleDefinition);
   const permissionsRepo = dataSource.getRepository(PermissionDefinition);
   const rolePermissionsRepo = dataSource.getRepository(RolePermission);
@@ -614,6 +620,9 @@ export async function runSeed() {
     ]);
   }
 
+  await seedEmailDesignDefaults(emailDesignTemplates);
+  await seedEmailDesignSettings(emailDesignSettings);
+
   // Seed Default Automation Workflows
   const workflowsRepo = dataSource.getRepository(AutomationWorkflow);
   const existingWorkflows = await workflowsRepo.find({ where: { organizationId: org.id } });
@@ -657,6 +666,89 @@ export async function runSeed() {
   }
 
   return { admin, org, seedPrograms, affiliate };
+}
+
+async function seedEmailDesignSettings(emailDesignSettingsRepo: any) {
+  const existing = await emailDesignSettingsRepo.findOne({ where: { settingsKey: 'default' } });
+  if (existing) return;
+
+  await emailDesignSettingsRepo.save(emailDesignSettingsRepo.create({
+    id: uuidv4(),
+    settingsKey: 'default',
+    payload: {
+      name: 'PartnerIQ',
+      tagline: 'Partner & Affiliate Management Platform',
+      signature: 'Built for better partnerships.',
+      companyLegal: 'PartnerIQ Technologies Inc.',
+      logoUrl:
+        'https://res.cloudinary.com/bunny1705/image/upload/v1787584202/partneriq/92977d80-3e51-4a12-a382-64b42fb5466a/organization-logo/rrhwttefwtgrxico2rtv.png',
+      websiteUrl: 'https://partneriq.io',
+      docsUrl: 'https://docs.partneriq.io',
+      helpCenterUrl: 'https://help.partneriq.io',
+      privacyUrl: 'https://partneriq.io/privacy',
+      termsUrl: 'https://partneriq.io/terms',
+      supportEmail: 'support@partneriq.io',
+      physicalAddress: '548 Market St, Suite 39201, San Francisco, CA 94104',
+      updatedAt: new Date().toISOString(),
+    },
+  }));
+
+  console.log('Seeded email design brand/footer settings');
+}
+
+async function seedEmailDesignDefaults(emailDesignTemplatesRepo: any) {
+  const seedDir = path.dirname(fileURLToPath(import.meta.url));
+  const registryUrl = pathToFileURL(
+    path.resolve(seedDir, '..', '..', '..', '..', 'email-design', 'src', 'emails', 'templates', 'registry.ts'),
+  ).href;
+
+  try {
+    const registry = await import(registryUrl);
+    const defaults = Array.isArray(registry.ALL_TEMPLATES) ? registry.ALL_TEMPLATES : [];
+    let savedCount = 0;
+
+    for (const template of defaults) {
+      if (!template?.id) continue;
+
+      const existing = await emailDesignTemplatesRepo.findOne({ where: { templateId: template.id } });
+      if (existing?.isCustom || existing?.isEdited) continue;
+
+      const payload = {
+        id: template.id,
+        name: template.name,
+        category: template.category,
+        description: template.description,
+        tags: template.tags || [],
+        defaultSubject: template.defaultSubject,
+        defaultPreheader: template.defaultPreheader,
+        variables: template.variables || [],
+        defaultData: template.defaultData || {},
+        samplePresets: template.samplePresets,
+        bodyTemplate: typeof template.renderBody === 'function' ? template.renderBody(template.defaultData || {}) : '',
+        securityNotice: template.securityNotice,
+        isCustom: false,
+        isEdited: false,
+        updatedAt: new Date().toISOString(),
+      };
+
+      await emailDesignTemplatesRepo.save(emailDesignTemplatesRepo.create({
+        ...(existing || { id: uuidv4() }),
+        templateId: template.id,
+        name: template.name,
+        category: template.category,
+        isCustom: false,
+        isEdited: false,
+        payload,
+      }));
+      savedCount += 1;
+    }
+
+    if (savedCount > 0) {
+      console.log(`Seeded ${savedCount} email design default templates`);
+    }
+  } catch (error) {
+    console.warn('Unable to seed email design defaults from registry:', error instanceof Error ? error.message : error);
+  }
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

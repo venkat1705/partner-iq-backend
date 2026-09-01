@@ -82,6 +82,8 @@ import {
   AutomationExecution,
   AutomationScheduledStep,
   AutomationEmailTemplate,
+  EmailDesignTemplate,
+  EmailDesignSettings,
   AutomationEmailLog,
 } from './schema';
 import {
@@ -201,6 +203,8 @@ export const AppDataSource = new DataSource({
     AutomationExecution,
     AutomationScheduledStep,
     AutomationEmailTemplate,
+    EmailDesignTemplate,
+    EmailDesignSettings,
     AutomationEmailLog,
     RoleDefinition,
     PermissionDefinition,

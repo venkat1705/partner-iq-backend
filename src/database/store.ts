@@ -100,6 +100,8 @@ import {
   AutomationExecution,
   AutomationScheduledStep,
   AutomationEmailTemplate,
+  EmailDesignTemplate,
+  EmailDesignSettings,
   AutomationEmailLog,
 } from './schema';
 import {
@@ -190,6 +192,8 @@ export type AutomationWorkflowVersionEntity = AutomationWorkflowVersion;
 export type AutomationExecutionEntity = AutomationExecution;
 export type AutomationScheduledStepEntity = AutomationScheduledStep;
 export type AutomationEmailTemplateEntity = AutomationEmailTemplate;
+export type EmailDesignTemplateEntity = EmailDesignTemplate;
+export type EmailDesignSettingsEntity = EmailDesignSettings;
 export type AutomationEmailLogEntity = AutomationEmailLog;
 export type RoleDefinitionEntity = import('./schema-rbac').RoleDefinition;
 export type PermissionDefinitionEntity = import('./schema-rbac').PermissionDefinition;
@@ -424,6 +428,8 @@ export class InMemoryDataStore {
   automationExecutions: AutomationExecutionEntity[] = [];
   automationScheduledSteps: AutomationScheduledStepEntity[] = [];
   automationEmailTemplates: AutomationEmailTemplateEntity[] = [];
+  emailDesignTemplates: EmailDesignTemplateEntity[] = [];
+  emailDesignSettings: EmailDesignSettingsEntity[] = [];
   automationEmailLogs: AutomationEmailLogEntity[] = [];
   roles: RoleDefinitionEntity[] = [];
   permissions: PermissionDefinitionEntity[] = [];
@@ -698,6 +704,14 @@ export class InMemoryDataStore {
     this.automationEmailTemplates = new DBBackedArray(
       AppDataSource.getRepository(AutomationEmailTemplate),
       await AppDataSource.getRepository(AutomationEmailTemplate).find(),
+    );
+    this.emailDesignTemplates = new DBBackedArray(
+      AppDataSource.getRepository(EmailDesignTemplate),
+      await AppDataSource.getRepository(EmailDesignTemplate).find(),
+    );
+    this.emailDesignSettings = new DBBackedArray(
+      AppDataSource.getRepository(EmailDesignSettings),
+      await AppDataSource.getRepository(EmailDesignSettings).find(),
     );
     this.automationEmailLogs = new DBBackedArray(
       AppDataSource.getRepository(AutomationEmailLog),

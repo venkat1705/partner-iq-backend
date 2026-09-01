@@ -5,6 +5,7 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import express from 'express';
+import { randomBytes } from 'crypto';
 import { AppModule } from './src/AppModule';
 import { GlobalExceptionFilter } from './src/common/filters/global-exception.filter';
 import { TransformInterceptor } from './src/common/interceptors/transform.interceptor';
@@ -28,12 +29,28 @@ async function bootstrap() {
   await runSeed();
   await dbStore.initialize();
 
-  const app = await NestFactory.create(AppModule, { cors: true, bodyParser: false });
+  const app = await NestFactory.create(AppModule, { rawBody: true, bodyParser: false });
   const appConfig = getAppConfig();
+
+  app.enableCors({
+    origin: appConfig.corsOrigins,
+    credentials: true,
+  });
 
   // Express Middlewares
   app.use(cookieParser());
-  app.use(express.json({ limit: '10mb' }));
+  app.use((req, res, next) => {
+    const requestId = (req.headers['x-request-id'] as string) || `req_${randomBytes(12).toString('hex')}`;
+    req.headers['x-request-id'] = requestId;
+    res.setHeader('X-Request-ID', requestId);
+    next();
+  });
+  app.use(express.json({
+    limit: '10mb',
+    verify: (req: express.Request & { rawBody?: Buffer }, _res, buf) => {
+      req.rawBody = Buffer.from(buf);
+    },
+  }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
   app.use(
     helmet({

@@ -4054,6 +4054,56 @@ export class AutomationEmailTemplate {
   updatedAt!: Date;
 }
 
+@Entity('email_design_templates')
+@Unique(['templateId'])
+export class EmailDesignTemplate {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column({ type: 'varchar', length: 150 })
+  templateId!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  name!: string;
+
+  @Column({ type: 'varchar', length: 80 })
+  category!: string;
+
+  @Column({ type: 'boolean', default: false })
+  isCustom!: boolean;
+
+  @Column({ type: 'boolean', default: false })
+  isEdited!: boolean;
+
+  @Column({ type: 'simple-json' })
+  payload!: any;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
+@Entity('email_design_settings')
+@Unique(['settingsKey'])
+export class EmailDesignSettings {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column({ type: 'varchar', length: 80 })
+  settingsKey!: string;
+
+  @Column({ type: 'simple-json' })
+  payload!: any;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
 @Entity('automation_email_logs')
 export class AutomationEmailLog {
   @PrimaryGeneratedColumn('uuid')

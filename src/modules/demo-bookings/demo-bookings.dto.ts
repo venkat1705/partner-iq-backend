@@ -20,7 +20,6 @@ export class CreateDemoBookingDto {
 }
 
 export class UpdateDemoBookingStatusDto {
-  @IsString() @IsNotEmpty() id!: string;
   @IsString() @IsIn(['new', 'confirmed', 'completed', 'rescheduled', 'cancelled'])
   status!: 'new' | 'confirmed' | 'completed' | 'rescheduled' | 'cancelled';
 }

@@ -24,6 +24,7 @@ import { PartnerDealsModule } from './modules/partner-deals/partner-deals.module
 import { GamificationModule } from './modules/gamification/gamification.module';
 import { AutomationsModule } from './modules/automations/automations.module';
 import { DemoBookingsModule } from './modules/demo-bookings/demo-bookings.module';
+import { EmailDesignModule } from './modules/email-design/email-design.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { DemoBookingsModule } from './modules/demo-bookings/demo-bookings.module
     GamificationModule,
     AutomationsModule,
     DemoBookingsModule,
+    EmailDesignModule,
   ],
 })
 export class AppModule {}

@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { DemoBookingsService } from './demo-bookings.service';
 import { CreateDemoBookingDto, UpdateDemoBookingStatusDto } from './demo-bookings.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PlatformAdminGuard } from '../../common/guards/platform-admin.guard';
 
 @ApiTags('Demo Bookings')
 @Controller('api/v1')
@@ -15,16 +16,16 @@ export class DemoBookingsController {
     return this.demoBookingsService.create(dto);
   }
 
-  @Get('demo-bookings')
-  @UseGuards(JwtAuthGuard)
+  @Get('admin/demo-bookings')
+  @UseGuards(JwtAuthGuard, PlatformAdminGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List demo bookings for the admin console' })
   async list(@Query('status') status?: string) {
     return this.demoBookingsService.list(status);
   }
 
-  @Patch('demo-bookings/:id/status')
-  @UseGuards(JwtAuthGuard)
+  @Patch('admin/demo-bookings/:id/status')
+  @UseGuards(JwtAuthGuard, PlatformAdminGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update a demo booking status' })
   async updateStatus(@Param('id') id: string, @Body() dto: UpdateDemoBookingStatusDto) {
