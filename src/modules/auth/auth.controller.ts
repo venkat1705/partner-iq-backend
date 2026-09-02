@@ -22,6 +22,10 @@ import {
   ForgotPasswordDto,
   ResetPasswordDto,
   VerifyEmailDto,
+  MfaChallengeDto,
+  MfaVerifyDto,
+  MfaSetupVerifyDto,
+  MfaDisableDto,
 } from './dto/auth.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -175,5 +179,67 @@ export class AuthController {
   @ApiOperation({ summary: 'Verify user email with token' })
   async verifyEmail(@Body() dto: VerifyEmailDto) {
     return { success: true, message: 'Email verified successfully' };
+  }
+
+  @Post('mfa/setup')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Begin Authenticator App enrollment' })
+  async setupMfa(@CurrentUser() user: AuthUserPayload) {
+    return this.authService.setupMfa(user.userId, user.email);
+  }
+
+  @Post('mfa/setup/verify')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Verify Authenticator App setup code and enable MFA' })
+  async verifyMfaSetup(@CurrentUser() user: AuthUserPayload, @Body() dto: MfaSetupVerifyDto) {
+    return this.authService.verifyMfaSetup(user.userId, dto.code);
+  }
+
+  @Post('mfa/disable')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Disable MFA after verification' })
+  async disableMfa(@CurrentUser() user: AuthUserPayload, @Body() dto: MfaDisableDto) {
+    return this.authService.disableMfa(user.userId, dto.password, dto.code);
+  }
+
+  @Post('mfa/challenge')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Create a short-lived MFA challenge for a user with MFA enabled' })
+  async createMfaChallenge(@Body() dto: MfaChallengeDto, @Req() req: Request) {
+    const userAgent = req.headers['user-agent'];
+    const ipAddress = req.ip || (req.headers['x-forwarded-for'] as string);
+    return this.authService.createMfaChallenge(dto.email, dto.password, userAgent, ipAddress);
+  }
+
+  @Post('mfa/verify')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify an MFA challenge using an authenticator code or recovery code' })
+  async verifyMfa(@Body() dto: MfaVerifyDto, @Req() req: Request) {
+    const userAgent = req.headers['user-agent'];
+    const ipAddress = req.ip || (req.headers['x-forwarded-for'] as string);
+    return this.authService.verifyMfaChallenge(dto.challengeId, dto.code, dto.recoveryCode, userAgent, ipAddress);
+  }
+
+  @Post('mfa/recovery/regenerate')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Regenerate recovery codes after step-up verification' })
+  async regenerateRecoveryCodes(@CurrentUser() user: AuthUserPayload, @Body() dto: MfaSetupVerifyDto) {
+    return this.authService.regenerateRecoveryCodes(user.userId, dto.code);
+  }
+
+  @Post('mfa/recovery/verify')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify a recovery code during login or step-up' })
+  async verifyRecoveryCode(@Body() dto: MfaVerifyDto, @Req() req: Request) {
+    const userAgent = req.headers['user-agent'];
+    const ipAddress = req.ip || (req.headers['x-forwarded-for'] as string);
+    return this.authService.verifyRecoveryCode(dto.challengeId, dto.recoveryCode, userAgent, ipAddress);
   }
 }

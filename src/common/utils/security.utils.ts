@@ -4,7 +4,7 @@ import * as crypto from 'crypto';
 export class SecurityUtils {
   private static readonly SALT_ROUNDS = 12;
   private static readonly MASTER_KEY =
-    process.env.ENCRYPTION_KEY || 'partneriq_master_encryption_key_32bytes!!';
+    process.env.ENCRYPTION_KEY || process.env.TOTP_ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex');
 
   static async hashPassword(password: string): Promise<string> {
     return bcrypt.hash(password, this.SALT_ROUNDS);
@@ -26,6 +26,82 @@ export class SecurityUtils {
       result += chars[randomBytes[i] % chars.length];
     }
     return result;
+  }
+
+  private static base32Encode(buffer: Buffer): string {
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    let bits = 0;
+    let value = 0;
+    let output = '';
+
+    for (const byte of buffer) {
+      value = (value << 8) | byte;
+      bits += 8;
+
+      while (bits >= 5) {
+        output += alphabet[(value >>> (bits - 5)) & 31];
+        bits -= 5;
+      }
+    }
+
+    if (bits > 0) {
+      output += alphabet[(value << (5 - bits)) & 31];
+    }
+
+    return output;
+  }
+
+  static generateTotpSecret(label: string): { secret: string; otpauthUri: string; manualKey: string } {
+    const secret = this.base32Encode(crypto.randomBytes(20)).slice(0, 32).toUpperCase();
+    const issuer = 'PartnerIQ';
+    const encodedLabel = encodeURIComponent(label);
+    const encodedIssuer = encodeURIComponent(issuer);
+    const otpauthUri = `otpauth://totp/${encodedIssuer}:${encodedLabel}?secret=${secret}&issuer=${encodedIssuer}&algorithm=SHA1&digits=6&period=30`;
+    return { secret, otpauthUri, manualKey: secret };
+  }
+
+  static generateTotpCode(secret: string, timeCounter?: number): string {
+    const counter = timeCounter ?? Math.floor(Date.now() / 30000);
+    const base32 = secret.replace(/\s/g, '').toUpperCase();
+    const key = Buffer.from(base32, 'base32');
+    const buffer = Buffer.alloc(8);
+    let value = counter;
+    for (let i = 7; i >= 0; i--) {
+      buffer[i] = value & 0xff;
+      value = Math.floor(value / 256);
+    }
+
+    const hmac = crypto.createHmac('sha1', key).update(buffer).digest();
+    const offset = hmac[hmac.length - 1] & 0xf;
+    const code = ((hmac[offset] & 0x7f) << 24) | ((hmac[offset + 1] & 0xff) << 16) | ((hmac[offset + 2] & 0xff) << 8) | (hmac[offset + 3] & 0xff);
+    return String(code % 1000000).padStart(6, '0');
+  }
+
+  static verifyTotpCode(secret: string, code: string, skewWindow = 1): boolean {
+    if (!secret || !code || !/^\d{6}$/.test(code)) {
+      return false;
+    }
+
+    const counter = Math.floor(Date.now() / 30000);
+    for (let offset = -skewWindow; offset <= skewWindow; offset += 1) {
+      if (this.generateTotpCode(secret, counter + offset) === code) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static generateRecoveryCodes(count = 10): string[] {
+    const codes: string[] = [];
+    for (let i = 0; i < count; i += 1) {
+      const code = `${crypto.randomBytes(3).toString('hex').toUpperCase().slice(0, 4)}-${crypto.randomBytes(3).toString('hex').toUpperCase().slice(0, 4)}`;
+      codes.push(code);
+    }
+    return codes;
+  }
+
+  static hashRecoveryCode(code: string): string {
+    return crypto.createHash('sha256').update(code.trim().toUpperCase()).digest('hex');
   }
 
   static generateApiKey(
@@ -125,6 +201,9 @@ export class SecurityUtils {
       'code_verifier',
       'codeChallenge',
       'code_challenge',
+      'totpSecret',
+      'recoveryCode',
+      'otp',
     ];
 
     const copy = Array.isArray(obj) ? [...obj] : { ...obj };

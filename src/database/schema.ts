@@ -289,6 +289,215 @@ export class AuthSession {
   createdAt!: Date;
 }
 
+@Entity('user_devices')
+export class UserDevice {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  userId!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  deviceIdentifierHash!: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  displayName?: string;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  deviceType?: string;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  operatingSystem?: string;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  osVersion?: string;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  browser?: string;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  browserVersion?: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  firstSeenAt?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  lastSeenAt?: Date;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  lastIpAddress?: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  country?: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  region?: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  city?: string;
+
+  @Column({ type: 'boolean', default: false })
+  isTrusted!: boolean;
+
+  @Column({ type: 'timestamp', nullable: true })
+  trustedAt?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  trustedUntil?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  revokedAt?: Date;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
+@Entity('user_mfa_configs')
+export class UserMfaConfig {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index({ unique: true })
+  @Column({ type: 'uuid' })
+  userId!: string;
+
+  @Column({ type: 'boolean', default: false })
+  enabled!: boolean;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  method?: string;
+
+  @Column({ type: 'text', nullable: true })
+  secretEncrypted?: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  enabledAt?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  lastVerifiedAt?: Date;
+
+  @Column({ type: 'simple-json', nullable: true })
+  metadata?: Record<string, any>;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
+@Entity('user_recovery_codes')
+export class UserRecoveryCode {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  userId!: string;
+
+  @Column({ type: 'varchar', length: 128 })
+  codeHash!: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  usedAt?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  revokedAt?: Date;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+}
+
+@Entity('mfa_challenges')
+export class MfaChallenge {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  userId!: string;
+
+  @Column({ type: 'varchar', length: 100 })
+  challengeId!: string;
+
+  @Column({ type: 'varchar', length: 50 })
+  method!: string;
+
+  @Column({ type: 'timestamp' })
+  expiresAt!: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  usedAt?: Date;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  ipAddress?: string;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  userAgent?: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  metadata?: Record<string, any>;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+}
+
+@Entity('auth_security_events')
+export class AuthSecurityEvent {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  userId?: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  organizationId?: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  sessionId?: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  deviceId?: string;
+
+  @Column({ type: 'varchar', length: 100 })
+  eventType!: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  ipAddress?: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  country?: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  region?: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  city?: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  browser?: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  operatingSystem?: string;
+
+  @Column({ type: 'int', default: 0 })
+  riskScore!: number;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  riskLevel?: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  metadata?: Record<string, any>;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+}
+
 @Entity('notifications')
 export class Notification {
   @PrimaryGeneratedColumn('uuid')

@@ -73,3 +73,46 @@ export class VerifyEmailDto {
   @IsString()
   token!: string;
 }
+
+export class MfaChallengeDto {
+  @ApiProperty({ example: 'user@example.com' })
+  @IsEmail()
+  email!: string;
+
+  @ApiProperty({ example: 'PartnerIQ@123' })
+  @IsString()
+  password!: string;
+}
+
+export class MfaVerifyDto {
+  @ApiProperty({ example: 'challenge-123' })
+  @IsString()
+  challengeId!: string;
+
+  @ApiPropertyOptional({ example: '123456' })
+  @IsOptional()
+  @IsString()
+  code?: string;
+
+  @ApiPropertyOptional({ example: 'ABCD-EFGH' })
+  @IsOptional()
+  @IsString()
+  recoveryCode?: string;
+}
+
+export class MfaSetupVerifyDto {
+  @ApiProperty({ example: '123456' })
+  @IsString()
+  code!: string;
+}
+
+export class MfaDisableDto {
+  @ApiProperty({ example: 'PartnerIQ@123' })
+  @IsString()
+  password!: string;
+
+  @ApiPropertyOptional({ example: '123456' })
+  @IsOptional()
+  @IsString()
+  code?: string;
+}
