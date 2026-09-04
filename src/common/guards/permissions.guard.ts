@@ -45,16 +45,22 @@ export class PermissionsGuard implements CanActivate {
     }
 
     if (!user.role) {
-      throw new ForbiddenException('User role is not defined for this organization context');
+      throw new ForbiddenException({
+        statusCode: 403,
+        code: 'PERMISSION_DENIED',
+        message: 'User role is not defined for this organization context',
+      });
     }
 
     const comparisons = requiredPermissions.map((permission) => hasPermission(user.role!, permission));
     const allowed = permissionsMode === 'ANY' ? comparisons.some(Boolean) : comparisons.every(Boolean);
 
     if (!allowed) {
-      throw new ForbiddenException(
-        `Insufficient permissions for role '${user.role}'. Required: ${requiredPermissions.join(', ')}`,
-      );
+      throw new ForbiddenException({
+        statusCode: 403,
+        code: 'PERMISSION_DENIED',
+        message: `Insufficient permissions for role '${user.role}'. Required: ${requiredPermissions.join(', ')}`,
+      });
     }
 
     return true;

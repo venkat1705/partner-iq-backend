@@ -27,6 +27,35 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  affiliate-backend:
+    build:
+      context: ../affiliate-backend
+      dockerfile: Dockerfile
+    container_name: partneriq-affiliate-backend
+    ports:
+      - "3006:3006"
+    environment:
+      - NODE_ENV=production
+      - PORT=3006
+      - APP_URL=http://localhost:3006
+      - AFFILIATE_PORTAL_URL=http://localhost:3005
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_NAME=partneriq
+      - DATABASE_USER=partneriq
+      - DATABASE_PASSWORD=partneriq_secure_pass
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_ACCESS_SECRET=partneriq_super_secret_jwt_access_key_min_32_chars
+      - JWT_REFRESH_SECRET=partneriq_super_secret_jwt_refresh_key_min_32_chars
+      - ENCRYPTION_KEY=partneriq_dev_encryption_key_fallback_32x
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
   partneriq-worker:
     build:
       context: .

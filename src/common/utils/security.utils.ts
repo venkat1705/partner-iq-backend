@@ -1,10 +1,26 @@
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 
+const DEV_FALLBACK_ENCRYPTION_KEY = 'partneriq_dev_encryption_key_fallback_32x';
+
+function resolveMasterKey(): string {
+  const key = process.env.ENCRYPTION_KEY || process.env.TOTP_ENCRYPTION_KEY;
+  if (!key) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        'ENCRYPTION_KEY environment variable is required in production. ' +
+        'Generate one with: openssl rand -hex 32'
+      );
+    }
+    // Development fallback — stable across restarts unlike crypto.randomBytes
+    return DEV_FALLBACK_ENCRYPTION_KEY;
+  }
+  return key;
+}
+
 export class SecurityUtils {
   private static readonly SALT_ROUNDS = 12;
-  private static readonly MASTER_KEY =
-    process.env.ENCRYPTION_KEY || process.env.TOTP_ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex');
+  private static readonly MASTER_KEY = resolveMasterKey();
 
   static async hashPassword(password: string): Promise<string> {
     return bcrypt.hash(password, this.SALT_ROUNDS);
@@ -51,6 +67,25 @@ export class SecurityUtils {
     return output;
   }
 
+  private static base32Decode(base32: string): Buffer {
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    let bits = 0;
+    let value = 0;
+    const bytes: number[] = [];
+
+    for (let i = 0; i < base32.length; i++) {
+      const index = alphabet.indexOf(base32[i]);
+      if (index === -1) continue;
+      value = (value << 5) | index;
+      bits += 5;
+      if (bits >= 8) {
+        bytes.push((value >>> (bits - 8)) & 255);
+        bits -= 8;
+      }
+    }
+    return Buffer.from(bytes);
+  }
+
   static generateTotpSecret(label: string): { secret: string; otpauthUri: string; manualKey: string } {
     const secret = this.base32Encode(crypto.randomBytes(20)).slice(0, 32).toUpperCase();
     const issuer = 'PartnerIQ';
@@ -63,7 +98,7 @@ export class SecurityUtils {
   static generateTotpCode(secret: string, timeCounter?: number): string {
     const counter = timeCounter ?? Math.floor(Date.now() / 30000);
     const base32 = secret.replace(/\s/g, '').toUpperCase();
-    const key = Buffer.from(base32, 'base32');
+    const key = this.base32Decode(base32);
     const buffer = Buffer.alloc(8);
     let value = counter;
     for (let i = 7; i >= 0; i--) {

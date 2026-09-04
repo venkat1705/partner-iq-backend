@@ -1,0 +1,527 @@
+/**
+ * Canonical System Email Template Keys and Variable Schemas
+ */
+
+export enum SystemTemplateKey {
+  // Authentication & Security (PartnerIQ Controlled — System Scope)
+  SECURITY_EMAIL_VERIFICATION = 'SECURITY_EMAIL_VERIFICATION',
+  SECURITY_PASSWORD_RESET = 'SECURITY_PASSWORD_RESET',
+  SECURITY_PASSWORD_CHANGED = 'SECURITY_PASSWORD_CHANGED',
+  SECURITY_NEW_LOGIN = 'SECURITY_NEW_LOGIN',
+  SECURITY_TWO_FACTOR_ENABLED = 'SECURITY_TWO_FACTOR_ENABLED',
+  SECURITY_TWO_FACTOR_DISABLED = 'SECURITY_TWO_FACTOR_DISABLED',
+  SECURITY_PAYOUT_METHOD_CHANGED = 'SECURITY_PAYOUT_METHOD_CHANGED',
+  SECURITY_EMAIL_CHANGED = 'SECURITY_EMAIL_CHANGED',
+
+  // Affiliate & Partner Communications (Organization Scope)
+  AFFILIATE_INVITATION = 'AFFILIATE_INVITATION',
+  AFFILIATE_WELCOME = 'AFFILIATE_WELCOME',
+  AFFILIATE_APPLICATION_RECEIVED = 'AFFILIATE_APPLICATION_RECEIVED',
+  AFFILIATE_APPLICATION_APPROVED = 'AFFILIATE_APPLICATION_APPROVED',
+  AFFILIATE_APPLICATION_REJECTED = 'AFFILIATE_APPLICATION_REJECTED',
+  AFFILIATE_TIER_CHANGED = 'AFFILIATE_TIER_CHANGED',
+  AFFILIATE_NEW_ASSET = 'AFFILIATE_NEW_ASSET',
+  AFFILIATE_PROGRAM_ANNOUNCEMENT = 'AFFILIATE_PROGRAM_ANNOUNCEMENT',
+
+  // Conversions & Commissions (Organization Scope)
+  AFFILIATE_COMMISSION_CREATED = 'AFFILIATE_COMMISSION_CREATED',
+  AFFILIATE_COMMISSION_APPROVED = 'AFFILIATE_COMMISSION_APPROVED',
+  AFFILIATE_COMMISSION_PAYABLE = 'AFFILIATE_COMMISSION_PAYABLE',
+  AFFILIATE_COMMISSION_REVERSED = 'AFFILIATE_COMMISSION_REVERSED',
+
+  // Payouts & Finance (Organization Scope)
+  AFFILIATE_PAYOUT_PROCESSING = 'AFFILIATE_PAYOUT_PROCESSING',
+  AFFILIATE_PAYOUT_COMPLETED = 'AFFILIATE_PAYOUT_COMPLETED',
+  AFFILIATE_PAYOUT_FAILED = 'AFFILIATE_PAYOUT_FAILED',
+
+  // Organization & Team (Platform / Organization Scope)
+  ORGANIZATION_WELCOME = 'ORGANIZATION_WELCOME',
+  ORGANIZATION_MEMBER_INVITED = 'ORGANIZATION_MEMBER_INVITED',
+
+  // Billing & Subscriptions (Platform Scope)
+  BILLING_PAYMENT_SUCCESS = 'BILLING_PAYMENT_SUCCESS',
+  BILLING_PAYMENT_FAILED = 'BILLING_PAYMENT_FAILED',
+  BILLING_TRIAL_ENDING = 'BILLING_TRIAL_ENDING',
+  BILLING_SUBSCRIPTION_CANCELLED = 'BILLING_SUBSCRIPTION_CANCELLED',
+}
+
+export type TemplateOwnership = 'SYSTEM' | 'PLATFORM' | 'ORGANIZATION';
+
+export interface TemplateVariableSchema {
+  key: string;
+  required: boolean;
+  type: 'string' | 'number' | 'currency' | 'date' | 'url' | 'boolean';
+  description: string;
+}
+
+export interface SystemTemplateMetadata {
+  key: SystemTemplateKey;
+  name: string;
+  category: string;
+  ownership: TemplateOwnership;
+  defaultSubject: string;
+  defaultPreheader: string;
+  description: string;
+  requiredVariables: string[];
+  variablesSchema: TemplateVariableSchema[];
+}
+
+// Security templates that MUST NOT be overridden by organization tenants
+export const SYSTEM_SECURITY_TEMPLATE_KEYS: SystemTemplateKey[] = [
+  SystemTemplateKey.SECURITY_EMAIL_VERIFICATION,
+  SystemTemplateKey.SECURITY_PASSWORD_RESET,
+  SystemTemplateKey.SECURITY_PASSWORD_CHANGED,
+  SystemTemplateKey.SECURITY_NEW_LOGIN,
+  SystemTemplateKey.SECURITY_TWO_FACTOR_ENABLED,
+  SystemTemplateKey.SECURITY_TWO_FACTOR_DISABLED,
+  SystemTemplateKey.SECURITY_PAYOUT_METHOD_CHANGED,
+  SystemTemplateKey.SECURITY_EMAIL_CHANGED,
+];
+
+export const SYSTEM_TEMPLATE_CATALOG: Record<SystemTemplateKey, SystemTemplateMetadata> = {
+  [SystemTemplateKey.SECURITY_EMAIL_VERIFICATION]: {
+    key: SystemTemplateKey.SECURITY_EMAIL_VERIFICATION,
+    name: 'Verify Email Address',
+    category: 'AUTHENTICATION',
+    ownership: 'SYSTEM',
+    defaultSubject: 'Verify your PartnerIQ email address',
+    defaultPreheader: 'Confirm your email address to activate your PartnerIQ account.',
+    description: 'Sent when a new account is registered or email is changed.',
+    requiredVariables: ['user.firstName', 'links.verificationUrl'],
+    variablesSchema: [
+      { key: 'user.firstName', required: true, type: 'string', description: 'User first name' },
+      { key: 'links.verificationUrl', required: true, type: 'url', description: 'Secure verification link' },
+    ],
+  },
+  [SystemTemplateKey.SECURITY_PASSWORD_RESET]: {
+    key: SystemTemplateKey.SECURITY_PASSWORD_RESET,
+    name: 'Reset Password',
+    category: 'AUTHENTICATION',
+    ownership: 'SYSTEM',
+    defaultSubject: 'Reset your PartnerIQ password',
+    defaultPreheader: 'Click the secure link below to choose a new password.',
+    description: 'Sent when a password reset is requested.',
+    requiredVariables: ['user.firstName', 'links.resetPasswordUrl'],
+    variablesSchema: [
+      { key: 'user.firstName', required: true, type: 'string', description: 'User first name' },
+      { key: 'links.resetPasswordUrl', required: true, type: 'url', description: 'Secure password reset link' },
+    ],
+  },
+  [SystemTemplateKey.SECURITY_PASSWORD_CHANGED]: {
+    key: SystemTemplateKey.SECURITY_PASSWORD_CHANGED,
+    name: 'Password Changed Alert',
+    category: 'SECURITY',
+    ownership: 'SYSTEM',
+    defaultSubject: 'Your PartnerIQ password was updated',
+    defaultPreheader: 'Security notice regarding recent account password changes.',
+    description: 'Sent immediately when password is modified.',
+    requiredVariables: ['user.firstName', 'security.timestamp'],
+    variablesSchema: [
+      { key: 'user.firstName', required: true, type: 'string', description: 'User first name' },
+      { key: 'security.timestamp', required: true, type: 'date', description: 'Time of password change' },
+    ],
+  },
+  [SystemTemplateKey.SECURITY_NEW_LOGIN]: {
+    key: SystemTemplateKey.SECURITY_NEW_LOGIN,
+    name: 'New Device Login Alert',
+    category: 'SECURITY',
+    ownership: 'SYSTEM',
+    defaultSubject: 'New login detected on your PartnerIQ account',
+    defaultPreheader: 'Security alert for a new sign-in location or browser.',
+    description: 'Sent when login is detected from an unrecognized device/IP.',
+    requiredVariables: ['user.firstName', 'security.deviceName', 'security.location', 'security.ipAddress'],
+    variablesSchema: [
+      { key: 'user.firstName', required: true, type: 'string', description: 'User first name' },
+      { key: 'security.deviceName', required: true, type: 'string', description: 'Device/browser name' },
+      { key: 'security.location', required: true, type: 'string', description: 'Approximate geolocation' },
+      { key: 'security.ipAddress', required: true, type: 'string', description: 'IP address' },
+    ],
+  },
+  [SystemTemplateKey.SECURITY_TWO_FACTOR_ENABLED]: {
+    key: SystemTemplateKey.SECURITY_TWO_FACTOR_ENABLED,
+    name: 'Two-Factor Authentication Enabled',
+    category: 'SECURITY',
+    ownership: 'SYSTEM',
+    defaultSubject: 'Two-Factor Authentication activated',
+    defaultPreheader: 'Your account is now protected with 2FA.',
+    description: 'Sent when 2FA authenticator app is activated.',
+    requiredVariables: ['user.firstName'],
+    variablesSchema: [
+      { key: 'user.firstName', required: true, type: 'string', description: 'User first name' },
+    ],
+  },
+  [SystemTemplateKey.SECURITY_TWO_FACTOR_DISABLED]: {
+    key: SystemTemplateKey.SECURITY_TWO_FACTOR_DISABLED,
+    name: 'Two-Factor Authentication Disabled',
+    category: 'SECURITY',
+    ownership: 'SYSTEM',
+    defaultSubject: 'SECURITY ALERT: Two-Factor Authentication disabled',
+    defaultPreheader: '2FA protection has been removed from your account.',
+    description: 'Sent when 2FA is deactivated.',
+    requiredVariables: ['user.firstName'],
+    variablesSchema: [
+      { key: 'user.firstName', required: true, type: 'string', description: 'User first name' },
+    ],
+  },
+  [SystemTemplateKey.SECURITY_PAYOUT_METHOD_CHANGED]: {
+    key: SystemTemplateKey.SECURITY_PAYOUT_METHOD_CHANGED,
+    name: 'Payout Method Security Alert',
+    category: 'SECURITY',
+    ownership: 'SYSTEM',
+    defaultSubject: 'Security Notice: Payout details updated',
+    defaultPreheader: 'Your payout disbursement destination was updated.',
+    description: 'Sent when payout banking/Razorpay details change.',
+    requiredVariables: ['user.firstName', 'payout.maskedDetails'],
+    variablesSchema: [
+      { key: 'user.firstName', required: true, type: 'string', description: 'User first name' },
+      { key: 'payout.maskedDetails', required: true, type: 'string', description: 'Masked banking account info' },
+    ],
+  },
+  [SystemTemplateKey.SECURITY_EMAIL_CHANGED]: {
+    key: SystemTemplateKey.SECURITY_EMAIL_CHANGED,
+    name: 'Primary Email Address Changed',
+    category: 'SECURITY',
+    ownership: 'SYSTEM',
+    defaultSubject: 'Security Notice: PartnerIQ email address changed',
+    defaultPreheader: 'Your account primary email address was updated.',
+    description: 'Sent to previous email address when primary email is changed.',
+    requiredVariables: ['user.firstName', 'user.newEmail'],
+    variablesSchema: [
+      { key: 'user.firstName', required: true, type: 'string', description: 'User first name' },
+      { key: 'user.newEmail', required: true, type: 'string', description: 'Newly set email address' },
+    ],
+  },
+
+  // AFFILIATE
+  [SystemTemplateKey.AFFILIATE_INVITATION]: {
+    key: SystemTemplateKey.AFFILIATE_INVITATION,
+    name: 'Affiliate Invitation',
+    category: 'AFFILIATE',
+    ownership: 'ORGANIZATION',
+    defaultSubject: 'You’re invited to join {{programName}}',
+    defaultPreheader: '{{organizationName}} invited you to earn {{commissionRate}} per referral.',
+    description: 'Sent when an organization invites a partner or creator to join an affiliate program.',
+    requiredVariables: ['affiliateName', 'organizationName', 'programName', 'invitationUrl'],
+    variablesSchema: [
+      { key: 'affiliateName', required: true, type: 'string', description: 'Affiliate or partner display name' },
+      { key: 'organizationName', required: true, type: 'string', description: 'Organization name' },
+      { key: 'programName', required: true, type: 'string', description: 'Affiliate program name' },
+      { key: 'commissionRate', required: false, type: 'string', description: 'Commission rate or label' },
+      { key: 'cookieDuration', required: false, type: 'string', description: 'Attribution cookie window' },
+      { key: 'invitationUrl', required: true, type: 'url', description: 'Affiliate invitation acceptance URL' },
+    ],
+  },
+  [SystemTemplateKey.AFFILIATE_WELCOME]: {
+    key: SystemTemplateKey.AFFILIATE_WELCOME,
+    name: 'Affiliate Partner Welcome',
+    category: 'AFFILIATE',
+    ownership: 'ORGANIZATION',
+    defaultSubject: 'Welcome to {{organization.name}} Partner Program!',
+    defaultPreheader: 'Start promoting and earning commissions today.',
+    description: 'Sent when an affiliate joins a partner program.',
+    requiredVariables: ['affiliate.firstName', 'organization.name', 'links.dashboardUrl'],
+    variablesSchema: [
+      { key: 'affiliate.firstName', required: true, type: 'string', description: 'Affiliate first name' },
+      { key: 'organization.name', required: true, type: 'string', description: 'Organization name' },
+      { key: 'links.dashboardUrl', required: true, type: 'url', description: 'Affiliate portal URL' },
+    ],
+  },
+  [SystemTemplateKey.AFFILIATE_APPLICATION_RECEIVED]: {
+    key: SystemTemplateKey.AFFILIATE_APPLICATION_RECEIVED,
+    name: 'Application Received',
+    category: 'AFFILIATE',
+    ownership: 'ORGANIZATION',
+    defaultSubject: 'Application received for {{organization.name}} Partner Program',
+    defaultPreheader: 'We are reviewing your application.',
+    description: 'Sent when an affiliate submits a program application.',
+    requiredVariables: ['affiliate.firstName', 'organization.name'],
+    variablesSchema: [
+      { key: 'affiliate.firstName', required: true, type: 'string', description: 'Affiliate first name' },
+      { key: 'organization.name', required: true, type: 'string', description: 'Organization name' },
+    ],
+  },
+  [SystemTemplateKey.AFFILIATE_APPLICATION_APPROVED]: {
+    key: SystemTemplateKey.AFFILIATE_APPLICATION_APPROVED,
+    name: 'Application Approved',
+    category: 'AFFILIATE',
+    ownership: 'ORGANIZATION',
+    defaultSubject: 'Congratulations! Your {{organization.name}} application is approved 🎉',
+    defaultPreheader: 'Access your tracking links and start earning.',
+    description: 'Sent when an affiliate application is approved.',
+    requiredVariables: ['affiliate.firstName', 'organization.name', 'links.dashboardUrl'],
+    variablesSchema: [
+      { key: 'affiliate.firstName', required: true, type: 'string', description: 'Affiliate first name' },
+      { key: 'organization.name', required: true, type: 'string', description: 'Organization name' },
+      { key: 'links.dashboardUrl', required: true, type: 'url', description: 'Affiliate portal URL' },
+    ],
+  },
+  [SystemTemplateKey.AFFILIATE_APPLICATION_REJECTED]: {
+    key: SystemTemplateKey.AFFILIATE_APPLICATION_REJECTED,
+    name: 'Application Declined',
+    category: 'AFFILIATE',
+    ownership: 'ORGANIZATION',
+    defaultSubject: 'Update regarding your {{organization.name}} partner application',
+    defaultPreheader: 'Thank you for your interest in our partner program.',
+    description: 'Sent when an application is declined.',
+    requiredVariables: ['affiliate.firstName', 'organization.name'],
+    variablesSchema: [
+      { key: 'affiliate.firstName', required: true, type: 'string', description: 'Affiliate first name' },
+      { key: 'organization.name', required: true, type: 'string', description: 'Organization name' },
+    ],
+  },
+  [SystemTemplateKey.AFFILIATE_TIER_CHANGED]: {
+    key: SystemTemplateKey.AFFILIATE_TIER_CHANGED,
+    name: 'Partner Tier Upgrade',
+    category: 'AFFILIATE',
+    ownership: 'ORGANIZATION',
+    defaultSubject: 'Tier Upgrade! You unlocked {{tier.name}} tier on {{organization.name}} 🚀',
+    defaultPreheader: 'Enjoy higher commission rates and exclusive benefits.',
+    description: 'Sent when an affiliate is upgraded to a higher performance tier.',
+    requiredVariables: ['affiliate.firstName', 'organization.name', 'tier.name', 'tier.commissionRate'],
+    variablesSchema: [
+      { key: 'affiliate.firstName', required: true, type: 'string', description: 'Affiliate first name' },
+      { key: 'organization.name', required: true, type: 'string', description: 'Organization name' },
+      { key: 'tier.name', required: true, type: 'string', description: 'New tier name' },
+      { key: 'tier.commissionRate', required: true, type: 'string', description: 'Commission rate percentage' },
+    ],
+  },
+  [SystemTemplateKey.AFFILIATE_NEW_ASSET]: {
+    key: SystemTemplateKey.AFFILIATE_NEW_ASSET,
+    name: 'New Marketing Asset Released',
+    category: 'AFFILIATE',
+    ownership: 'ORGANIZATION',
+    defaultSubject: 'New promotional assets available for {{organization.name}}',
+    defaultPreheader: 'Fresh banners and email swipes are ready in your portal.',
+    description: 'Sent when new marketing materials are published.',
+    requiredVariables: ['affiliate.firstName', 'organization.name', 'asset.title', 'links.assetUrl'],
+    variablesSchema: [
+      { key: 'affiliate.firstName', required: true, type: 'string', description: 'Affiliate first name' },
+      { key: 'organization.name', required: true, type: 'string', description: 'Organization name' },
+      { key: 'asset.title', required: true, type: 'string', description: 'Asset title' },
+      { key: 'links.assetUrl', required: true, type: 'url', description: 'Asset link' },
+    ],
+  },
+  [SystemTemplateKey.AFFILIATE_PROGRAM_ANNOUNCEMENT]: {
+    key: SystemTemplateKey.AFFILIATE_PROGRAM_ANNOUNCEMENT,
+    name: 'Program Announcement',
+    category: 'AFFILIATE',
+    ownership: 'ORGANIZATION',
+    defaultSubject: 'Announcement from {{organization.name}} Partner Team',
+    defaultPreheader: 'Important updates regarding your partner program.',
+    description: 'Broadcast announcement to partners.',
+    requiredVariables: ['affiliate.firstName', 'organization.name', 'announcement.body'],
+    variablesSchema: [
+      { key: 'affiliate.firstName', required: true, type: 'string', description: 'Affiliate first name' },
+      { key: 'organization.name', required: true, type: 'string', description: 'Organization name' },
+      { key: 'announcement.body', required: true, type: 'string', description: 'Announcement text' },
+    ],
+  },
+
+  // COMMISSION
+  [SystemTemplateKey.AFFILIATE_COMMISSION_CREATED]: {
+    key: SystemTemplateKey.AFFILIATE_COMMISSION_CREATED,
+    name: 'New Commission Tracked',
+    category: 'COMMISSION',
+    ownership: 'ORGANIZATION',
+    defaultSubject: 'You earned a new commission on {{organization.name}}! 💰',
+    defaultPreheader: 'A customer purchased using your referral link.',
+    description: 'Sent when a new commission is created/pending.',
+    requiredVariables: ['affiliate.firstName', 'organization.name', 'commission.amountFormatted', 'commission.currency'],
+    variablesSchema: [
+      { key: 'affiliate.firstName', required: true, type: 'string', description: 'Affiliate first name' },
+      { key: 'organization.name', required: true, type: 'string', description: 'Organization name' },
+      { key: 'commission.amountFormatted', required: true, type: 'currency', description: 'Formatted amount' },
+      { key: 'commission.currency', required: true, type: 'string', description: 'Currency code' },
+    ],
+  },
+  [SystemTemplateKey.AFFILIATE_COMMISSION_APPROVED]: {
+    key: SystemTemplateKey.AFFILIATE_COMMISSION_APPROVED,
+    name: 'Commission Approved',
+    category: 'COMMISSION',
+    ownership: 'ORGANIZATION',
+    defaultSubject: 'Your {{organization.name}} commission of {{commission.amountFormatted}} was approved ✅',
+    defaultPreheader: 'Your commission has cleared the lock-in period.',
+    description: 'Sent when a commission transitions to approved status.',
+    requiredVariables: ['affiliate.firstName', 'organization.name', 'commission.amountFormatted'],
+    variablesSchema: [
+      { key: 'affiliate.firstName', required: true, type: 'string', description: 'Affiliate first name' },
+      { key: 'organization.name', required: true, type: 'string', description: 'Organization name' },
+      { key: 'commission.amountFormatted', required: true, type: 'currency', description: 'Formatted amount' },
+    ],
+  },
+  [SystemTemplateKey.AFFILIATE_COMMISSION_PAYABLE]: {
+    key: SystemTemplateKey.AFFILIATE_COMMISSION_PAYABLE,
+    name: 'Commission Ready for Payout',
+    category: 'COMMISSION',
+    ownership: 'ORGANIZATION',
+    defaultSubject: 'Commission ready for payout on {{organization.name}}',
+    defaultPreheader: 'Your approved balance is included in the next payout batch.',
+    description: 'Sent when commission is ready for disbursement.',
+    requiredVariables: ['affiliate.firstName', 'organization.name', 'commission.amountFormatted'],
+    variablesSchema: [
+      { key: 'affiliate.firstName', required: true, type: 'string', description: 'Affiliate first name' },
+      { key: 'organization.name', required: true, type: 'string', description: 'Organization name' },
+      { key: 'commission.amountFormatted', required: true, type: 'currency', description: 'Formatted amount' },
+    ],
+  },
+  [SystemTemplateKey.AFFILIATE_COMMISSION_REVERSED]: {
+    key: SystemTemplateKey.AFFILIATE_COMMISSION_REVERSED,
+    name: 'Commission Reversed (Refund/Chargeback)',
+    category: 'COMMISSION',
+    ownership: 'ORGANIZATION',
+    defaultSubject: 'Notice: Commission adjustment on {{organization.name}}',
+    defaultPreheader: 'A referral transaction was refunded or cancelled.',
+    description: 'Sent when a commission is reversed due to customer refund.',
+    requiredVariables: ['affiliate.firstName', 'organization.name', 'commission.amountFormatted', 'commission.reason'],
+    variablesSchema: [
+      { key: 'affiliate.firstName', required: true, type: 'string', description: 'Affiliate first name' },
+      { key: 'organization.name', required: true, type: 'string', description: 'Organization name' },
+      { key: 'commission.amountFormatted', required: true, type: 'currency', description: 'Formatted amount' },
+      { key: 'commission.reason', required: true, type: 'string', description: 'Reason for reversal' },
+    ],
+  },
+
+  // PAYOUT
+  [SystemTemplateKey.AFFILIATE_PAYOUT_PROCESSING]: {
+    key: SystemTemplateKey.AFFILIATE_PAYOUT_PROCESSING,
+    name: 'Payout Processing',
+    category: 'PAYOUT',
+    ownership: 'ORGANIZATION',
+    defaultSubject: 'Your payout of {{payout.amountFormatted}} is being processed 💸',
+    defaultPreheader: 'Funds are on their way to your account.',
+    description: 'Sent when payout batch execution begins.',
+    requiredVariables: ['affiliate.firstName', 'organization.name', 'payout.amountFormatted'],
+    variablesSchema: [
+      { key: 'affiliate.firstName', required: true, type: 'string', description: 'Affiliate first name' },
+      { key: 'organization.name', required: true, type: 'string', description: 'Organization name' },
+      { key: 'payout.amountFormatted', required: true, type: 'currency', description: 'Payout amount' },
+    ],
+  },
+  [SystemTemplateKey.AFFILIATE_PAYOUT_COMPLETED]: {
+    key: SystemTemplateKey.AFFILIATE_PAYOUT_COMPLETED,
+    name: 'Payout Completed',
+    category: 'PAYOUT',
+    ownership: 'ORGANIZATION',
+    defaultSubject: 'Payout Sent! {{payout.amountFormatted}} deposited from {{organization.name}} 🎉',
+    defaultPreheader: 'Transfer complete. View your remittance advice statement.',
+    description: 'Sent when payout transfer succeeds.',
+    requiredVariables: ['affiliate.firstName', 'organization.name', 'payout.amountFormatted', 'payout.reference'],
+    variablesSchema: [
+      { key: 'affiliate.firstName', required: true, type: 'string', description: 'Affiliate first name' },
+      { key: 'organization.name', required: true, type: 'string', description: 'Organization name' },
+      { key: 'payout.amountFormatted', required: true, type: 'currency', description: 'Payout amount' },
+      { key: 'payout.reference', required: true, type: 'string', description: 'Bank transfer reference' },
+    ],
+  },
+  [SystemTemplateKey.AFFILIATE_PAYOUT_FAILED]: {
+    key: SystemTemplateKey.AFFILIATE_PAYOUT_FAILED,
+    name: 'Payout Action Required (Failed)',
+    category: 'PAYOUT',
+    ownership: 'ORGANIZATION',
+    defaultSubject: 'Action Required: Payout transfer issue on {{organization.name}}',
+    defaultPreheader: 'Please check your banking details to re-attempt payout.',
+    description: 'Sent when payout transfer fails.',
+    requiredVariables: ['affiliate.firstName', 'organization.name', 'payout.amountFormatted', 'payout.reason'],
+    variablesSchema: [
+      { key: 'affiliate.firstName', required: true, type: 'string', description: 'Affiliate first name' },
+      { key: 'organization.name', required: true, type: 'string', description: 'Organization name' },
+      { key: 'payout.amountFormatted', required: true, type: 'currency', description: 'Payout amount' },
+      { key: 'payout.reason', required: true, type: 'string', description: 'Failure reason' },
+    ],
+  },
+
+  // ORGANIZATION
+  [SystemTemplateKey.ORGANIZATION_WELCOME]: {
+    key: SystemTemplateKey.ORGANIZATION_WELCOME,
+    name: 'Welcome to PartnerIQ',
+    category: 'ORGANIZATION',
+    ownership: 'PLATFORM',
+    defaultSubject: 'Welcome to PartnerIQ! Let’s launch your partner program',
+    defaultPreheader: 'Your organization workspace is ready.',
+    description: 'Sent when a new organization workspace is created.',
+    requiredVariables: ['user.firstName', 'organization.name', 'links.setupUrl'],
+    variablesSchema: [
+      { key: 'user.firstName', required: true, type: 'string', description: 'Admin first name' },
+      { key: 'organization.name', required: true, type: 'string', description: 'Organization name' },
+      { key: 'links.setupUrl', required: true, type: 'url', description: 'Onboarding setup link' },
+    ],
+  },
+  [SystemTemplateKey.ORGANIZATION_MEMBER_INVITED]: {
+    key: SystemTemplateKey.ORGANIZATION_MEMBER_INVITED,
+    name: 'Team Member Invitation',
+    category: 'ORGANIZATION',
+    ownership: 'ORGANIZATION',
+    defaultSubject: 'You’ve been invited to join {{organization.name}} on PartnerIQ',
+    defaultPreheader: 'Collaborate on affiliate management and payouts.',
+    description: 'Sent when a user is invited to an organization team.',
+    requiredVariables: ['invitation.recipientEmail', 'organization.name', 'invitation.role', 'links.acceptUrl'],
+    variablesSchema: [
+      { key: 'invitation.recipientEmail', required: true, type: 'string', description: 'Recipient email' },
+      { key: 'organization.name', required: true, type: 'string', description: 'Organization name' },
+      { key: 'invitation.role', required: true, type: 'string', description: 'Team role assigned' },
+      { key: 'links.acceptUrl', required: true, type: 'url', description: 'Invitation acceptance link' },
+    ],
+  },
+
+  // BILLING
+  [SystemTemplateKey.BILLING_PAYMENT_SUCCESS]: {
+    key: SystemTemplateKey.BILLING_PAYMENT_SUCCESS,
+    name: 'Subscription Payment Receipt',
+    category: 'BILLING',
+    ownership: 'PLATFORM',
+    defaultSubject: 'Receipt for your PartnerIQ subscription ({{billing.amountFormatted}})',
+    defaultPreheader: 'Thank you for your business.',
+    description: 'Sent when subscription invoice payment succeeds.',
+    requiredVariables: ['user.firstName', 'billing.amountFormatted', 'billing.planName', 'links.invoiceUrl'],
+    variablesSchema: [
+      { key: 'user.firstName', required: true, type: 'string', description: 'User first name' },
+      { key: 'billing.amountFormatted', required: true, type: 'currency', description: 'Paid amount' },
+      { key: 'billing.planName', required: true, type: 'string', description: 'Subscription plan name' },
+      { key: 'links.invoiceUrl', required: true, type: 'url', description: 'Download PDF invoice link' },
+    ],
+  },
+  [SystemTemplateKey.BILLING_PAYMENT_FAILED]: {
+    key: SystemTemplateKey.BILLING_PAYMENT_FAILED,
+    name: 'Subscription Payment Failed',
+    category: 'BILLING',
+    ownership: 'PLATFORM',
+    defaultSubject: 'Action Required: PartnerIQ subscription payment failed',
+    defaultPreheader: 'Please update your billing card to keep your portal active.',
+    description: 'Sent when subscription charge fails.',
+    requiredVariables: ['user.firstName', 'billing.amountFormatted', 'links.billingSettingsUrl'],
+    variablesSchema: [
+      { key: 'user.firstName', required: true, type: 'string', description: 'User first name' },
+      { key: 'billing.amountFormatted', required: true, type: 'currency', description: 'Attempted amount' },
+      { key: 'links.billingSettingsUrl', required: true, type: 'url', description: 'Update billing method link' },
+    ],
+  },
+  [SystemTemplateKey.BILLING_TRIAL_ENDING]: {
+    key: SystemTemplateKey.BILLING_TRIAL_ENDING,
+    name: 'Free Trial Ending Soon',
+    category: 'BILLING',
+    ownership: 'PLATFORM',
+    defaultSubject: 'Your PartnerIQ free trial ends in {{trial.daysRemaining}} days',
+    defaultPreheader: 'Add a payment method to ensure uninterrupted tracking.',
+    description: 'Sent 3 days before trial expiry.',
+    requiredVariables: ['user.firstName', 'trial.daysRemaining', 'links.billingSettingsUrl'],
+    variablesSchema: [
+      { key: 'user.firstName', required: true, type: 'string', description: 'User first name' },
+      { key: 'trial.daysRemaining', required: true, type: 'number', description: 'Days left in trial' },
+      { key: 'links.billingSettingsUrl', required: true, type: 'url', description: 'Billing settings link' },
+    ],
+  },
+  [SystemTemplateKey.BILLING_SUBSCRIPTION_CANCELLED]: {
+    key: SystemTemplateKey.BILLING_SUBSCRIPTION_CANCELLED,
+    name: 'Subscription Cancelled',
+    category: 'BILLING',
+    ownership: 'PLATFORM',
+    defaultSubject: 'PartnerIQ subscription cancellation notice',
+    defaultPreheader: 'Your workspace will remain active until the end of your billing cycle.',
+    description: 'Sent when subscription is cancelled.',
+    requiredVariables: ['user.firstName', 'billing.endDate'],
+    variablesSchema: [
+      { key: 'user.firstName', required: true, type: 'string', description: 'User first name' },
+      { key: 'billing.endDate', required: true, type: 'date', description: 'Access end date' },
+    ],
+  },
+};

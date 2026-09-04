@@ -48,6 +48,7 @@ export class OAuthService {
   constructor(
     private readonly googleOAuthService: GoogleOAuthService,
     private readonly stateService: OAuthStateService,
+    @Inject(forwardRef(() => AuthService))
     private readonly authService: AuthService,
     @Inject(forwardRef(() => MembershipsService))
     private readonly membershipsService: MembershipsService,

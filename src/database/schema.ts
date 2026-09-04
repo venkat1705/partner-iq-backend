@@ -276,6 +276,35 @@ export class AuthSession {
   @Column({ type: 'varchar', length: 100, nullable: true })
   deviceName?: string;
 
+  // Security extensions
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  deviceId?: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  organizationContextId?: string;
+
+  @Column({ type: 'varchar', length: 50, default: 'PASSWORD' })
+  authenticationLevel!: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  mfaVerifiedAt?: Date;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  country?: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  region?: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  city?: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  revokeReason?: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  idleExpiresAt?: Date;
+
   @Column({ type: 'timestamp' })
   expiresAt!: Date;
 
@@ -496,6 +525,62 @@ export class AuthSecurityEvent {
 
   @CreateDateColumn()
   createdAt!: Date;
+}
+
+@Entity('organization_security_policies')
+export class OrganizationSecurityPolicy {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index({ unique: true })
+  @Column({ type: 'uuid' })
+  organizationId!: string;
+
+  @Column({ type: 'boolean', default: false })
+  requireMfa!: boolean;
+
+  @Column({ type: 'varchar', length: 50, default: 'ALL' })
+  mfaScope!: string; // 'ALL' | 'ADMINS' | 'SENSITIVE_ROLES'
+
+  @Column({ type: 'simple-json', nullable: true })
+  sensitiveRoles?: string[];
+
+  @Column({ type: 'int', default: 10080 })
+  sessionIdleTimeoutMinutes!: number; // Default 7 days
+
+  @Column({ type: 'uuid', nullable: true })
+  updatedBy?: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
+@Entity('mfa_rate_limits')
+export class MfaRateLimit {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 200 })
+  key!: string; // e.g. "mfa_verify:challengeId" or "mfa_verify:ip:1.2.3.4"
+
+  @Column({ type: 'int', default: 0 })
+  attempts!: number;
+
+  @Column({ type: 'timestamp' })
+  windowStart!: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  lockedUntil?: Date;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
 }
 
 @Entity('notifications')
@@ -4352,3 +4437,208 @@ export class AutomationEmailLog {
   @CreateDateColumn()
   createdAt!: Date;
 }
+
+@Entity('email_template_versions')
+export class EmailTemplateVersion {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 150 })
+  templateKey!: string;
+
+  @Column({ type: 'int', default: 1 })
+  version!: number;
+
+  @Column({ type: 'varchar', length: 50, default: 'DRAFT' })
+  status!: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+
+  @Column({ type: 'varchar', length: 255 })
+  subject!: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  preheader?: string;
+
+  @Column({ type: 'text' })
+  bodyTemplate!: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  variables?: any;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  changeSummary?: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  createdById?: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+}
+
+@Entity('email_template_overrides')
+@Unique(['organizationId', 'templateKey'])
+export class EmailTemplateOverride {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 150 })
+  templateKey!: string;
+
+  @Column({ type: 'varchar', length: 50, default: 'PUBLISHED' })
+  status!: 'DRAFT' | 'PUBLISHED' | 'DISABLED';
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  customSubject?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  customPreheader?: string;
+
+  @Column({ type: 'text', nullable: true })
+  customBody?: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  customData?: Record<string, any>;
+
+  @Column({ type: 'uuid', nullable: true })
+  updatedById?: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
+@Entity('email_delivery_logs')
+export class EmailDeliveryLog {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 150, nullable: true })
+  messageId?: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 150 })
+  templateKey!: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  templateVersionId?: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  organizationId?: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 255 })
+  recipientEmail!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  recipientEmailMasked!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  subject!: string;
+
+  @Column({ type: 'varchar', length: 50, default: 'development' })
+  provider!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  providerMessageId?: string;
+
+  @Column({ type: 'varchar', length: 50, default: 'QUEUED' })
+  status!: 'QUEUED' | 'PROCESSING' | 'SENT' | 'DELIVERED' | 'FAILED' | 'BOUNCED' | 'COMPLAINED' | 'SUPPRESSED';
+
+  @Column({ type: 'int', default: 1 })
+  attemptCount!: number;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  failureCode?: string;
+
+  @Column({ type: 'text', nullable: true })
+  failureMessage?: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 150, nullable: true })
+  eventId?: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  idempotencyKey?: string;
+
+  @Column({ type: 'text', nullable: true })
+  snapshotHtml?: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  metadata?: Record<string, any>;
+
+  @CreateDateColumn()
+  queuedAt!: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  sentAt?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  deliveredAt?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  failedAt?: Date;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+}
+
+@Entity('email_suppressions')
+@Unique(['email', 'organizationId'])
+export class EmailSuppression {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 255 })
+  email!: string;
+
+  @Column({ type: 'varchar', length: 50, default: 'HARD_BOUNCE' })
+  reason!: 'HARD_BOUNCE' | 'COMPLAINT' | 'UNSUBSCRIBED' | 'ADMIN_SUPPRESSED' | 'INVALID_ADDRESS';
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  organizationId?: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  metadata?: Record<string, any>;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+}
+
+@Entity('platform_settings')
+export class PlatformSetting {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index({ unique: true })
+  @Column({ type: 'varchar', length: 120 })
+  key!: string;
+
+  @Column({ type: 'simple-json' })
+  value!: any;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  description?: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  updatedBy?: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+

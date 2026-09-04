@@ -103,6 +103,11 @@ import {
   EmailDesignTemplate,
   EmailDesignSettings,
   AutomationEmailLog,
+  EmailTemplateVersion,
+  EmailTemplateOverride,
+  EmailDeliveryLog,
+  EmailSuppression,
+  PlatformSetting,
 } from './schema';
 import {
   RoleDefinition,
@@ -195,11 +200,16 @@ export type AutomationEmailTemplateEntity = AutomationEmailTemplate;
 export type EmailDesignTemplateEntity = EmailDesignTemplate;
 export type EmailDesignSettingsEntity = EmailDesignSettings;
 export type AutomationEmailLogEntity = AutomationEmailLog;
+export type EmailTemplateVersionEntity = EmailTemplateVersion;
+export type EmailTemplateOverrideEntity = EmailTemplateOverride;
+export type EmailDeliveryLogEntity = EmailDeliveryLog;
+export type EmailSuppressionEntity = EmailSuppression;
 export type RoleDefinitionEntity = import('./schema-rbac').RoleDefinition;
 export type PermissionDefinitionEntity = import('./schema-rbac').PermissionDefinition;
 export type RolePermissionEntity = import('./schema-rbac').RolePermission;
 export type OrganizationPolicyEntity = import('./schema-rbac').OrganizationPolicy;
 export type OrganizationInvitationEntity = import('./schema-rbac').OrganizationInvitation;
+export type PlatformSettingEntity = PlatformSetting;
 
 class DBBackedArray<T extends object> extends Array<T> {
   private repo: Repository<T>;
@@ -431,11 +441,16 @@ export class InMemoryDataStore {
   emailDesignTemplates: EmailDesignTemplateEntity[] = [];
   emailDesignSettings: EmailDesignSettingsEntity[] = [];
   automationEmailLogs: AutomationEmailLogEntity[] = [];
+  emailTemplateVersions: EmailTemplateVersionEntity[] = [];
+  emailTemplateOverrides: EmailTemplateOverrideEntity[] = [];
+  emailDeliveryLogs: EmailDeliveryLogEntity[] = [];
+  emailSuppressions: EmailSuppressionEntity[] = [];
   roles: RoleDefinitionEntity[] = [];
   permissions: PermissionDefinitionEntity[] = [];
   rolePermissions: RolePermissionEntity[] = [];
   organizationPolicies: OrganizationPolicyEntity[] = [];
   organizationInvitations: OrganizationInvitationEntity[] = [];
+  platformSettings: PlatformSettingEntity[] = [];
 
   // Counter maps for Redis rate-limit/fraud tracking
   ipClickCounters: Map<string, { count: number; expiresAt: number }> = new Map();
@@ -717,11 +732,40 @@ export class InMemoryDataStore {
       AppDataSource.getRepository(AutomationEmailLog),
       await AppDataSource.getRepository(AutomationEmailLog).find(),
     );
+    this.emailTemplateVersions = new DBBackedArray(
+      AppDataSource.getRepository(EmailTemplateVersion),
+      await AppDataSource.getRepository(EmailTemplateVersion).find(),
+    );
+    this.emailTemplateOverrides = new DBBackedArray(
+      AppDataSource.getRepository(EmailTemplateOverride),
+      await AppDataSource.getRepository(EmailTemplateOverride).find(),
+    );
+    this.emailDeliveryLogs = new DBBackedArray(
+      AppDataSource.getRepository(EmailDeliveryLog),
+      await AppDataSource.getRepository(EmailDeliveryLog).find(),
+    );
+    this.emailSuppressions = new DBBackedArray(
+      AppDataSource.getRepository(EmailSuppression),
+      await AppDataSource.getRepository(EmailSuppression).find(),
+    );
     this.roles = new DBBackedArray(AppDataSource.getRepository(RoleDefinition), await AppDataSource.getRepository(RoleDefinition).find());
     this.permissions = new DBBackedArray(AppDataSource.getRepository(PermissionDefinition), await AppDataSource.getRepository(PermissionDefinition).find());
     this.rolePermissions = new DBBackedArray(AppDataSource.getRepository(RolePermission), await AppDataSource.getRepository(RolePermission).find());
     this.organizationPolicies = new DBBackedArray(AppDataSource.getRepository(OrganizationPolicy), await AppDataSource.getRepository(OrganizationPolicy).find());
     this.organizationInvitations = new DBBackedArray(AppDataSource.getRepository(OrganizationInvitation), await AppDataSource.getRepository(OrganizationInvitation).find());
+    this.platformSettings = new DBBackedArray(AppDataSource.getRepository(PlatformSetting), await AppDataSource.getRepository(PlatformSetting).find());
+
+    // Preload default affiliate eligibility setting if not present
+    if (!this.platformSettings.some((s) => s.key === 'affiliateEligibility.allowOrganizationMembers')) {
+      const defaultSetting = new PlatformSetting();
+      defaultSetting.id = uuidv4();
+      defaultSetting.key = 'affiliateEligibility.allowOrganizationMembers';
+      defaultSetting.value = false;
+      defaultSetting.description = 'Allow organization users to become affiliates';
+      defaultSetting.createdAt = new Date();
+      defaultSetting.updatedAt = new Date();
+      this.platformSettings.push(defaultSetting);
+    }
 
     this.initialized = true;
   }

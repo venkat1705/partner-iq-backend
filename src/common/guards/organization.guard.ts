@@ -57,6 +57,18 @@ export class OrganizationGuard implements CanActivate {
     }
 
     // Verify user membership in organization
+    const hasAnyOrgMembership = dbStore.organizationMemberships.some(
+      (m) => m.userId === user.userId && m.status === MembershipStatus.ACTIVE,
+    );
+
+    if (!hasAnyOrgMembership) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        code: 'ORGANIZATION_MEMBERSHIP_REQUIRED',
+        message: 'This account does not have access to an organization workspace.',
+      });
+    }
+
     const membership = dbStore.organizationMemberships.find(
       (m) =>
         m.organizationId === organizationId &&
@@ -65,7 +77,11 @@ export class OrganizationGuard implements CanActivate {
     );
 
     if (!membership) {
-      throw new ForbiddenException('User does not belong to this organization');
+      throw new ForbiddenException({
+        statusCode: 403,
+        code: 'ORGANIZATION_MEMBERSHIP_REQUIRED',
+        message: 'User does not belong to this organization',
+      });
     }
 
     // Attach role and tenantId to user payload

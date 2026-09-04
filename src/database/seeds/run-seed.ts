@@ -28,6 +28,7 @@ import {
   CommissionType,
   AttributionModel,
   AffiliateStatus,
+  AffiliateInvitationStatus,
   TrackingLinkStatus,
   IntegrationCategory,
   IntegrationConnectionType,
@@ -208,48 +209,441 @@ export async function runSeed() {
     seedPrograms.push(prog);
   }
 
-  // Seed an Affiliate
-  let affiliate = dbStore.affiliates.find((a) => a.email === 'sarah@growthpartner.com');
-  if (!affiliate) {
-    affiliate = {
-      id: uuidv4(),
-      organizationId: org.id,
-      displayName: 'Sarah Growth',
-      email: 'sarah@growthpartner.com',
-      companyName: 'Growth Partner LLC',
-      website: 'https://growthpartner.com',
-      country: 'US',
-      status: AffiliateStatus.ACTIVE,
-      trustScore: 95,
-      payoutMethod: 'MANUAL',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    dbStore.affiliates.push(affiliate);
-
-    // Link affiliate to primary program
-    dbStore.programAffiliates.push({
-      id: uuidv4(),
-      organizationId: org.id,
-      programId: seedPrograms[0].id,
-      affiliateId: affiliate.id,
-      status: AffiliateStatus.ACTIVE,
-      referralCode: 'sarah',
-      joinedAt: new Date(),
+  // Seed Demo Affiliate Users
+  let demoPartnerUser = await users.findOne({ where: { email: 'venkataramireddyvenky@gmail.com' } });
+  if (!demoPartnerUser) {
+    const passwordHash = await SecurityUtils.hashPassword('PartnerIQ@123');
+    demoPartnerUser = users.create({
+      email: 'venkataramireddyvenky@gmail.com',
+      passwordHash,
+      firstName: 'Venkata',
+      lastName: 'Rami Reddy',
+      status: UserStatus.ACTIVE,
+      emailVerified: true,
+      platformRole: PlatformRole.USER,
+      failedLoginAttempts: 0,
     });
-
-    // Create tracking link
-    dbStore.trackingLinks.push({
-      id: uuidv4(),
-      organizationId: org.id,
-      programId: seedPrograms[0].id,
-      affiliateId: affiliate.id,
-      destinationUrl: 'https://acme.com/pricing',
-      shortCode: 'sarah',
-      status: TrackingLinkStatus.ACTIVE,
-      createdAt: new Date(),
-    });
+    demoPartnerUser = await users.save(demoPartnerUser);
   }
+
+  let demoAgencyUser = await users.findOne({ where: { email: 'sarah.lin@growthscale.agency' } });
+  if (!demoAgencyUser) {
+    const passwordHash = await SecurityUtils.hashPassword('PartnerIQ@123');
+    demoAgencyUser = users.create({
+      email: 'sarah.lin@growthscale.agency',
+      passwordHash,
+      firstName: 'Sarah',
+      lastName: 'Lin',
+      status: UserStatus.ACTIVE,
+      emailVerified: true,
+      platformRole: PlatformRole.USER,
+      failedLoginAttempts: 0,
+    });
+    demoAgencyUser = await users.save(demoAgencyUser);
+  }
+
+  // Seed ZenPay Payments Organization (INR)
+  let orgZenpay = await organizations.findOne({ where: { slug: 'zenpay' } });
+  if (!orgZenpay) {
+    orgZenpay = organizations.create({
+      name: 'ZenPay Payments',
+      slug: 'zenpay',
+      website: 'https://zenpay.in',
+      industry: 'Fintech & Payment Gateway',
+      companySize: '100-500',
+      country: 'IN',
+      defaultCurrency: 'INR',
+      status: OrganizationStatus.ACTIVE,
+      onboardingCompleted: true,
+      createdBy: admin.id,
+    });
+    orgZenpay = await organizations.save(orgZenpay);
+  }
+
+  // Seed Nova AI Studio Organization (USD)
+  let orgNova = await organizations.findOne({ where: { slug: 'nova' } });
+  if (!orgNova) {
+    orgNova = organizations.create({
+      name: 'Nova AI Studio',
+      slug: 'nova',
+      website: 'https://nova-ai.io',
+      industry: 'Artificial Intelligence',
+      companySize: '20-50',
+      country: 'US',
+      defaultCurrency: 'USD',
+      status: OrganizationStatus.ACTIVE,
+      onboardingCompleted: true,
+      createdBy: admin.id,
+    });
+    orgNova = await organizations.save(orgNova);
+  }
+
+  // Seed FitLife Pro Organization (USD)
+  let orgFitlife = await organizations.findOne({ where: { slug: 'fitlife' } });
+  if (!orgFitlife) {
+    orgFitlife = organizations.create({
+      name: 'FitLife Pro',
+      slug: 'fitlife',
+      website: 'https://fitlifepro.com',
+      industry: 'Health & Fitness',
+      companySize: '50-100',
+      country: 'US',
+      defaultCurrency: 'USD',
+      status: OrganizationStatus.ACTIVE,
+      onboardingCompleted: true,
+      createdBy: admin.id,
+    });
+    orgFitlife = await organizations.save(orgFitlife);
+  }
+
+  // Seed ZenPay Programs
+  const zenpayPrograms = [
+    { name: 'ZenPay Merchant Partner Program', slug: 'merchant-referral', type: ProgramType.AFFILIATE, defaultVal: 500000, currency: 'INR' },
+  ];
+  const seedZenpayPrograms = [];
+  for (const zp of zenpayPrograms) {
+    let prog = await programs.findOne({ where: { slug: zp.slug, organizationId: orgZenpay.id } });
+    if (!prog) {
+      prog = programs.create({
+        organizationId: orgZenpay.id,
+        name: zp.name,
+        slug: zp.slug,
+        type: zp.type,
+        status: ProgramStatus.ACTIVE,
+        currency: 'INR',
+        commissionType: CommissionType.FIXED_AMOUNT,
+        defaultCommissionValue: zp.defaultVal,
+        attributionModel: AttributionModel.LAST_CLICK,
+        cookieDurationDays: 60,
+        affiliateApprovalMode: 'AUTO',
+        createdBy: admin.id,
+      });
+      prog = await programs.save(prog);
+    }
+    seedZenpayPrograms.push(prog);
+  }
+
+  // Seed Nova AI Programs
+  let progNova = await programs.findOne({ where: { slug: 'ai-creator', organizationId: orgNova.id } });
+  if (!progNova) {
+    progNova = programs.create({
+      organizationId: orgNova.id,
+      name: 'Nova AI Creator Guild',
+      slug: 'ai-creator',
+      type: ProgramType.AFFILIATE,
+      status: ProgramStatus.ACTIVE,
+      currency: 'USD',
+      commissionType: CommissionType.PERCENTAGE,
+      defaultCommissionValue: 3000,
+      attributionModel: AttributionModel.LAST_CLICK,
+      cookieDurationDays: 60,
+      affiliateApprovalMode: 'AUTO',
+      createdBy: admin.id,
+    });
+    progNova = await programs.save(progNova);
+  }
+
+  // Seed Affiliates for Venkata in Acme, ZenPay, Nova
+  const affiliateEmails = ['venkataramireddyvenky@gmail.com', 'sarah@growthpartner.com', 'sarah.lin@growthscale.agency'];
+  for (const affEmail of affiliateEmails) {
+    const isVenkat = affEmail.includes('venkat');
+    const name = isVenkat ? 'Venkata Rami Reddy' : 'Sarah Lin';
+
+    // 1. Acme affiliate
+    let affAcme = dbStore.affiliates.find((a) => a.organizationId === org.id && a.email === affEmail);
+    if (!affAcme) {
+      affAcme = {
+        id: uuidv4(),
+        organizationId: org.id,
+        displayName: name,
+        email: affEmail,
+        companyName: isVenkat ? 'TechGrowth Hub' : 'GrowthScale Agency',
+        website: isVenkat ? 'https://techgrowthhub.io' : 'https://growthscale.agency',
+        country: isVenkat ? 'IN' : 'US',
+        status: AffiliateStatus.ACTIVE,
+        trustScore: 95,
+        payoutMethod: 'MANUAL',
+        createdAt: new Date(Date.now() - 90 * 86400000),
+        updatedAt: new Date(),
+      };
+      dbStore.affiliates.push(affAcme);
+
+      dbStore.programAffiliates.push({
+        id: uuidv4(),
+        organizationId: org.id,
+        programId: seedPrograms[0].id,
+        affiliateId: affAcme.id,
+        status: AffiliateStatus.ACTIVE,
+        referralCode: isVenkat ? 'k8s-deepdive' : 'sarah-acme',
+        joinedAt: new Date(Date.now() - 90 * 86400000),
+      });
+
+      const link1 = {
+        id: uuidv4(),
+        organizationId: org.id,
+        programId: seedPrograms[0].id,
+        affiliateId: affAcme.id,
+        destinationUrl: 'https://acmecloud.io/pricing',
+        shortCode: isVenkat ? 'k8s-deepdive' : 'sarah-cloud',
+        status: TrackingLinkStatus.ACTIVE,
+        title: 'YouTube Video - K8s Deep Dive Bio Link',
+        customAlias: isVenkat ? 'k8s-deepdive' : 'sarah-cloud',
+        campaign: 'youtube_video_42',
+        subId: 'yt_desc',
+        clicks: 8420,
+        createdAt: new Date(Date.now() - 60 * 86400000),
+      };
+      dbStore.trackingLinks.push(link1 as any);
+
+      // Conversions & Commissions for Acme
+      const conv1 = {
+        id: uuidv4(),
+        organizationId: org.id,
+        programId: seedPrograms[0].id,
+        affiliateId: affAcme.id,
+        trackingLinkId: link1.id,
+        externalOrderId: 'ORD-94812',
+        customerEmail: 'david@fintechscale.io',
+        amount: 1200,
+        status: 'APPROVED',
+        createdAt: new Date(Date.now() - 10 * 86400000),
+      };
+      dbStore.conversions.push(conv1 as any);
+
+      dbStore.commissions.push({
+        id: uuidv4(),
+        organizationId: org.id,
+        programId: seedPrograms[0].id,
+        affiliateId: affAcme.id,
+        conversionId: conv1.id,
+        amount: 300,
+        status: 'PAYABLE',
+        createdAt: new Date(Date.now() - 10 * 86400000),
+      } as any);
+
+      const conv2 = {
+        id: uuidv4(),
+        organizationId: org.id,
+        programId: seedPrograms[0].id,
+        affiliateId: affAcme.id,
+        trackingLinkId: link1.id,
+        externalOrderId: 'ORD-94833',
+        customerEmail: 'mike@datastream.co',
+        amount: 850,
+        status: 'APPROVED',
+        createdAt: new Date(Date.now() - 6 * 86400000),
+      };
+      dbStore.conversions.push(conv2 as any);
+
+      dbStore.commissions.push({
+        id: uuidv4(),
+        organizationId: org.id,
+        programId: seedPrograms[0].id,
+        affiliateId: affAcme.id,
+        conversionId: conv2.id,
+        amount: 212.5,
+        status: 'PAYABLE',
+        createdAt: new Date(Date.now() - 6 * 86400000),
+      } as any);
+
+      // Payout item
+      const batchAcme = { id: uuidv4(), organizationId: org.id, currency: 'USD', createdAt: new Date(Date.now() - 20 * 86400000) };
+      dbStore.payoutBatches.push(batchAcme as any);
+      dbStore.payoutItems.push({
+        id: uuidv4(),
+        payoutBatchId: batchAcme.id,
+        affiliateId: affAcme.id,
+        amount: 2150,
+        netAmount: 2150,
+        grossAmount: 2150,
+        taxWithheld: 0,
+        status: 'PAID',
+        createdAt: new Date(Date.now() - 20 * 86400000),
+      } as any);
+    }
+
+    // 2. ZenPay affiliate (INR)
+    let affZenpay = dbStore.affiliates.find((a) => a.organizationId === orgZenpay.id && a.email === affEmail);
+    if (!affZenpay) {
+      affZenpay = {
+        id: uuidv4(),
+        organizationId: orgZenpay.id,
+        displayName: name,
+        email: affEmail,
+        companyName: isVenkat ? 'TechGrowth Hub India' : 'GrowthScale India',
+        website: isVenkat ? 'https://techgrowthhub.io' : 'https://growthscale.agency',
+        country: 'IN',
+        status: AffiliateStatus.ACTIVE,
+        trustScore: 92,
+        payoutMethod: 'UPI',
+        createdAt: new Date(Date.now() - 75 * 86400000),
+        updatedAt: new Date(),
+      };
+      dbStore.affiliates.push(affZenpay);
+
+      if (seedZenpayPrograms[0]) {
+        dbStore.programAffiliates.push({
+          id: uuidv4(),
+          organizationId: orgZenpay.id,
+          programId: seedZenpayPrograms[0].id,
+          affiliateId: affZenpay.id,
+          status: AffiliateStatus.ACTIVE,
+          referralCode: isVenkat ? 'zenpay-ecom' : 'sarah-zenpay',
+          joinedAt: new Date(Date.now() - 75 * 86400000),
+        });
+
+        const linkZenpay = {
+          id: uuidv4(),
+          organizationId: orgZenpay.id,
+          programId: seedZenpayPrograms[0].id,
+          affiliateId: affZenpay.id,
+          destinationUrl: 'https://zenpay.in/business/signup',
+          shortCode: isVenkat ? 'zenpay-ecom' : 'sarah-zenpay',
+          status: TrackingLinkStatus.ACTIVE,
+          title: 'E-Commerce Masterclass Resource Link',
+          customAlias: isVenkat ? 'zenpay-ecom' : 'sarah-zenpay',
+          clicks: 8900,
+          createdAt: new Date(Date.now() - 70 * 86400000),
+        };
+        dbStore.trackingLinks.push(linkZenpay as any);
+
+        // ZenPay Conversions (INR amounts)
+        const convZen1 = {
+          id: uuidv4(),
+          organizationId: orgZenpay.id,
+          programId: seedZenpayPrograms[0].id,
+          affiliateId: affZenpay.id,
+          trackingLinkId: linkZenpay.id,
+          externalOrderId: 'MER-5521',
+          customerEmail: 'anita@luxurysilks.in',
+          amount: 150000,
+          status: 'APPROVED',
+          createdAt: new Date(Date.now() - 15 * 86400000),
+        };
+        dbStore.conversions.push(convZen1 as any);
+
+        dbStore.commissions.push({
+          id: uuidv4(),
+          organizationId: orgZenpay.id,
+          programId: seedZenpayPrograms[0].id,
+          affiliateId: affZenpay.id,
+          conversionId: convZen1.id,
+          amount: 15000,
+          status: 'PAYABLE',
+          createdAt: new Date(Date.now() - 15 * 86400000),
+        } as any);
+
+        const batchZenpay = { id: uuidv4(), organizationId: orgZenpay.id, currency: 'INR', createdAt: new Date(Date.now() - 25 * 86400000) };
+        dbStore.payoutBatches.push(batchZenpay as any);
+        dbStore.payoutItems.push({
+          id: uuidv4(),
+          payoutBatchId: batchZenpay.id,
+          affiliateId: affZenpay.id,
+          amount: 104500,
+          netAmount: 104500,
+          grossAmount: 110000,
+          taxWithheld: 5500,
+          status: 'PAID',
+          createdAt: new Date(Date.now() - 25 * 86400000),
+        } as any);
+      }
+    }
+  }
+
+  // Seed Affiliate Invitations
+  if (!dbStore.affiliateInvitations.some((i: any) => i.token === 'demo-cloudscale-token')) {
+    dbStore.affiliateInvitations.push({
+      id: uuidv4(),
+      organizationId: org.id,
+      programId: seedPrograms[0]?.id || uuidv4(),
+      email: 'venkataramireddyvenky@gmail.com',
+      partnerName: 'Venkata Rami Reddy',
+      affiliateType: 'CONTENT_CREATOR',
+      primaryChannel: 'YOUTUBE',
+      commissionOverrideType: 'PERCENTAGE',
+      commissionOverrideValue: 3500,
+      token: 'demo-cloudscale-token',
+      status: AffiliateInvitationStatus.PENDING,
+      invitedByLabel: 'Acme Cloud Growth Team',
+      personalMessage: 'Hey Venkata! We love your tutorials on Kubernetes and AI agents. We would love to partner with you with an elevated 35% revshare.',
+      expiresAt: new Date(Date.now() + 14 * 86400000),
+      createdAt: new Date(Date.now() - 2 * 86400000),
+    } as any);
+  }
+
+  // Seed Marketing Assets for Acme and ZenPay
+  if (!dbStore.assets.some((a: any) => a.title?.includes('Product Showcase Banner'))) {
+    dbStore.assets.push(
+      {
+        id: uuidv4(),
+        organizationId: org.id,
+        programId: seedPrograms[0]?.id || uuidv4(),
+        title: 'Dark Mode Product Showcase Banner (1200x630)',
+        type: 'BANNER' as any,
+        fileUrl: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=1600&auto=format&fit=crop&q=80',
+        tags: ['Twitter Card', 'Dark Mode'],
+        createdAt: new Date(Date.now() - 40 * 86400000),
+      } as any,
+      {
+        id: uuidv4(),
+        organizationId: org.id,
+        programId: seedPrograms[0]?.id || uuidv4(),
+        title: 'Leaderboard Web Banner (728x90)',
+        type: 'BANNER' as any,
+        fileUrl: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=1600&auto=format&fit=crop&q=80',
+        tags: ['Display Ad', 'DevOps'],
+        createdAt: new Date(Date.now() - 35 * 86400000),
+      } as any,
+      {
+        id: uuidv4(),
+        organizationId: org.id,
+        programId: seedPrograms[0]?.id || uuidv4(),
+        title: 'High-Converting Newsletter Email Copy Template',
+        type: 'EMAIL_TEMPLATE' as any,
+        copyContent: `Subject: How we cut 42% off our monthly AWS Kubernetes bill ⚡\n\nHey {{subscriber_name}},\n\nGet 20% off your first 3 months using code {{coupon_code}}:\n{{affiliate_link}}\n\nCheers,\n{{partner_name}}`,
+        tags: ['Email Template', 'Newsletter', 'Swipe Copy'],
+        createdAt: new Date(Date.now() - 30 * 86400000),
+      } as any,
+      {
+        id: uuidv4(),
+        organizationId: orgZenpay.id,
+        programId: seedZenpayPrograms[0]?.id || uuidv4(),
+        title: 'ZenPay Instant UPI Checkout Video Teaser',
+        type: 'VIDEO' as any,
+        fileUrl: 'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?w=1600&auto=format&fit=crop&q=80',
+        tags: ['Reel', 'Instagram', 'UPI'],
+        createdAt: new Date(Date.now() - 25 * 86400000),
+      } as any,
+    );
+  }
+
+  // Seed Billing Coupons for Acme and ZenPay
+  if (!dbStore.billingCoupons.some((c) => c.code === 'VENKAT20')) {
+    dbStore.billingCoupons.push(
+      {
+        id: uuidv4(),
+        organizationId: org.id,
+        code: 'VENKAT20',
+        type: 'PERCENTAGE' as any,
+        amountOrPercentage: 20,
+        status: 'ACTIVE' as any,
+        timesRedeemed: 64,
+        createdAt: new Date(Date.now() - 45 * 86400000),
+      } as any,
+      {
+        id: uuidv4(),
+        organizationId: orgZenpay.id,
+        code: 'ZENFIRSTFREE',
+        type: 'PERCENTAGE' as any,
+        amountOrPercentage: 100,
+        status: 'ACTIVE' as any,
+        timesRedeemed: 35,
+        createdAt: new Date(Date.now() - 40 * 86400000),
+      } as any,
+    );
+  }
+
+  let affiliate = dbStore.affiliates.find((a) => a.email === 'venkataramireddyvenky@gmail.com') || dbStore.affiliates[0];
 
   // Seed API Keys for Acme (including default deterministic test & live keys for Postman)
   const defaultOrgKeys = [

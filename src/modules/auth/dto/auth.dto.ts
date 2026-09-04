@@ -1,5 +1,6 @@
-import { IsEmail, IsOptional, IsString, MinLength, Matches } from 'class-validator';
+import { IsEmail, IsOptional, IsString, MinLength, Matches, IsBoolean, IsIn, IsArray, IsNumber, Min, Max } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 
 export class RegisterDto {
   @ApiProperty({ example: 'user@example.com' })
@@ -85,7 +86,7 @@ export class MfaChallengeDto {
 }
 
 export class MfaVerifyDto {
-  @ApiProperty({ example: 'challenge-123' })
+  @ApiProperty({ example: 'challenge-uuid-123' })
   @IsString()
   challengeId!: string;
 
@@ -98,6 +99,11 @@ export class MfaVerifyDto {
   @IsOptional()
   @IsString()
   recoveryCode?: string;
+
+  @ApiPropertyOptional({ description: 'Trust this device for 30 days', example: false })
+  @IsOptional()
+  @IsBoolean()
+  trustDevice?: boolean;
 }
 
 export class MfaSetupVerifyDto {
@@ -115,4 +121,62 @@ export class MfaDisableDto {
   @IsOptional()
   @IsString()
   code?: string;
+}
+
+export class RegenerateRecoveryCodesDto {
+  @ApiProperty({ example: '123456', description: 'Current TOTP code to authorize regeneration' })
+  @IsString()
+  code!: string;
+}
+
+export class TrustDeviceDto {
+  @ApiPropertyOptional({ description: 'Optional reason or label' })
+  @IsOptional()
+  @IsString()
+  label?: string;
+}
+
+export class StepUpChallengeDto {
+  // No body needed — user context from JWT
+}
+
+export class StepUpVerifyDto {
+  @ApiProperty({ example: 'challenge-uuid-123' })
+  @IsString()
+  challengeId!: string;
+
+  @ApiProperty({ example: '123456' })
+  @IsString()
+  code!: string;
+}
+
+export class UpdateOrgSecurityPolicyDto {
+  @ApiProperty({ example: 'org-uuid' })
+  @IsString()
+  organizationId!: string;
+
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @IsBoolean()
+  requireMfa?: boolean;
+
+  @ApiPropertyOptional({ example: 'ALL', enum: ['ALL', 'ADMINS', 'SENSITIVE_ROLES'] })
+  @IsOptional()
+  @IsString()
+  @IsIn(['ALL', 'ADMINS', 'SENSITIVE_ROLES'])
+  mfaScope?: string;
+
+  @ApiPropertyOptional({ example: ['OWNER', 'ADMIN', 'FINANCE'] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  sensitiveRoles?: string[];
+
+  @ApiPropertyOptional({ example: 10080, description: 'Session idle timeout in minutes' })
+  @IsOptional()
+  @IsNumber()
+  @Min(60)
+  @Max(43200)
+  @Type(() => Number)
+  sessionIdleTimeoutMinutes?: number;
 }

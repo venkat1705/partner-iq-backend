@@ -1,4 +1,5 @@
 import { AuthService } from '../modules/auth/auth.service';
+import { RiskEngineService } from '../modules/auth/risk-engine.service';
 import { OrganizationsService } from '../modules/organizations/organizations.service';
 import { AffiliatesService } from '../modules/affiliates/affiliates.service';
 import { TrackingService } from '../modules/tracking/tracking.service';
@@ -84,8 +85,8 @@ async function runTestSuite() {
   assert(!!admin && !!org, 'Seed Data Initialized');
 
   // 2. Authentication & Password Security Test
-  const authService = new AuthService();
-  const loginRes = await authService.login({ email: 'admin@partneriq.demo', password: 'PartnerIQ@123' });
+  const authService = new AuthService(new RiskEngineService());
+  const loginRes = (await authService.login({ email: 'admin@partneriq.demo', password: 'PartnerIQ@123' })) as any;
   assert(!!loginRes.accessToken && !!loginRes.refreshToken, 'Admin Authentication Successful');
 
   // 3. Refresh Token Rotation & Theft Detection Test
@@ -97,7 +98,7 @@ async function runTestSuite() {
     await authService.refreshToken(loginRes.refreshToken);
     assert(false, 'RefreshToken Reuse Detection should have thrown UnauthorizedException');
   } catch (err: any) {
-    assert(err.message.includes('theft detected'), 'Token Theft Detection & Token Family Revocation Passed');
+    assert(err.message.includes('Session security violation') || err.message.includes('theft'), 'Token Theft Detection & Token Family Revocation Passed');
   }
 
   // 4. Multi-Tenant IDOR Guard Test

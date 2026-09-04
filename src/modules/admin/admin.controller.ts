@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Patch, Put, Body, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -17,4 +17,29 @@ export class AdminController {
   getOverview(@CurrentUser() user: AuthUserPayload) {
     return this.adminService.getOverview(user);
   }
+
+  @Get('affiliates/settings')
+  @ApiOperation({ summary: 'Get platform-wide affiliate eligibility settings' })
+  getAffiliateSettings(@CurrentUser() user: AuthUserPayload) {
+    return this.adminService.getAffiliateSettings(user);
+  }
+
+  @Patch('affiliates/settings')
+  @ApiOperation({ summary: 'Update platform-wide affiliate eligibility settings' })
+  updateAffiliateSettings(
+    @CurrentUser() user: AuthUserPayload,
+    @Body() body: { allowOrganizationMembers: boolean },
+  ) {
+    return this.adminService.updateAffiliateSettings(body, user);
+  }
+
+  @Put('affiliates/settings')
+  @ApiOperation({ summary: 'Update platform-wide affiliate eligibility settings (PUT)' })
+  putAffiliateSettings(
+    @CurrentUser() user: AuthUserPayload,
+    @Body() body: { allowOrganizationMembers: boolean },
+  ) {
+    return this.adminService.updateAffiliateSettings(body, user);
+  }
 }
+

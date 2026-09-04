@@ -2,6 +2,7 @@ import { OAuthService } from '../modules/auth/oauth/oauth.service';
 import { GoogleOAuthService } from '../modules/auth/oauth/providers/google/google-oauth.service';
 import { OAuthStateService } from '../modules/auth/oauth/state/oauth-state.service';
 import { AuthService } from '../modules/auth/auth.service';
+import { RiskEngineService } from '../modules/auth/risk-engine.service';
 import { MembershipsService } from '../modules/memberships/memberships.service';
 import { NotificationsService } from '../modules/notifications/notifications.service';
 import { runSeed } from '../database/seeds/run-seed';
@@ -37,7 +38,8 @@ async function runOAuthTests() {
   // Setup services with mocked Google OAuth token exchange & verifier
   const googleOAuthService = new GoogleOAuthService();
   const stateService = new OAuthStateService();
-  const authService = new AuthService();
+  const riskEngineService = new RiskEngineService();
+  const authService = new AuthService(riskEngineService);
   const notificationGateway = { broadcastToUser: () => {} } as any;
   const notificationsService = new NotificationsService(notificationGateway);
   const membershipsService = new MembershipsService({ sendInvitationEmail: async () => {} } as any);

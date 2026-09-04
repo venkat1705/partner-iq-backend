@@ -1,8 +1,9 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
+import { v4 as uuidv4 } from 'uuid';
 import Redis from 'ioredis';
 import { AppDataSource } from '../../database/data-source';
 import { dbStore } from '../../database/store';
-import { IntegrationEventStatus, IntegrationStatus, OrganizationIntegrationStatus, PlatformRole, PayoutStatus } from '../../common/enums';
+import { IntegrationEventStatus, IntegrationStatus, OrganizationIntegrationStatus, PlatformRole, PayoutStatus, AuditAction } from '../../common/enums';
 import type { AuthUserPayload } from '../../common/interfaces/request-with-user.interface';
 
 @Injectable()
@@ -677,4 +678,71 @@ export class AdminService {
     if (score >= 40) return 'MEDIUM';
     return 'LOW';
   }
+
+  async getAffiliateSettings(user: AuthUserPayload) {
+    if (!user.isSuperAdmin && user.platformRole !== PlatformRole.SUPER_ADMIN) {
+      throw new ForbiddenException('Super admin access is required');
+    }
+
+    const setting = dbStore.platformSettings.find(
+      (s) => s.key === 'affiliateEligibility.allowOrganizationMembers',
+    );
+
+    return {
+      allowOrganizationMembers: setting ? Boolean(setting.value) : false,
+      updatedAt: setting?.updatedAt || new Date(),
+    };
+  }
+
+  async updateAffiliateSettings(dto: { allowOrganizationMembers: boolean }, user: AuthUserPayload) {
+    if (!user.isSuperAdmin && user.platformRole !== PlatformRole.SUPER_ADMIN) {
+      throw new ForbiddenException('Super admin access is required');
+    }
+
+    const key = 'affiliateEligibility.allowOrganizationMembers';
+    let setting = dbStore.platformSettings.find((s) => s.key === key);
+    const oldValue = setting ? Boolean(setting.value) : false;
+    const newValue = Boolean(dto.allowOrganizationMembers);
+
+    if (!setting) {
+      setting = {
+        id: uuidv4(),
+        key,
+        value: newValue,
+        description: 'Allow organization users to become affiliates',
+        updatedBy: user.userId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      dbStore.platformSettings.push(setting);
+    } else {
+      setting.value = newValue;
+      setting.updatedBy = user.userId;
+      setting.updatedAt = new Date();
+    }
+
+    // Persist audit log
+    const auditLog = {
+      id: uuidv4(),
+      actorType: 'USER',
+      actorId: user.userId,
+      action: AuditAction.AFFILIATE_ELIGIBILITY_POLICY_UPDATED,
+      resourceType: 'platform_setting',
+      resourceId: key,
+      metadata: {
+        settingKey: key,
+        oldValue,
+        newValue,
+        actorEmail: user.email,
+      },
+      createdAt: new Date(),
+    };
+    dbStore.auditLogs.push(auditLog as any);
+
+    return {
+      allowOrganizationMembers: newValue,
+      updatedAt: setting.updatedAt,
+    };
+  }
 }
+

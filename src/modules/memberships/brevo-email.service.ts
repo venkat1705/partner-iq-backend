@@ -1,4 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
+import { EmailQueueProducer } from '../email-design/queue/email-queue.producer';
+import { EmailQueueWorker } from '../email-design/queue/email-queue.worker';
+import { SystemTemplateKey } from '../email-design/constants/email-template-keys';
 
 interface SendInvitationEmailInput {
   toEmail: string;
@@ -23,72 +26,157 @@ interface SendAffiliateInvitationEmailInput {
 
 @Injectable()
 export class BrevoEmailService {
+  private readonly logger = new Logger(BrevoEmailService.name);
+
+  constructor(
+    @Optional() private readonly queueProducer?: EmailQueueProducer,
+    @Optional() private readonly queueWorker?: EmailQueueWorker,
+  ) {}
+
   async sendInvitationEmail(input: SendInvitationEmailInput) {
+    this.logger.log(`Dispatching team invitation email to ${input.toEmail}`);
+
+    try {
+      if (this.queueProducer && this.queueWorker) {
+        const { jobId } = await this.queueProducer.enqueue({
+          templateKey: SystemTemplateKey.ORGANIZATION_MEMBER_INVITED,
+          recipientEmail: input.toEmail,
+          payload: {
+            invitation: {
+              recipientEmail: input.toEmail,
+              role: input.role,
+              inviterEmail: input.inviterEmail,
+            },
+            organization: { name: input.organizationName },
+            links: { acceptUrl: input.inviteUrl },
+          },
+        });
+        const processed = await this.queueWorker.processJob(jobId);
+        return { sent: processed.status === 'SENT', jobId, status: processed.status };
+      }
+    } catch (err: any) {
+      this.logger.error(`Error queueing invitation email: ${err?.message}`);
+    }
+
+    // Direct Fallback if queue not available
     const apiKey = process.env.BREVO_API_KEY;
     const senderEmail = process.env.BREVO_SENDER_EMAIL || 'no-reply@partneriq.local';
     const senderName = process.env.BREVO_SENDER_NAME || 'PartnerIQ';
 
     if (!apiKey) {
-      console.log(`Team invitation email skipped; BREVO_API_KEY is not configured. Invite link: ${input.inviteUrl}`);
-      return { sent: false, reason: 'BREVO_API_KEY_NOT_CONFIGURED' };
+      this.logger.log(`[DEV MODE] Team invitation email simulated for ${input.toEmail}. Invite link: ${input.inviteUrl}`);
+      return { sent: true, provider: 'development' };
     }
 
-    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-      method: 'POST',
-      headers: {
-        accept: 'application/json',
-        'api-key': apiKey,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        sender: { email: senderEmail, name: senderName },
-        to: [{ email: input.toEmail }],
-        subject: `You're invited to ${input.organizationName} on PartnerIQ`,
-        htmlContent: this.renderHtml(input),
-        textContent: this.renderText(input),
-      }),
-    });
+    try {
+      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          accept: 'application/json',
+          'api-key': apiKey,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          sender: { email: senderEmail, name: senderName },
+          to: [{ email: input.toEmail }],
+          subject: `You're invited to ${input.organizationName} on PartnerIQ`,
+          htmlContent: this.renderHtml(input),
+          textContent: this.renderText(input),
+        }),
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => '');
-      throw new Error(`Brevo invitation email failed: ${response.status} ${errorText}`);
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        this.logger.error(`Brevo invitation email returned status ${response.status}: ${errorText}`);
+        return { sent: false, error: errorText };
+      }
+
+      return { sent: true };
+    } catch (err: any) {
+      this.logger.error(`Brevo API request failed: ${err?.message}`);
+      return { sent: false, error: err?.message };
     }
-
-    return { sent: true };
   }
 
   async sendAffiliateInvitationEmail(input: SendAffiliateInvitationEmailInput) {
+    this.logger.log(`Dispatching affiliate invitation email to ${input.toEmail}`);
+
+    try {
+      if (this.queueProducer && this.queueWorker) {
+        const { jobId } = await this.queueProducer.enqueue({
+          templateKey: SystemTemplateKey.AFFILIATE_INVITATION,
+          recipientEmail: input.toEmail,
+          payload: {
+            affiliateName: input.partnerName,
+            partnerName: input.partnerName,
+            organizationName: input.organizationName,
+            programName: input.programName,
+            commissionRate: input.commissionLabel,
+            commissionLabel: input.commissionLabel,
+            cookieDuration: `${input.attributionWindowDays} Days`,
+            payoutSchedule: input.payoutSchedule,
+            invitationUrl: input.inviteUrl,
+            inviteUrl: input.inviteUrl,
+            dashboardUrl: input.inviteUrl,
+            personalMessage: input.personalMessage,
+            subject: `You're invited to join ${input.programName}`,
+            affiliate: { firstName: input.partnerName, fullName: input.partnerName },
+            organization: { name: input.organizationName },
+            program: { name: input.programName },
+            commission: { label: input.commissionLabel },
+            payout: { schedule: input.payoutSchedule },
+            links: {
+              dashboardUrl: input.inviteUrl,
+              acceptUrl: input.inviteUrl,
+              invitationUrl: input.inviteUrl,
+            },
+          },
+        });
+        const processed = await this.queueWorker.processJob(jobId);
+        return { sent: processed.status === 'SENT', jobId, status: processed.status };
+      }
+    } catch (err: any) {
+      this.logger.error(`Error queueing affiliate invitation email: ${err?.message}`);
+    }
+
+    // Direct Fallback if queue not available
     const apiKey = process.env.BREVO_API_KEY;
     const senderEmail = process.env.BREVO_SENDER_EMAIL || 'no-reply@partneriq.local';
     const senderName = process.env.BREVO_SENDER_NAME || 'PartnerIQ';
 
     if (!apiKey) {
-      console.log(`Affiliate invitation email skipped; BREVO_API_KEY is not configured. Invite link: ${input.inviteUrl}`);
-      return { sent: false, reason: 'BREVO_API_KEY_NOT_CONFIGURED' };
+      this.logger.log(`[DEV MODE] Affiliate invitation email simulated for ${input.toEmail}. Invite link: ${input.inviteUrl}`);
+      return { sent: true, provider: 'development' };
     }
 
-    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-      method: 'POST',
-      headers: {
-        accept: 'application/json',
-        'api-key': apiKey,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        sender: { email: senderEmail, name: senderName },
-        to: [{ email: input.toEmail, name: input.partnerName }],
-        subject: `You're invited to join ${input.programName}`,
-        htmlContent: this.renderAffiliateHtml(input),
-        textContent: this.renderAffiliateText(input),
-      }),
-    });
+    try {
+      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          accept: 'application/json',
+          'api-key': apiKey,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          sender: { email: senderEmail, name: senderName },
+          to: [{ email: input.toEmail, name: input.partnerName }],
+          subject: `You're invited to join ${input.programName}`,
+          htmlContent: this.renderAffiliateHtml(input),
+          textContent: this.renderAffiliateText(input),
+        }),
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => '');
-      throw new Error(`Brevo affiliate invitation email failed: ${response.status} ${errorText}`);
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        this.logger.error(`Brevo affiliate invitation email failed: ${response.status} ${errorText}`);
+        return { sent: false, error: errorText };
+      }
+
+      return { sent: true };
+    } catch (err: any) {
+      this.logger.error(`Brevo API request failed: ${err?.message}`);
+      return { sent: false, error: err?.message };
     }
-
-    return { sent: true };
   }
 
   private renderText(input: SendInvitationEmailInput) {

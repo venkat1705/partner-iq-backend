@@ -28,13 +28,15 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
     let message = 'Internal server error';
     let errorCode = 'INTERNAL_ERROR';
+    let details: any = undefined;
 
     if (typeof exceptionResponse === 'string') {
       message = exceptionResponse;
     } else if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
       const resObj = exceptionResponse as any;
       message = resObj.message || message;
-      errorCode = resObj.error || resObj.code || errorCode;
+      errorCode = resObj.code || resObj.errorCode || (typeof resObj.error === 'string' && resObj.error !== 'Forbidden' && resObj.error !== 'Unauthorized' && resObj.error !== 'Conflict' && resObj.error !== 'Bad Request' ? resObj.error : undefined) || errorCode;
+      details = resObj.details || resObj.errors || undefined;
       if (Array.isArray(message)) {
         message = message.join('; ');
       }
@@ -42,16 +44,36 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       this.logger.error(`Unhandled Exception: ${exception.message}`, exception.stack);
     }
 
+    if (errorCode === 'INTERNAL_ERROR') {
+      if (status === HttpStatus.UNAUTHORIZED) {
+        errorCode = 'UNAUTHENTICATED';
+      } else if (status === HttpStatus.FORBIDDEN) {
+        errorCode = 'PERMISSION_DENIED';
+      } else if (status === HttpStatus.NOT_FOUND) {
+        errorCode = 'RESOURCE_NOT_FOUND';
+      } else if (status === HttpStatus.CONFLICT) {
+        errorCode = 'CONFLICT';
+      } else if (status === HttpStatus.BAD_REQUEST || status === HttpStatus.UNPROCESSABLE_ENTITY) {
+        errorCode = 'VALIDATION_ERROR';
+      }
+    }
+
     const requestId = (request.headers['x-request-id'] as string) || `req_${randomBytes(12).toString('hex')}`;
 
     response.status(status).json({
       success: false,
+      statusCode: status,
+      code: errorCode,
+      message,
+      details,
       error: {
         code: errorCode,
         message,
         requestId,
       },
+      correlationId: requestId,
       timestamp: new Date().toISOString(),
+      path: request.url,
     });
   }
 }

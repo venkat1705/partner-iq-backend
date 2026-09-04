@@ -2,10 +2,12 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { dbStore, AffiliateEntity, ProgramAffiliateEntity, AffiliateApplicationEntity, TrackingLinkEntity } from '../../database/store';
 import { AffiliateStatus, AffiliateInvitationStatus, ApplicationStatus, AuditAction, ProgramStatus, TrackingLinkStatus, AutomationTriggerType, TierTransitionType, EnvironmentType } from '../../common/enums';
+import { MembershipStatus } from '../../common/enums/rbac';
 import { SecurityUtils } from '../../common/utils/security.utils';
 import { EnvironmentUtils } from '../../common/utils/environment.utils';
 import { getAppConfig } from '../../config/app.config';
@@ -22,8 +24,46 @@ export class AffiliatesService {
     private readonly automationEngineService: AutomationEngineService,
   ) {}
 
+  private assertUserEligibleForAffiliate(email: string) {
+    const setting = dbStore.platformSettings?.find(
+      (s) => s.key === 'affiliateEligibility.allowOrganizationMembers',
+    );
+    const allowOrganizationMembers = setting ? Boolean(setting.value) : false;
+
+    if (allowOrganizationMembers) {
+      return;
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const existingUser = dbStore.users.find(
+      (u) => u.email.toLowerCase().trim() === normalizedEmail && !u.deletedAt,
+    );
+
+    if (!existingUser) {
+      return;
+    }
+
+    const activeOrgMembership = dbStore.organizationMemberships.find((m) => {
+      if (m.userId !== existingUser.id) return false;
+      if (m.status !== MembershipStatus.ACTIVE) return false;
+      const org = dbStore.organizations.find((o) => o.id === m.organizationId && !o.deletedAt);
+      if (org && (org.status === 'SUSPENDED' || org.status === 'CLOSED')) return false;
+      const role = String(m.role).toUpperCase();
+      return role === 'OWNER' || role === 'ADMIN' || role === 'MEMBER' || role === 'MANAGER';
+    });
+
+    if (activeOrgMembership) {
+      throw new ConflictException({
+        statusCode: 409,
+        code: 'AFFILIATE_INELIGIBLE_ORGANIZATION_MEMBER',
+        message: 'This user is already associated with an organization account and cannot be invited as an affiliate at this time.',
+      });
+    }
+  }
+
   async create(organizationId: string, dto: CreateAffiliateDto, actorId?: string, skipAudit = false, environment: EnvironmentType = EnvironmentType.LIVE) {
     const email = dto.email.toLowerCase().trim();
+    this.assertUserEligibleForAffiliate(email);
 
     let affiliate = dbStore.affiliates.find(
       (a) => a.organizationId === organizationId && a.email === email,
@@ -153,6 +193,7 @@ export class AffiliatesService {
 
   async inviteAffiliate(organizationId: string, dto: CreateAffiliateInvitationDto, actorId: string, environment: EnvironmentType = EnvironmentType.LIVE) {
     const email = dto.email.toLowerCase().trim();
+    this.assertUserEligibleForAffiliate(email);
     const partnerName = dto.partnerName.trim();
     const program = dbStore.programs.find((item) =>
       item.id === dto.programId &&
@@ -549,7 +590,7 @@ export class AffiliatesService {
     console.log(
       [
         `Affiliate invitation email prepared for ${invitation.email}`,
-        `Reason: ${result.reason}`,
+        `Reason: ${(result as any).reason || (result as any).error || result.status || 'delivery not sent'}`,
         `Subject: You're invited to join ${program.name}`,
         `Accept Invitation: ${inviteUrl}`,
         `Expires: ${invitation.expiresAt.toISOString()}`,
