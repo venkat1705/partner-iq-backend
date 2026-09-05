@@ -25,6 +25,7 @@ import { GamificationModule } from './modules/gamification/gamification.module';
 import { AutomationsModule } from './modules/automations/automations.module';
 import { DemoBookingsModule } from './modules/demo-bookings/demo-bookings.module';
 import { EmailDesignModule } from './modules/email-design/email-design.module';
+import { InternalOpsModule } from './modules/internal-ops/internal-ops.module';
 
 @Module({
   imports: [
@@ -54,7 +55,8 @@ import { EmailDesignModule } from './modules/email-design/email-design.module';
     AutomationsModule,
     DemoBookingsModule,
     EmailDesignModule,
+    InternalOpsModule,
   ],
 })
-export class AppModule {}
+export class AppModule { }
 

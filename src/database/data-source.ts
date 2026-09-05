@@ -13,6 +13,9 @@ import {
   User,
   UserIdentity,
   Affiliate,
+  AffiliatePortalProfile,
+  AffiliatePayoutMethod,
+  AffiliateSupportTicket,
   AffiliateInvitation,
   ProgramAffiliate,
   AffiliateApplication,
@@ -91,6 +94,9 @@ import {
   AutomationEmailTemplate,
   EmailDesignTemplate,
   EmailDesignSettings,
+  DocumentDesignTemplate,
+  DocumentTemplateVersion,
+  GeneratedDocument,
   AutomationEmailLog,
   EmailTemplateVersion,
   EmailTemplateOverride,
@@ -116,7 +122,7 @@ const databasePassword = process.env.DATABASE_PASSWORD || process.env.PLANETSCAL
 const databaseName = process.env.DATABASE_NAME || process.env.PLANETSCALE_DB || 'partner_db';
 const databaseSsl =
   process.env.DATABASE_SSL === 'true' ||
-  Boolean(process.env.DATABASE_URL || process.env.PLANETSCALE_DB_HOST)
+    Boolean(process.env.DATABASE_URL || process.env.PLANETSCALE_DB_HOST)
     ? { rejectUnauthorized: true }
     : undefined;
 
@@ -125,12 +131,12 @@ export const AppDataSource = new DataSource({
   ...(databaseUrl
     ? { url: databaseUrl }
     : {
-        host: databaseHost,
-        port: databasePort,
-        username: databaseUsername,
-        password: databasePassword,
-        database: databaseName,
-      }),
+      host: databaseHost,
+      port: databasePort,
+      username: databaseUsername,
+      password: databasePassword,
+      database: databaseName,
+    }),
   ssl: databaseSsl,
   synchronize: true,
   logging: false,
@@ -146,6 +152,9 @@ export const AppDataSource = new DataSource({
     NotificationPreference,
     Program,
     Affiliate,
+    AffiliatePortalProfile,
+    AffiliatePayoutMethod,
+    AffiliateSupportTicket,
     AffiliateInvitation,
     ProgramAffiliate,
     AffiliateApplication,
@@ -224,6 +233,9 @@ export const AppDataSource = new DataSource({
     AutomationEmailTemplate,
     EmailDesignTemplate,
     EmailDesignSettings,
+    DocumentDesignTemplate,
+    DocumentTemplateVersion,
+    GeneratedDocument,
     AutomationEmailLog,
     EmailTemplateVersion,
     EmailTemplateOverride,

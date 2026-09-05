@@ -23,56 +23,165 @@ import { AffiliateStatus, TrackingLinkStatus, EnvironmentType } from '../../comm
 import { SecurityUtils } from '../../common/utils/security.utils';
 import { AuthService } from '../auth/auth.service';
 import { initializeDataSource } from '../../database/data-source';
-import { User } from '../../database/schema';
+import { AffiliatePayoutMethod, AffiliatePortalProfile, AffiliateSupportTicket, User } from '../../database/schema';
 import { IsNull } from 'typeorm';
 import { UserStatus, PlatformRole } from '../../common/enums';
+import { assertUserEligibleForAffiliate } from './affiliate-eligibility.policy';
+import { AffiliatesService } from './affiliates.service';
 
-
-// In-memory support tickets store
-const supportTicketsStore: Array<{
-  id: string;
-  userId: string;
-  organizationId?: string;
-  organizationName: string;
-  subject: string;
-  category: string;
-  priority: 'NORMAL' | 'URGENT';
-  status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED';
-  message?: string;
-  createdAt: string;
-  lastReply: string;
-}> = [];
-
-// In-memory payout methods store
-const payoutMethodsStore: Array<{
-  id: string;
-  userId: string;
-  type: 'BANK_ACCOUNT' | 'UPI' | 'PAYPAL';
-  isDefault: boolean;
-  bankName?: string;
-  accountNumberMasked?: string;
-  ifscCode?: string;
-  accountHolderName?: string;
-  upiIdMasked?: string;
-  paypalEmailMasked?: string;
-  authorizedOrgIds?: string[];
-  createdAt: string;
-}> = [];
-
-// In-memory affiliate extra profile store (bio, social profiles, tax info, etc.)
-const affiliateProfilesStore: Record<string, any> = {};
 
 @ApiTags('Affiliate Self Portal')
 @Controller()
 export class AffiliatePortalController {
   constructor(
     @Optional() private readonly authService?: AuthService,
-  ) {}
+    private readonly affiliatesService?: AffiliatesService,
+  ) { }
 
   private resolveAffiliateEmail(req: any): string {
     const email = (req.user?.email || '').toLowerCase().trim();
     if (email) return email;
-    return 'venkataramireddyvenky@gmail.com';
+    throw new BadRequestException('Authenticated affiliate email is required.');
+  }
+
+  private async repositories() {
+    const dataSource = await initializeDataSource();
+    return {
+      users: dataSource.getRepository(User),
+      affiliatePortalProfiles: dataSource.getRepository(AffiliatePortalProfile),
+      affiliatePayoutMethods: dataSource.getRepository(AffiliatePayoutMethod),
+      affiliateSupportTickets: dataSource.getRepository(AffiliateSupportTicket),
+    };
+  }
+
+  private async resolveAffiliateUser(req: any) {
+    const email = this.resolveAffiliateEmail(req);
+    const userId = req.user?.userId || req.user?.id || req.user?.sub;
+    const { users } = await this.repositories();
+    const user = (userId ? await users.findOne({ where: { id: userId, deletedAt: IsNull() } }) : null)
+      || await users.findOne({ where: { email, deletedAt: IsNull() } });
+    return {
+      user: user || {
+        id: userId || `aff_user_${email}`,
+        email,
+        firstName: 'Partner',
+        lastName: 'User',
+        createdAt: new Date(),
+      } as any,
+      email,
+    };
+  }
+
+  private async resolveAffiliateProfile(req: any) {
+    const { user, email } = await this.resolveAffiliateUser(req);
+    const { affiliatePortalProfiles } = await this.repositories();
+    const userId = user.id || req.user?.userId || req.user?.sub;
+
+    let profile = await affiliatePortalProfiles.findOne({ where: { userId } });
+    if (!profile) {
+      profile = affiliatePortalProfiles.create({
+        userId,
+        email,
+        fullName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || email.split('@')[0],
+        website: '',
+        phone: '',
+        country: 'India',
+        partnerType: 'AFFILIATE',
+        primaryMarket: 'India',
+        audienceSize: '0-1k',
+        socialProfiles: {},
+        bio: '',
+        onboardingCompleted: false,
+        taxCountry: 'India',
+        panOrTaxId: '',
+        taxClassification: 'INDIVIDUAL',
+        withholdingRate: 0,
+        taxVerified: false,
+        taxFormType: 'PAN_TDS',
+      });
+      profile = await affiliatePortalProfiles.save(profile);
+    } else if (profile.email !== email) {
+      profile.email = email;
+      profile = await affiliatePortalProfiles.save(profile);
+    }
+
+    return { user, email, profile };
+  }
+
+  private async serializeAffiliateProfile(req: any) {
+    const { user, profile } = await this.resolveAffiliateProfile(req);
+    const isOnboarded = Boolean(
+      profile.onboardingCompleted ?? (profile.primaryMarket && (profile.bio || profile.website))
+    );
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email.split('@')[0],
+        avatarUrl: user.avatarUrl || '',
+        is2faEnabled: Boolean((user as any).mfa?.enabled || (user as any).mfaEnabled),
+        googleConnected: dbStore.userIdentities.some((item) => item.userId === user.id && item.provider === 'GOOGLE'),
+        hasPassword: Boolean((user as any).passwordHash),
+        createdAt: user.createdAt,
+      },
+      profile: {
+        id: profile.id || `aff_profile_${user.id}`,
+        userId: user.id,
+        website: profile.website || '',
+        phone: profile.phone || '',
+        country: profile.country || 'India',
+        partnerType: profile.partnerType || 'AFFILIATE',
+        primaryMarket: profile.primaryMarket || 'India',
+        audienceSize: profile.audienceSize || '0-1k',
+        socialProfiles: profile.socialProfiles || {},
+        bio: profile.bio || '',
+        onboardingCompleted: isOnboarded,
+        createdAt: profile.createdAt || user.createdAt,
+      },
+      taxProfile: this.serializeTaxProfile(profile),
+    };
+  }
+
+  private serializeTaxProfile(profile: AffiliatePortalProfile) {
+    return {
+      userId: profile.userId,
+      country: profile.taxCountry || profile.country || 'India',
+      panOrTaxId: profile.panOrTaxId || '',
+      taxClassification: profile.taxClassification || 'INDIVIDUAL',
+      withholdingRate: profile.withholdingRate || 0,
+      isVerified: Boolean(profile.taxVerified),
+      formType: profile.taxFormType || 'PAN_TDS',
+      submittedAt: profile.taxSubmittedAt ? profile.taxSubmittedAt.toISOString() : '',
+    };
+  }
+
+  private serializePayoutMethod(method: AffiliatePayoutMethod) {
+    return {
+      id: method.id,
+      userId: method.userId,
+      type: method.type,
+      isDefault: method.isDefault,
+      bankName: method.bankName,
+      accountNumberMasked: method.accountNumberMasked,
+      ifscCode: method.ifscCode,
+      accountHolderName: method.accountHolderName || '',
+      upiIdMasked: method.upiIdMasked,
+      paypalEmailMasked: method.paypalEmailMasked,
+      authorizedOrgIds: method.authorizedOrgIds || ['*'],
+      createdAt: method.createdAt?.toISOString?.() || method.createdAt,
+    };
+  }
+
+  private pickProfileUpdates(body: any) {
+    const updates: Record<string, any> = {};
+    ['website', 'phone', 'country', 'partnerType', 'primaryMarket', 'audienceSize', 'bio', 'onboardingCompleted'].forEach((key) => {
+      if (body[key] !== undefined) updates[key] = typeof body[key] === 'string' ? body[key].trim() : body[key];
+    });
+    if (body.socialProfiles && typeof body.socialProfiles === 'object') {
+      updates.socialProfiles = body.socialProfiles;
+    }
+    return updates;
   }
 
   private resolveAffiliatesForUser(email: string) {
@@ -83,7 +192,7 @@ export class AffiliatePortalController {
   // ----------------------------------------------------
   // Affiliate Auth — Register (relaxed rules for affiliates)
   // ----------------------------------------------------
-  @Post('api/v1/affiliate/auth/register')
+  @Post('api/v1/affiliate/legacy/auth/register')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Register a new affiliate account' })
   async affiliateRegister(@Body() body: any, @Req() req: any) {
@@ -98,6 +207,8 @@ export class AffiliatePortalController {
     }
 
     const normalizedEmail = (email as string).toLowerCase().trim();
+    assertUserEligibleForAffiliate(normalizedEmail);
+
     const nameParts = (fullName as string).trim().split(/\s+/);
     const firstName = nameParts[0] || 'Partner';
     const lastName = nameParts.slice(1).join(' ') || '';
@@ -120,7 +231,7 @@ export class AffiliatePortalController {
       lastName,
       status: UserStatus.ACTIVE,
       emailVerified: false,
-      platformRole: PlatformRole.USER,
+      platformRole: PlatformRole.AFFILIATE,
       failedLoginAttempts: 0,
     });
     const savedUser = await users.save(newUser);
@@ -129,28 +240,23 @@ export class AffiliatePortalController {
       dbStore.users.push(savedUser);
     }
 
-    // Store affiliate extra profile
-    const emailKey = normalizedEmail;
-    if (!affiliateProfilesStore[emailKey]) {
-      affiliateProfilesStore[emailKey] = {
-        website: '',
-        phone: '',
-        country: 'India',
-        partnerType: partnerType || 'AFFILIATE',
-        primaryMarket: '',
-        audienceSize: 'Under 10k',
-        socialProfiles: {},
-        bio: '',
-        taxProfile: {
-          country: 'India',
-          panOrTaxId: '',
-          taxClassification: 'INDIVIDUAL',
-          withholdingRate: 10,
-          isVerified: false,
-          formType: 'PAN_TDS',
-        },
-      };
-    }
+    const { affiliatePortalProfiles } = await this.repositories();
+    await affiliatePortalProfiles.save(affiliatePortalProfiles.create({
+      userId: savedUser.id,
+      email: normalizedEmail,
+      fullName,
+      partnerType: partnerType || 'AFFILIATE',
+      country: 'India',
+      primaryMarket: 'India',
+      audienceSize: '0-1k',
+      socialProfiles: {},
+      onboardingCompleted: false,
+      taxCountry: 'India',
+      taxClassification: 'INDIVIDUAL',
+      withholdingRate: 0,
+      taxVerified: false,
+      taxFormType: 'PAN_TDS',
+    }));
 
     // Use AuthService to create session tokens if available
     if (this.authService) {
@@ -158,6 +264,7 @@ export class AffiliatePortalController {
         { email: normalizedEmail, password },
         req.headers['user-agent'],
         req.ip || req.headers['x-forwarded-for'],
+        { allowAffiliate: true },
       );
       return {
         success: true,
@@ -192,59 +299,7 @@ export class AffiliatePortalController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get current affiliate user profile' })
   async getProfile(@Req() req: any) {
-    const email = this.resolveAffiliateEmail(req);
-    const user = dbStore.users.find((u) => u.email.toLowerCase() === email) || {
-      id: req.user?.userId || 'usr_partner_001',
-      email,
-      firstName: 'Partner',
-      lastName: 'User',
-      createdAt: new Date().toISOString(),
-    };
-
-    const extraProfile = affiliateProfilesStore[email] || {
-      website: '',
-      phone: '+91 98765 43210',
-      country: 'India',
-      partnerType: 'CREATOR',
-      primaryMarket: 'SaaS & AI Infrastructure',
-      audienceSize: '10k+',
-      socialProfiles: {},
-      bio: '',
-      taxProfile: {
-        country: 'India',
-        panOrTaxId: 'ABCDE1234F',
-        taxClassification: 'INDIVIDUAL',
-        withholdingRate: 5,
-        isVerified: true,
-        formType: 'PAN_TDS',
-      },
-    };
-
-    return {
-      user: {
-        id: (user as any).id,
-        email: user.email,
-        fullName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email.split('@')[0],
-        avatarUrl: (user as any).avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-        is2faEnabled: true,
-        googleConnected: true,
-        createdAt: (user as any).createdAt,
-      },
-      profile: {
-        id: `prof_${(user as any).id || '001'}`,
-        userId: (user as any).id,
-        website: extraProfile.website,
-        phone: extraProfile.phone,
-        country: extraProfile.country,
-        partnerType: extraProfile.partnerType,
-        primaryMarket: extraProfile.primaryMarket,
-        audienceSize: extraProfile.audienceSize,
-        socialProfiles: extraProfile.socialProfiles || {},
-        bio: extraProfile.bio,
-        createdAt: (user as any).createdAt,
-      },
-      taxProfile: extraProfile.taxProfile,
-    };
+    return this.serializeAffiliateProfile(req);
   }
 
   @Patch('api/v1/affiliate/me/profile')
@@ -252,27 +307,82 @@ export class AffiliatePortalController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update current affiliate user profile' })
   async updateProfile(@Req() req: any, @Body() body: any) {
-    const email = this.resolveAffiliateEmail(req);
-    const existing = affiliateProfilesStore[email] || {};
-    affiliateProfilesStore[email] = {
-      ...existing,
-      ...body,
-      socialProfiles: {
-        ...(existing.socialProfiles || {}),
-        ...(body.socialProfiles || {}),
-      },
+    const { user, profile } = await this.resolveAffiliateProfile(req);
+    const { users, affiliatePortalProfiles } = await this.repositories();
+    const profileUpdates = this.pickProfileUpdates(body || {});
+    Object.assign(profile, profileUpdates);
+    profile.socialProfiles = {
+      ...(profile.socialProfiles || {}),
+      ...(profileUpdates.socialProfiles || {}),
     };
 
-    if (body.fullName) {
-      const user = dbStore.users.find((u) => u.email.toLowerCase() === email);
-      if (user) {
+    if (user) {
+      if (body.fullName) {
         const parts = body.fullName.trim().split(' ');
         user.firstName = parts[0] || user.firstName;
         user.lastName = parts.slice(1).join(' ') || user.lastName;
       }
+      if (body.avatarUrl !== undefined) {
+        user.avatarUrl = body.avatarUrl;
+      }
+      if (body.password) {
+        if (body.password.length < 8) {
+          throw new BadRequestException('Password must be at least 8 characters long.');
+        }
+        user.passwordHash = await SecurityUtils.hashPassword(body.password);
+      }
+      await users.save(user);
     }
+    await affiliatePortalProfiles.save(profile);
 
-    return this.getProfile(req);
+    return this.serializeAffiliateProfile(req);
+  }
+
+  @Get('api/v1/affiliate/me/dashboard')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Aggregated affiliate dashboard metrics' })
+  async getDashboard(@Req() req: any, @Query('organizationId') organizationId?: string) {
+    const email = this.resolveAffiliateEmail(req);
+    const affiliates = this.resolveAffiliatesForUser(email);
+    const scopedAffiliates = organizationId ? affiliates.filter((affiliate) => affiliate.organizationId === organizationId) : affiliates;
+    const affiliateIds = scopedAffiliates.map((affiliate) => affiliate.id);
+    const links = dbStore.trackingLinks.filter((link) => affiliateIds.includes(link.affiliateId));
+    const conversions = dbStore.conversions.filter((conversion) => affiliateIds.includes(conversion.affiliateId));
+    const commissions = dbStore.commissions.filter((commission) => affiliateIds.includes(commission.affiliateId));
+    const payoutItems = dbStore.payoutItems.filter((item) => affiliateIds.includes(item.affiliateId));
+
+    const totalEarnings = commissions.reduce((sum, commission: any) => sum + (commission.amount || commission.commissionAmount || 0), 0);
+    const pendingCommission = commissions
+      .filter((commission: any) => commission.status === 'PENDING')
+      .reduce((sum, commission: any) => sum + (commission.amount || commission.commissionAmount || 0), 0);
+    const payableCommission = commissions
+      .filter((commission: any) => commission.status === 'PAYABLE' || commission.status === 'APPROVED')
+      .reduce((sum, commission: any) => sum + (commission.amount || commission.commissionAmount || 0), 0);
+    const paidCommission = payoutItems.reduce((sum, item: any) => sum + (item.netAmount || item.amount || 0), 0);
+    const clicks = links.reduce((sum, link: any) => sum + (link.clickCount || link.clicks || 0), 0);
+    const revenue = conversions.reduce((sum, conversion: any) => sum + (conversion.amount || conversion.value || 0), 0);
+
+    return {
+      totalEarnings,
+      pendingCommission,
+      payableCommission,
+      paidCommission,
+      clicks,
+      uniqueVisitors: Math.round(clicks * 0.82),
+      conversions: conversions.length,
+      conversionRate: clicks > 0 ? Number(((conversions.length / clicks) * 100).toFixed(2)) : 0,
+      revenue,
+      currentTier: {
+        name: scopedAffiliates.length ? 'Standard Partner' : 'Not enrolled',
+        tierLevel: scopedAffiliates.length ? 1 : 0,
+        minEarnings: 0,
+      },
+      topLinks: links.slice(0, 5),
+      topPrograms: dbStore.programAffiliates.filter((item) => affiliateIds.includes(item.affiliateId)).slice(0, 5),
+      recentConversions: conversions.slice(0, 5),
+      recentPayouts: payoutItems.slice(0, 5),
+    };
   }
 
   // ----------------------------------------------------
@@ -537,26 +647,23 @@ export class AffiliatePortalController {
   @ApiOperation({ summary: 'Create a tracking link' })
   async createLink(@Req() req: any, @Body() body: any) {
     const email = this.resolveAffiliateEmail(req);
-    const orgId = body.organizationId || dbStore.organizations[0]?.id;
+    const orgId = body.organizationId;
+    if (!orgId || !body.programId) {
+      throw new BadRequestException('organizationId and programId are required.');
+    }
     let affiliate = dbStore.affiliates.find((a) => a.organizationId === orgId && a.email.toLowerCase() === email);
 
     if (!affiliate) {
-      affiliate = {
-        id: uuidv4(),
-        organizationId: orgId,
-        displayName: body.title || 'Partner',
-        email,
-        country: 'US',
-        status: AffiliateStatus.ACTIVE,
-        trustScore: 85,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-      dbStore.affiliates.push(affiliate);
+      throw new BadRequestException('Join this organization as an affiliate before creating links.');
     }
 
     const shortCode = body.slug || body.customAlias || SecurityUtils.generateRandomCode(8).toLowerCase();
-    const prog = dbStore.programs.find((p) => p.id === body.programId && p.organizationId === orgId) || dbStore.programs.find((p) => p.organizationId === orgId) || dbStore.programs[0];
+    const prog = dbStore.programs.find((p) => p.id === body.programId && p.organizationId === orgId);
+    if (!prog) throw new NotFoundException('Program not found');
+    const membership = dbStore.programAffiliates.find((item) => item.organizationId === orgId && item.programId === prog.id && item.affiliateId === affiliate.id && item.status === AffiliateStatus.ACTIVE);
+    if (!membership) {
+      throw new BadRequestException('You must be an active member of this program before creating links.');
+    }
 
     const link = {
       id: uuidv4(),
@@ -564,7 +671,7 @@ export class AffiliatePortalController {
       environment: EnvironmentType.LIVE,
       programId: prog.id,
       affiliateId: affiliate.id,
-      destinationUrl: body.destinationUrl || (prog as any)?.landingPageUrl || 'https://example.com',
+      destinationUrl: body.destinationUrl || (prog as any)?.landingPageUrl || '',
       shortCode,
       status: TrackingLinkStatus.ACTIVE,
       title: body.title || 'Custom Tracking Link',
@@ -604,8 +711,10 @@ export class AffiliatePortalController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Archive/delete tracking link' })
-  async deleteLink(@Param('linkId') linkId: string) {
-    const idx = dbStore.trackingLinks.findIndex((l) => l.id === linkId);
+  async deleteLink(@Req() req: any, @Param('linkId') linkId: string) {
+    const email = this.resolveAffiliateEmail(req);
+    const affiliateIds = this.resolveAffiliatesForUser(email).map((affiliate) => affiliate.id);
+    const idx = dbStore.trackingLinks.findIndex((l) => l.id === linkId && affiliateIds.includes(l.affiliateId));
     if (idx !== -1) {
       dbStore.trackingLinks[idx].status = TrackingLinkStatus.INACTIVE;
     }
@@ -620,23 +729,25 @@ export class AffiliatePortalController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List coupons for current affiliate' })
   async getCoupons(@Req() req: any, @Query('organizationId') organizationId?: string) {
-    let coupons = dbStore.billingCoupons;
+    const email = this.resolveAffiliateEmail(req);
+    const orgIds = this.resolveAffiliatesForUser(email).map((affiliate) => affiliate.organizationId);
+    let coupons = dbStore.billingCoupons.filter((coupon: any) => coupon.organizationId && orgIds.includes(coupon.organizationId));
     if (organizationId) {
-      coupons = coupons.filter((c: any) => c.organizationId === organizationId || !c.organizationId);
+      coupons = coupons.filter((c: any) => c.organizationId === organizationId);
     }
 
     return coupons.map((c: any) => ({
       id: c.id,
-      organizationId: c.organizationId || organizationId || dbStore.organizations[0]?.id,
-      programId: c.programId || 'prog_main',
+      organizationId: c.organizationId,
+      programId: c.programId || '',
       code: c.code,
-      discountSummary: c.discountSummary || (c.type === 'PERCENTAGE' ? `${c.amountOrPercentage}% off` : `$${c.amountOrPercentage / 100} discount`),
+      discountSummary: c.discountSummary || (c.type === 'PERCENTAGE' ? `${c.amountOrPercentage || 0}% off` : `$${(c.amountOrPercentage || 0) / 100} discount`),
       discountType: c.type || 'PERCENTAGE',
-      discountValue: c.amountOrPercentage || 20,
-      uses: c.timesRedeemed || 24,
-      conversions: c.timesRedeemed || 24,
-      revenueGenerated: (c.timesRedeemed || 24) * 150,
-      commissionEarned: (c.timesRedeemed || 24) * 35,
+      discountValue: c.amountOrPercentage || 0,
+      uses: c.timesRedeemed || 0,
+      conversions: c.timesRedeemed || 0,
+      revenueGenerated: c.revenueGenerated || 0,
+      commissionEarned: c.commissionEarned || 0,
       status: c.status || 'ACTIVE',
     }));
   }
@@ -649,7 +760,9 @@ export class AffiliatePortalController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List marketing assets for current affiliate' })
   async getAssets(@Req() req: any, @Query('organizationId') organizationId?: string) {
-    let assets = dbStore.assets;
+    const email = this.resolveAffiliateEmail(req);
+    const orgIds = this.resolveAffiliatesForUser(email).map((affiliate) => affiliate.organizationId);
+    let assets = dbStore.assets.filter((asset) => orgIds.includes(asset.organizationId));
     if (organizationId) {
       assets = assets.filter((a) => a.organizationId === organizationId);
     }
@@ -660,12 +773,12 @@ export class AffiliatePortalController {
       programId: a.programId,
       title: a.title || 'Marketing Asset',
       type: a.type || 'BANNER',
-      fileSize: a.fileSize || '1.2 MB',
-      dimensions: a.dimensions || '1200 x 630 px',
-      previewUrl: a.previewUrl || a.fileUrl || 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800&auto=format&fit=crop&q=80',
-      downloadUrl: a.fileUrl || `https://assets.partneriq.in/download/${a.id}`,
+      fileSize: a.fileSize,
+      dimensions: a.dimensions,
+      previewUrl: a.previewUrl || a.fileUrl || '',
+      downloadUrl: a.fileUrl || '',
       copyContent: a.copyContent || a.bodyContent || null,
-      tags: a.tags || ['Banner', 'Marketing'],
+      tags: a.tags || [],
       createdAt: a.createdAt,
     }));
   }
@@ -699,10 +812,10 @@ export class AffiliatePortalController {
         programName: prog?.name || 'Partner Program',
         orderId: c.externalOrderId || c.externalId || `ORD-${c.id.slice(0, 6).toUpperCase()}`,
         source: link?.shortCode || c.source || 'direct-referral',
-        customerMasked: c.customerMasked || `${(c.customerEmail || 'user').slice(0, 2)}***@${(c.customerEmail || 'customer.com').split('@')[1] || 'domain.com'}`,
-        value: c.amount || 500,
-        attributedValue: c.amount || 500,
-        commissionAmount: (comm as any)?.amount || (comm as any)?.commissionAmount || (c.amount ? c.amount * 0.25 : 125),
+        customerMasked: c.customerMasked || (c.customerEmail ? `${c.customerEmail.slice(0, 2)}***@${c.customerEmail.split('@')[1] || 'domain.com'}` : 'Customer'),
+        value: c.amount || 0,
+        attributedValue: c.amount || 0,
+        commissionAmount: (comm as any)?.amount || (comm as any)?.commissionAmount || 0,
         status: c.status,
         clickTimestamp: c.clickTimestamp || new Date(new Date(c.createdAt).getTime() - 3600000).toISOString(),
         convertedTimestamp: c.createdAt,
@@ -739,9 +852,9 @@ export class AffiliatePortalController {
         programId: c.programId,
         programName: prog?.name || 'Partner Program',
         conversionId: c.conversionId || `conv_${c.id.slice(0, 6)}`,
-        saleValue: conv?.amount || c.saleValue || 850,
-        rateDescription: c.rateDescription || '25% standard recurring',
-        amount: c.amount || c.commissionAmount || 212.5,
+        saleValue: conv?.amount || c.saleValue || 0,
+        rateDescription: c.rateDescription || '',
+        amount: c.amount || c.commissionAmount || 0,
         currency: (org as any)?.defaultCurrency || (org as any)?.currency || 'USD',
         status: c.status,
         createdAt: c.createdAt,
@@ -785,20 +898,20 @@ export class AffiliatePortalController {
     return payoutItems.map((pi: any) => {
       const batch = dbStore.payoutBatches.find((b) => b.id === pi.payoutBatchId);
       const org = dbStore.organizations.find((o) => o.id === (batch?.organizationId || organizationId));
-      const gross = pi.grossAmount || pi.amount || 2150;
-      const taxWithheld = pi.taxWithheld || (org?.slug === 'zenpay' ? gross * 0.05 : 0);
+      const gross = pi.grossAmount || pi.amount || 0;
+      const taxWithheld = pi.taxWithheld || 0;
       const net = pi.netAmount || (gross - taxWithheld);
 
       return {
         id: pi.id,
-        organizationId: batch?.organizationId || organizationId || org?.id || 'org_acme',
-        organizationName: org?.name || 'PartnerIQ Partner',
+        organizationId: batch?.organizationId || organizationId || org?.id,
+        organizationName: org?.name || 'Partner',
         amount: net,
         currency: (batch as any)?.currency || (org as any)?.defaultCurrency || 'USD',
-        provider: pi.provider || (org?.slug === 'zenpay' ? 'Razorpay' : 'Stripe'),
+        provider: pi.provider || '',
         providerReference: pi.providerReference || `po_${pi.id.slice(0, 8)}`,
-        payoutMethodMasked: pi.payoutMethodMasked || (org?.slug === 'zenpay' ? 'venkat***@okaxis' : 'HDFC Bank •••• 4281'),
-        payoutMethodType: pi.payoutMethodType || (org?.slug === 'zenpay' ? 'UPI' : 'BANK_ACCOUNT'),
+        payoutMethodMasked: pi.payoutMethodMasked || '',
+        payoutMethodType: pi.payoutMethodType || 'BANK_ACCOUNT',
         status: pi.status || 'PAID',
         scheduledDate: batch?.createdAt || pi.createdAt,
         completedDate: pi.createdAt,
@@ -806,7 +919,7 @@ export class AffiliatePortalController {
         taxWithheld,
         feeDeduction: 0,
         netAmount: net,
-        commissionCount: pi.commissionCount || 5,
+        commissionCount: pi.commissionCount || 0,
         timeline: [
           { status: 'PENDING', timestamp: batch?.createdAt || pi.createdAt, message: 'Batch initiated' },
           { status: 'PROCESSING', timestamp: pi.createdAt, message: 'Processed via payment provider' },
@@ -822,18 +935,29 @@ export class AffiliatePortalController {
   @ApiOperation({ summary: 'Request instant settlement payout' })
   async requestInstantPayout(@Req() req: any, @Body('organizationId') organizationId: string) {
     const email = this.resolveAffiliateEmail(req);
-    const org = dbStore.organizations.find((o) => o.id === organizationId) || dbStore.organizations[0];
-    const aff = dbStore.affiliates.find((a) => a.organizationId === org.id && a.email.toLowerCase() === email) || dbStore.affiliates[0];
+    const org = dbStore.organizations.find((item) => item.id === organizationId);
+    if (!org) throw new NotFoundException('Organization not found');
+    const affiliate = dbStore.affiliates.find((item) => item.organizationId === org.id && item.email.toLowerCase() === email);
+    if (!affiliate) throw new BadRequestException('Join this organization before requesting a payout.');
+
+    const payableCommissions = dbStore.commissions.filter((commission: any) =>
+      commission.organizationId === org.id
+      && commission.affiliateId === affiliate.id
+      && (commission.status === 'PAYABLE' || commission.status === 'APPROVED'),
+    );
+    const grossAmount = payableCommissions.reduce((sum, commission: any) => sum + (commission.amount || commission.commissionAmount || 0), 0);
+    if (grossAmount <= 0) throw new BadRequestException('No payable balance is available.');
 
     const newPayout = {
       id: `pay_${uuidv4().slice(0, 8)}`,
       payoutBatchId: `batch_${uuidv4().slice(0, 8)}`,
-      affiliateId: aff.id,
-      amount: 1500,
-      netAmount: 1500,
-      grossAmount: 1500,
+      affiliateId: affiliate.id,
+      amount: grossAmount,
+      netAmount: grossAmount,
+      grossAmount,
       taxWithheld: 0,
-      status: 'PAID',
+      status: 'PENDING',
+      commissionCount: payableCommissions.length,
       createdAt: new Date(),
     };
 
@@ -843,23 +967,22 @@ export class AffiliatePortalController {
       id: newPayout.id,
       organizationId: org.id,
       organizationName: org.name,
-      amount: 1500,
-      currency: (org as any).defaultCurrency || 'USD',
-      provider: org.slug === 'zenpay' ? 'Razorpay' : 'Stripe Connect',
+      amount: grossAmount,
+      currency: (org as any).defaultCurrency || (org as any).currency || 'USD',
+      provider: '',
       providerReference: `instant_${newPayout.id}`,
-      payoutMethodMasked: org.slug === 'zenpay' ? 'venkat***@okaxis' : 'Bank •••• 4281',
-      payoutMethodType: org.slug === 'zenpay' ? 'UPI' : 'BANK_ACCOUNT',
-      status: 'PAID',
+      payoutMethodMasked: '',
+      payoutMethodType: 'BANK_ACCOUNT',
+      status: 'PENDING',
       scheduledDate: new Date().toISOString(),
-      completedDate: new Date().toISOString(),
-      grossAmount: 1500,
+      completedDate: undefined,
+      grossAmount,
       taxWithheld: 0,
       feeDeduction: 0,
-      netAmount: 1500,
-      commissionCount: 3,
+      netAmount: grossAmount,
+      commissionCount: payableCommissions.length,
     };
   }
-
   // ----------------------------------------------------
   // Payout Methods CRUD
   // ----------------------------------------------------
@@ -868,8 +991,10 @@ export class AffiliatePortalController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List payout methods for current affiliate' })
   async getPayoutMethods(@Req() req: any) {
-    const email = this.resolveAffiliateEmail(req);
-    return payoutMethodsStore;
+    const { user } = await this.resolveAffiliateUser(req);
+    const { affiliatePayoutMethods } = await this.repositories();
+    const methods = await affiliatePayoutMethods.find({ where: { userId: user.id }, order: { createdAt: 'DESC' } });
+    return methods.map((method) => this.serializePayoutMethod(method));
   }
 
   @Post('api/v1/affiliate/me/payout-methods')
@@ -877,38 +1002,51 @@ export class AffiliatePortalController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Add a new payout method' })
   async addPayoutMethod(@Req() req: any, @Body() body: any) {
-    const email = this.resolveAffiliateEmail(req);
-    const newMethod = {
-      id: `pm_${uuidv4().slice(0, 8)}`,
-      userId: req.user?.userId || 'usr_partner_001',
-      type: body.type,
-      isDefault: payoutMethodsStore.length === 0 || body.isDefault,
-      bankName: body.bankName,
-      accountNumberMasked: body.accountNumber ? `•••• ${body.accountNumber.slice(-4)}` : undefined,
-      ifscCode: body.ifscCode,
-      accountHolderName: body.accountHolderName,
-      upiIdMasked: body.upiId,
-      paypalEmailMasked: body.paypalEmail,
+    const { user } = await this.resolveAffiliateUser(req);
+    const { affiliatePayoutMethods } = await this.repositories();
+    const userId = user.id;
+    const details = body?.details || {};
+    const type = body?.type;
+    if (!['BANK_ACCOUNT', 'UPI', 'PAYPAL', 'WISE'].includes(type)) {
+      throw new BadRequestException('Unsupported payout method type.');
+    }
+    const existingMethods = await affiliatePayoutMethods.find({ where: { userId } });
+    const accountNumber = String(details.accountNumber || body.accountNumber || '').trim();
+    const upiId = String(details.upiId || body.upiId || '').trim();
+    const paypalEmail = String(details.paypalEmail || body.paypalEmail || '').trim();
+
+    const newMethod = affiliatePayoutMethods.create({
+      userId,
+      type,
+      isDefault: existingMethods.length === 0 || Boolean(body.isDefault),
+      bankName: details.bankName || body.bankName,
+      accountNumberMasked: accountNumber ? `**** ${accountNumber.slice(-4)}` : undefined,
+      ifscCode: String(details.ifscCode || body.ifscCode || '').trim().toUpperCase() || undefined,
+      accountHolderName: String(details.accountHolderName || body.accountHolderName || '').trim(),
+      upiIdMasked: upiId || undefined,
+      paypalEmailMasked: paypalEmail ? paypalEmail.replace(/^(.{2}).*(@.*)$/, '$1***$2') : undefined,
       authorizedOrgIds: body.authorizedOrgIds || ['*'],
-      createdAt: new Date().toISOString(),
-    };
+    });
 
     if (newMethod.isDefault) {
-      payoutMethodsStore.forEach((m) => (m.isDefault = false));
+      await affiliatePayoutMethods.update({ userId }, { isDefault: false });
     }
 
-    payoutMethodsStore.unshift(newMethod);
-    return newMethod;
+    return this.serializePayoutMethod(await affiliatePayoutMethods.save(newMethod));
   }
 
   @Patch('api/v1/affiliate/me/payout-methods/:methodId/default')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Set default payout method' })
-  async setDefaultPayoutMethod(@Param('methodId') methodId: string) {
-    payoutMethodsStore.forEach((m) => {
-      m.isDefault = m.id === methodId;
-    });
+  async setDefaultPayoutMethod(@Req() req: any, @Param('methodId') methodId: string) {
+    const { user } = await this.resolveAffiliateUser(req);
+    const { affiliatePayoutMethods } = await this.repositories();
+    const method = await affiliatePayoutMethods.findOne({ where: { id: methodId, userId: user.id } });
+    if (!method) throw new NotFoundException('Payout method not found');
+    await affiliatePayoutMethods.update({ userId: user.id }, { isDefault: false });
+    method.isDefault = true;
+    await affiliatePayoutMethods.save(method);
     return { success: true };
   }
 
@@ -916,11 +1054,11 @@ export class AffiliatePortalController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Delete payout method' })
-  async deletePayoutMethod(@Param('methodId') methodId: string) {
-    const idx = payoutMethodsStore.findIndex((m) => m.id === methodId);
-    if (idx !== -1) {
-      payoutMethodsStore.splice(idx, 1);
-    }
+  async deletePayoutMethod(@Req() req: any, @Param('methodId') methodId: string) {
+    const { user } = await this.resolveAffiliateUser(req);
+    const { affiliatePayoutMethods } = await this.repositories();
+    const method = await affiliatePayoutMethods.findOne({ where: { id: methodId, userId: user.id } });
+    if (method) await affiliatePayoutMethods.remove(method);
     return { success: true };
   }
 
@@ -932,17 +1070,8 @@ export class AffiliatePortalController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get current tax profile' })
   async getTaxProfile(@Req() req: any) {
-    const email = this.resolveAffiliateEmail(req);
-    const profile = affiliateProfilesStore[email];
-    return profile?.taxProfile || {
-      country: 'India',
-      panOrTaxId: 'ABCDE1234F',
-      taxClassification: 'INDIVIDUAL',
-      withholdingRate: 5,
-      isVerified: true,
-      formType: 'PAN_TDS',
-      submittedAt: new Date().toISOString(),
-    };
+    const { profile } = await this.resolveAffiliateProfile(req);
+    return this.serializeTaxProfile(profile);
   }
 
   @Patch('api/v1/affiliate/me/tax-profile')
@@ -950,17 +1079,17 @@ export class AffiliatePortalController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update tax profile' })
   async updateTaxProfile(@Req() req: any, @Body() body: any) {
-    const email = this.resolveAffiliateEmail(req);
-    const existing = affiliateProfilesStore[email] || {};
-    affiliateProfilesStore[email] = {
-      ...existing,
-      taxProfile: {
-        ...(existing.taxProfile || {}),
-        ...body,
-        submittedAt: new Date().toISOString(),
-      },
-    };
-    return affiliateProfilesStore[email].taxProfile;
+    const { profile } = await this.resolveAffiliateProfile(req);
+    const { affiliatePortalProfiles } = await this.repositories();
+    profile.taxCountry = body.country || profile.country || 'India';
+    profile.panOrTaxId = body.panOrTaxId ? String(body.panOrTaxId).trim().toUpperCase() : profile.panOrTaxId || '';
+    profile.taxClassification = body.taxClassification || profile.taxClassification || 'INDIVIDUAL';
+    profile.withholdingRate = body.withholdingRate ?? profile.withholdingRate ?? 0;
+    profile.taxVerified = Boolean(body.isVerified ?? profile.taxVerified ?? false);
+    profile.taxFormType = body.formType || profile.taxFormType || 'PAN_TDS';
+    profile.taxSubmittedAt = new Date();
+    await affiliatePortalProfiles.save(profile);
+    return this.serializeTaxProfile(profile);
   }
 
   // ----------------------------------------------------
@@ -972,50 +1101,28 @@ export class AffiliatePortalController {
   @ApiOperation({ summary: 'List invitations for current affiliate' })
   async getInvitations(@Req() req: any) {
     const email = this.resolveAffiliateEmail(req);
-    const invitations = dbStore.affiliateInvitations.filter(
-      (inv: any) => inv.email?.toLowerCase() === email || inv.email?.toLowerCase().includes('venkat') || inv.email?.toLowerCase().includes('sarah'),
-    );
+    return this.affiliatesService?.listInvitationsForEmail(email) || [];
+  }
 
-    return invitations.map((inv: any) => {
-      const org = dbStore.organizations.find((o) => o.id === inv.organizationId);
-      const prog = dbStore.programs.find((p) => p.id === inv.programId);
-
-      return {
-        id: inv.id,
-        organizationId: inv.organizationId,
-        organizationName: org?.name || 'Partner Brand',
-        organizationLogo: (org as any)?.branding?.logoUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80',
-        programId: inv.programId,
-        programName: prog?.name || 'VIP Creator Program',
-        programSlug: prog?.slug || 'creator-program',
-        email: inv.email,
-        partnerName: inv.partnerName || 'Partner',
-        affiliateType: inv.affiliateType || 'CONTENT_CREATOR',
-        primaryChannel: inv.primaryChannel || 'YOUTUBE',
-        commissionOverrideType: inv.commissionOverrideType || 'PERCENTAGE',
-        commissionOverrideValue: inv.commissionOverrideValue || 3000,
-        commissionSummary: `${(inv.commissionOverrideValue || 3000) / 100}% Recurring`,
-        status: inv.status,
-        invitedByLabel: inv.invitedByLabel || `${org?.name || 'Partnership'} Team`,
-        personalMessage: inv.personalMessage || `Join the official ${org?.name || 'Brand'} partner program!`,
-        expiresAt: inv.expiresAt,
-        createdAt: inv.createdAt,
-        inviteUrl: `https://partners.partneriq.in/invitations/affiliate/${inv.token}`,
-        token: inv.token,
-      };
-    });
+  @Post('api/v1/affiliate/me/invitations/:invitationId/accept')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Accept affiliate invitation for current affiliate' })
+  async acceptInvitation(@Req() req: any, @Param('invitationId') invitationId: string, @Body() body: any) {
+    const email = this.resolveAffiliateEmail(req);
+    return this.affiliatesService?.acceptInvitationForEmail(invitationId, email, {
+      acceptedTerms: true,
+      termsVersionAccepted: body?.termsVersionAccepted || 1,
+    }, req.user?.userId || req.user?.sub);
   }
 
   @Post('api/v1/affiliate/me/invitations/:invitationId/decline')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Decline affiliate invitation' })
-  async declineInvitation(@Param('invitationId') invitationId: string) {
-    const inv = dbStore.affiliateInvitations.find((i: any) => i.id === invitationId || i.token === invitationId);
-    if (inv) {
-      inv.status = 'DECLINED' as any;
-    }
-    return { success: true };
+  async declineInvitation(@Req() req: any, @Param('invitationId') invitationId: string) {
+    const email = this.resolveAffiliateEmail(req);
+    return this.affiliatesService?.declineInvitationForEmail(invitationId, email, req.user?.userId || req.user?.sub);
   }
 
   // ----------------------------------------------------
@@ -1026,26 +1133,7 @@ export class AffiliatePortalController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get active sessions for security' })
   async getSessions() {
-    return [
-      {
-        id: 'sess_001',
-        device: 'MacBook Pro 16-inch',
-        browser: 'Chrome 124.0',
-        location: 'Bengaluru, India',
-        ipMasked: '103.21.***.44',
-        lastActive: 'Just now',
-        isCurrent: true,
-      },
-      {
-        id: 'sess_002',
-        device: 'iPhone 15 Pro',
-        browser: 'Mobile Safari 17.4',
-        location: 'Bengaluru, India',
-        ipMasked: '103.21.***.89',
-        lastActive: '4 hours ago',
-        isCurrent: false,
-      },
-    ];
+    return [];
   }
 
   // ----------------------------------------------------
@@ -1061,29 +1149,39 @@ export class AffiliatePortalController {
     @Query('timeRange') timeRange = '7d',
   ) {
     const email = this.resolveAffiliateEmail(req);
-    const org = organizationId ? dbStore.organizations.find((o) => o.id === organizationId) : null;
-    const isZenPay = org?.slug === 'zenpay';
-
     const count = timeRange === '90d' ? 12 : (timeRange === '30d' ? 10 : 7);
+    const affiliates = this.resolveAffiliatesForUser(email);
+    const scopedAffiliates = organizationId ? affiliates.filter((affiliate) => affiliate.organizationId === organizationId) : affiliates;
+    const affiliateIds = scopedAffiliates.map((affiliate) => affiliate.id);
     const result = [];
     const now = new Date();
-
-    const mult = isZenPay ? 80 : 1;
 
     for (let i = count - 1; i >= 0; i--) {
       const d = new Date(now.getTime() - i * 86400000);
       const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      const baseClicks = 400 + Math.floor(Math.sin(i * 0.8) * 150) + (count - i) * 60;
-      const conversions = Math.max(1, Math.round(baseClicks * 0.015));
-      const revenue = conversions * 220 * mult;
-      const commissions = conversions * 55 * mult;
+      const dayKey = d.toISOString().slice(0, 10);
+      const dayLinks = dbStore.trackingLinks.filter((link: any) =>
+        affiliateIds.includes(link.affiliateId)
+        && (!organizationId || link.organizationId === organizationId)
+        && new Date(link.createdAt).toISOString().slice(0, 10) === dayKey,
+      );
+      const dayConversions = dbStore.conversions.filter((conversion: any) =>
+        affiliateIds.includes(conversion.affiliateId)
+        && (!organizationId || conversion.organizationId === organizationId)
+        && new Date(conversion.createdAt).toISOString().slice(0, 10) === dayKey,
+      );
+      const dayCommissions = dbStore.commissions.filter((commission: any) =>
+        affiliateIds.includes(commission.affiliateId)
+        && (!organizationId || commission.organizationId === organizationId)
+        && new Date(commission.createdAt).toISOString().slice(0, 10) === dayKey,
+      );
 
       result.push({
         date: dateStr,
-        clicks: baseClicks,
-        conversions,
-        revenue,
-        commissions,
+        clicks: dayLinks.reduce((sum, link: any) => sum + (link.clickCount || link.clicks || 0), 0),
+        conversions: dayConversions.length,
+        revenue: dayConversions.reduce((sum, conversion: any) => sum + (conversion.amount || conversion.value || 0), 0),
+        commissions: dayCommissions.reduce((sum, commission: any) => sum + (commission.amount || commission.commissionAmount || 0), 0),
       });
     }
 
@@ -1098,8 +1196,9 @@ export class AffiliatePortalController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List support tickets' })
   async getSupportTickets(@Req() req: any) {
-    const email = this.resolveAffiliateEmail(req);
-    return supportTicketsStore;
+    const { user } = await this.resolveAffiliateUser(req);
+    const { affiliateSupportTickets } = await this.repositories();
+    return affiliateSupportTickets.find({ where: { userId: user.id }, order: { createdAt: 'DESC' } });
   }
 
   @Post('api/v1/affiliate/me/support-tickets')
@@ -1107,25 +1206,22 @@ export class AffiliatePortalController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Submit support ticket' })
   async createSupportTicket(@Req() req: any, @Body() body: any) {
-    const email = this.resolveAffiliateEmail(req);
+    const { user } = await this.resolveAffiliateUser(req);
+    const { affiliateSupportTickets } = await this.repositories();
     const org = dbStore.organizations.find((o) => o.id === body.organizationId);
 
-    const ticket = {
-      id: `TK-${Math.floor(1000 + Math.random() * 9000)}`,
-      userId: req.user?.userId || 'usr_partner_001',
+    const ticket = affiliateSupportTickets.create({
+      userId: user.id,
       organizationId: body.organizationId,
       organizationName: org?.name || 'Global Partner Support',
       subject: body.subject,
       category: body.category || 'General Support',
       priority: body.priority || 'NORMAL',
-      status: 'OPEN' as const,
+      status: 'OPEN',
       message: body.message,
-      createdAt: new Date().toISOString(),
       lastReply: 'Ticket registered. Partner manager assigned.',
-    };
+    });
 
-    supportTicketsStore.unshift(ticket);
-    return ticket;
+    return affiliateSupportTickets.save(ticket);
   }
 }
-

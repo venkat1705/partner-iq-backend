@@ -13,7 +13,7 @@ export class EmailDesignController {
     private readonly svc: EmailDesignService,
     private readonly suppressionSvc: EmailSuppressionService,
     private readonly authService: AuthService,
-  ) {}
+  ) { }
 
   private refreshCookieOptions(maxAge?: number): CookieOptions {
     const appConfig = getAppConfig();
@@ -143,6 +143,95 @@ export class EmailDesignController {
   @Delete('templates/:templateId')
   async delete(@Param('templateId') templateId: string) {
     return this.svc.deleteTemplate(templateId);
+  }
+
+  // ================= DOCUMENT & PDF ROUTES =================
+
+  @UseGuards(JwtAuthGuard, PlatformAdminGuard)
+  @Get('documents/catalog')
+  async getDocumentCatalog() {
+    return this.svc.getDocumentCatalog();
+  }
+
+  @UseGuards(JwtAuthGuard, PlatformAdminGuard)
+  @Get('documents/templates')
+  async listDocumentTemplates() {
+    return this.svc.listDocumentTemplates();
+  }
+
+  @UseGuards(JwtAuthGuard, PlatformAdminGuard)
+  @Put('documents/templates/:templateKey')
+  async saveDocumentTemplate(@Param('templateKey') templateKey: string, @Body() body: any) {
+    return this.svc.saveDocumentTemplate({ ...body, templateKey });
+  }
+
+  @UseGuards(JwtAuthGuard, PlatformAdminGuard)
+  @Delete('documents/templates/:templateKey')
+  async deleteDocumentTemplate(@Param('templateKey') templateKey: string) {
+    return this.svc.deleteDocumentTemplate(templateKey);
+  }
+
+  @UseGuards(JwtAuthGuard, PlatformAdminGuard)
+  @Post('documents/render')
+  async renderDocument(@Body() body: any) {
+    return this.svc.renderDocument(body);
+  }
+
+  @UseGuards(JwtAuthGuard, PlatformAdminGuard)
+  @Post('documents/generate-pdf')
+  async generatePdf(@Body() body: any, @Req() req: Request & any) {
+    return this.svc.generatePdfDocument({
+      ...body,
+      generatedById: req.user?.userId,
+    });
+  }
+
+  @UseGuards(JwtAuthGuard, PlatformAdminGuard)
+  @Post('documents/test-pdf')
+  async generateTestPdf(@Body() body: any) {
+    return this.svc.generateTestPdf(body);
+  }
+
+  @UseGuards(JwtAuthGuard, PlatformAdminGuard)
+  @Get('documents/generated')
+  async listGeneratedDocuments(
+    @Query('search') search?: string,
+    @Query('documentType') documentType?: string,
+    @Query('status') status?: string,
+    @Query('orgId') orgId?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.svc.listGeneratedDocuments({
+      search,
+      documentType,
+      status,
+      organizationId: orgId,
+      page,
+      limit,
+    });
+  }
+
+  @UseGuards(JwtAuthGuard, PlatformAdminGuard)
+  @Get('documents/generated/:id')
+  async getGeneratedDocument(@Param('id') id: string) {
+    return this.svc.getGeneratedDocument(id);
+  }
+
+  @Get('documents/generated/:id/preview-html')
+  async previewGeneratedHtml(@Param('id') id: string, @Res() res: Response) {
+    const doc = this.svc.getGeneratedDocument(id);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.send(doc.renderedHtmlSnapshot || '<h1>No Snapshot Found</h1>');
+  }
+
+  @UseGuards(JwtAuthGuard, PlatformAdminGuard)
+  @Get('documents/generated/:id/download')
+  async downloadGeneratedDocument(@Param('id') id: string, @Res() res: Response) {
+    const doc = this.svc.getGeneratedDocument(id);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${doc.fileName || 'document.html'}"`);
+    return res.send(doc.renderedHtmlSnapshot || '');
   }
 }
 

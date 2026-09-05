@@ -43,6 +43,7 @@ import {
   ForgotPasswordDto,
   ResetPasswordDto,
 } from './dto/auth.dto';
+import { assertUserEligibleForOrganization } from '../affiliates/affiliate-eligibility.policy';
 
 // Sensitive roles that must be subject to org MFA policy for 'SENSITIVE_ROLES' scope
 const SENSITIVE_ROLES = new Set([
@@ -61,7 +62,7 @@ export class AuthService {
     private readonly riskEngine: RiskEngineService,
     @Optional() private readonly emailQueueProducer?: EmailQueueProducer,
     @Optional() private readonly emailQueueWorker?: EmailQueueWorker,
-  ) {}
+  ) { }
 
   private async repositories() {
     const dataSource = await initializeDataSource();
@@ -132,27 +133,27 @@ export class AuthService {
       userAgent.match(/(Edg|Edge)\//)
         ? 'Edge'
         : userAgent.match(/OPR\//)
-        ? 'Opera'
-        : userAgent.match(/Chrome\//)
-        ? 'Chrome'
-        : userAgent.match(/Firefox\//)
-        ? 'Firefox'
-        : userAgent.match(/Safari\//)
-        ? 'Safari'
-        : 'Unknown';
+          ? 'Opera'
+          : userAgent.match(/Chrome\//)
+            ? 'Chrome'
+            : userAgent.match(/Firefox\//)
+              ? 'Firefox'
+              : userAgent.match(/Safari\//)
+                ? 'Safari'
+                : 'Unknown';
 
     const os =
       userAgent.match(/Windows NT/)
         ? 'Windows'
         : userAgent.match(/Macintosh|Mac OS X/)
-        ? 'macOS'
-        : userAgent.match(/Android/)
-        ? 'Android'
-        : userAgent.match(/iPhone|iPad/)
-        ? 'iOS'
-        : userAgent.match(/Linux/)
-        ? 'Linux'
-        : 'Unknown';
+          ? 'macOS'
+          : userAgent.match(/Android/)
+            ? 'Android'
+            : userAgent.match(/iPhone|iPad/)
+              ? 'iOS'
+              : userAgent.match(/Linux/)
+                ? 'Linux'
+                : 'Unknown';
 
     const isAndroid = /Android/.test(userAgent);
     const isIOS = /iPhone|iPad/.test(userAgent);
@@ -675,10 +676,17 @@ export class AuthService {
     const { users } = await this.repositories();
     const normalizedEmail = dto.email.toLowerCase().trim();
 
+    assertUserEligibleForOrganization(normalizedEmail);
+
     const existing = await users.findOne({
       where: { email: normalizedEmail, deletedAt: IsNull() },
     });
     if (existing) {
+      if (existing.platformRole === PlatformRole.AFFILIATE) {
+        throw new ForbiddenException(
+          'An affiliate account is already registered with this email. Affiliate accounts cannot be registered as organization accounts.',
+        );
+      }
       throw new BadRequestException('User with this email already exists');
     }
 
@@ -718,7 +726,12 @@ export class AuthService {
   // Login
   // ─────────────────────────────────────────────────────────
 
-  async login(dto: LoginDto, userAgent?: string, ipAddress?: string) {
+  async login(
+    dto: LoginDto,
+    userAgent?: string,
+    ipAddress?: string,
+    options: { allowAffiliate?: boolean } = {},
+  ) {
     const { users } = await this.repositories();
     const { browser, os } = this.parseUserAgent(userAgent);
     const normalizedEmail = dto.email.toLowerCase().trim();
@@ -730,6 +743,12 @@ export class AuthService {
       // Timing-safe: don't reveal whether email exists
       await SecurityUtils.hashPassword('dummy-timing-safe-hash');
       throw new UnauthorizedException('Invalid email or password');
+    }
+
+    if (user.platformRole === PlatformRole.AFFILIATE && !options.allowAffiliate) {
+      throw new ForbiddenException(
+        'This account is registered as an affiliate partner and cannot sign in to the organization portal. Please use the affiliate portal at /affiliate.',
+      );
     }
 
     if (user.status === UserStatus.LOCKED && user.lockedUntil) {
@@ -1428,28 +1447,28 @@ export class AuthService {
     const orgs = isSuperAdmin
       ? await organizations.find({ where: { deletedAt: IsNull() } })
       : activeMemberships.length
-      ? await organizations.findBy(activeMemberships.map((m) => ({ id: m.organizationId })))
-      : [];
+        ? await organizations.findBy(activeMemberships.map((m) => ({ id: m.organizationId })))
+        : [];
     const userMemberships = isSuperAdmin
       ? orgs.map((org) => ({
-          organizationId: org.id,
-          organizationName: org.name,
-          role: Role.SUPER_ADMIN,
-          programAccessType: ProgramAccessType.ALL,
-          programIds: [],
-          permissions: getRolePermissions(Role.SUPER_ADMIN),
-        }))
+        organizationId: org.id,
+        organizationName: org.name,
+        role: Role.SUPER_ADMIN,
+        programAccessType: ProgramAccessType.ALL,
+        programIds: [],
+        permissions: getRolePermissions(Role.SUPER_ADMIN),
+      }))
       : activeMemberships.map((m) => {
-          const org = orgs.find((o) => o.id === m.organizationId);
-          return {
-            organizationId: m.organizationId,
-            organizationName: org?.name,
-            role: m.role,
-            programAccessType: m.programAccessType,
-            programIds: m.programIds || [],
-            permissions: getRolePermissions(m.role),
-          };
-        });
+        const org = orgs.find((o) => o.id === m.organizationId);
+        return {
+          organizationId: m.organizationId,
+          organizationName: org?.name,
+          role: m.role,
+          programAccessType: m.programAccessType,
+          programIds: m.programIds || [],
+          permissions: getRolePermissions(m.role),
+        };
+      });
 
     // Get MFA status
     const mfaStatus = await this.getMfaStatus(userId);

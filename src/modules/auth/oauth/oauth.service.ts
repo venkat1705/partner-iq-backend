@@ -53,7 +53,7 @@ export class OAuthService {
     @Inject(forwardRef(() => MembershipsService))
     private readonly membershipsService: MembershipsService,
     private readonly notificationsService: NotificationsService,
-  ) {}
+  ) { }
 
   private async repositories() {
     const dataSource = await initializeDataSource();
@@ -331,6 +331,12 @@ export class OAuthService {
     // Resolve or create user
     const { user, isNewUser } = await this.resolveOrCreateUser(identity);
 
+    if (user.platformRole === PlatformRole.AFFILIATE) {
+      throw new ForbiddenException(
+        'This account is registered as an affiliate partner and cannot accept organization invitations.',
+      );
+    }
+
     // Accept membership invitation for user
     await this.membershipsService.acceptInvitationForUser(state.invitationToken, user.id);
 
@@ -372,6 +378,12 @@ export class OAuthService {
     reqMeta: { ipAddress?: string; userAgent?: string },
   ): Promise<OAuthAuthResult> {
     const { user, isNewUser } = await this.resolveOrCreateUser(identity);
+
+    if (user.platformRole === PlatformRole.AFFILIATE) {
+      throw new ForbiddenException(
+        'This account is registered as an affiliate partner and cannot sign in to the organization portal. Please use the affiliate portal.',
+      );
+    }
 
     // Validate account status (defense against suspended or locked users)
     if (user.status === UserStatus.LOCKED && user.lockedUntil) {
@@ -444,6 +456,11 @@ export class OAuthService {
         where: { id: existingIdentity.userId, deletedAt: IsNull() },
       });
       if (user) {
+        if (user.platformRole === PlatformRole.AFFILIATE) {
+          throw new ForbiddenException(
+            'This account is registered as an affiliate partner and cannot sign in to the organization portal. Please use the affiliate portal.',
+          );
+        }
         existingIdentity.lastLoginAt = new Date();
         existingIdentity.email = normalizedEmail;
         existingIdentity.emailVerified = identity.emailVerified;
@@ -467,6 +484,11 @@ export class OAuthService {
     });
 
     if (existingUserByEmail) {
+      if (existingUserByEmail.platformRole === PlatformRole.AFFILIATE) {
+        throw new ForbiddenException(
+          'This account is registered as an affiliate partner and cannot sign in to the organization portal. Please use the affiliate portal.',
+        );
+      }
       // Safe verified-email linking
       if (!identity.emailVerified) {
         throw new UnauthorizedException('Unverified Google email cannot be linked to existing account.');

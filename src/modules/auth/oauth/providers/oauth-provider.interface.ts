@@ -4,6 +4,7 @@ export interface OAuthAuthorizationInput {
   codeChallenge: string;
   codeChallengeMethod: 'S256';
   redirectUri: string;
+  clientId?: string;
   prompt?: string;
   loginHint?: string;
 }
@@ -12,6 +13,8 @@ export interface OAuthCodeExchangeInput {
   code: string;
   codeVerifier: string;
   redirectUri: string;
+  clientId?: string;
+  clientSecret?: string;
 }
 
 export interface OAuthTokens {
@@ -39,5 +42,5 @@ export interface OAuthProvider {
   readonly name: string;
   getAuthorizationUrl(input: OAuthAuthorizationInput): Promise<string>;
   exchangeCode(input: OAuthCodeExchangeInput): Promise<OAuthTokens>;
-  verifyAndExtractIdentity(tokens: OAuthTokens, expectedNonce?: string): Promise<ExternalIdentity>;
+  verifyAndExtractIdentity(tokens: OAuthTokens, expectedNonce?: string, expectedClientId?: string): Promise<ExternalIdentity>;
 }

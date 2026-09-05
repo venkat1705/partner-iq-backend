@@ -33,7 +33,8 @@ import { runSeed } from '../database/seeds/run-seed';
 import { SecurityUtils } from '../common/utils/security.utils';
 import { AssetManagementService } from '../modules/asset-management/asset-management.service';
 import { dbStore } from '../database/store';
-import { AffiliateAssetActivityType, AssetBundleVisibility, AssetSourceType, AssetStatus, AssetType, AttributionModel } from '../common/enums';
+import { AffiliateAssetActivityType, AssetBundleVisibility, AssetSourceType, AssetStatus, AssetType, AttributionModel, Role } from '../common/enums';
+import { MembershipStatus } from '../common/enums/rbac';
 
 async function runTestSuite() {
   console.log('🧪 Running PartnerIQ Comprehensive Test Suite...\n');
@@ -105,6 +106,58 @@ async function runTestSuite() {
   const orgsService = new OrganizationsService();
   const orgB = await orgsService.create(admin.id, { name: 'Tenant B Org', slug: 'tenant-b-org' });
   assert(org.id !== orgB.id, 'Multi-tenant Org B Isolation Verified');
+
+  // 4a. Affiliate eligibility policy blocks every active organization user role, not only owners/admins.
+  const orgMemberUser = {
+    id: 'usr_active_org_member_affiliate_policy',
+    email: 'active-org-member@example.com',
+    passwordHash: 'unused',
+    firstName: 'Active',
+    lastName: 'Member',
+    status: 'ACTIVE',
+    emailVerified: true,
+    platformRole: 'USER',
+    failedLoginAttempts: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  } as any;
+  dbStore.users.push(orgMemberUser);
+  dbStore.organizationMemberships.push({
+    id: 'mem_active_org_member_affiliate_policy',
+    organizationId: org.id,
+    userId: orgMemberUser.id,
+    role: Role.VIEWER,
+    status: MembershipStatus.ACTIVE,
+    programAccessType: 'ALL',
+    joinedAt: new Date(),
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  } as any);
+
+  const affiliatesService = new AffiliatesService(
+    { sendAffiliateInvitationEmail: async () => ({ sent: false, reason: 'test' }) } as any,
+    {} as any,
+    { handleEvent: async () => undefined } as any,
+  );
+
+  try {
+    await affiliatesService.inviteAffiliate(
+      org.id,
+      {
+        programId: seedPrograms[0].id,
+        partnerName: 'Active Organization Member',
+        email: orgMemberUser.email,
+      },
+      admin.id,
+    );
+    assert(false, 'Active organization members cannot be invited as affiliates');
+  } catch (err: any) {
+    const response = typeof err.getResponse === 'function' ? err.getResponse() : {};
+    assert(
+      response?.code === 'AFFILIATE_INELIGIBLE_ORGANIZATION_MEMBER',
+      'Active organization members cannot be invited as affiliates',
+    );
+  }
 
   // 4b. Asset Library Tenant Isolation, Versioning, Publishing, Personalization & Analytics
   const assetService = new AssetManagementService();

@@ -20,6 +20,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthUserPayload } from '../../common/interfaces/request-with-user.interface';
 import { getAppConfig } from '../../config/app.config';
 import { MembershipsService } from './memberships.service';
+import { assertUserEligibleForOrganization } from '../affiliates/affiliate-eligibility.policy';
 
 @ApiTags('Organization Invitations')
 @Controller('api/v1/invitations')
@@ -27,7 +28,7 @@ export class InvitationsController {
   constructor(
     private readonly membershipsService: MembershipsService,
     private readonly authService: AuthService,
-  ) {}
+  ) { }
 
   private refreshCookieOptions(maxAge?: number): CookieOptions {
     const appConfig = getAppConfig();
@@ -57,6 +58,7 @@ export class InvitationsController {
   ) {
     const invitation = this.membershipsService.getInvitation(token);
     const email = dto.email.toLowerCase().trim();
+    assertUserEligibleForOrganization(email);
     if (email !== invitation.email.toLowerCase()) {
       throw new BadRequestException('Invitation email does not match registration email');
     }

@@ -102,6 +102,9 @@ import {
   AutomationEmailTemplate,
   EmailDesignTemplate,
   EmailDesignSettings,
+  DocumentDesignTemplate,
+  DocumentTemplateVersion,
+  GeneratedDocument,
   AutomationEmailLog,
   EmailTemplateVersion,
   EmailTemplateOverride,
@@ -199,6 +202,9 @@ export type AutomationScheduledStepEntity = AutomationScheduledStep;
 export type AutomationEmailTemplateEntity = AutomationEmailTemplate;
 export type EmailDesignTemplateEntity = EmailDesignTemplate;
 export type EmailDesignSettingsEntity = EmailDesignSettings;
+export type DocumentDesignTemplateEntity = DocumentDesignTemplate;
+export type DocumentTemplateVersionEntity = DocumentTemplateVersion;
+export type GeneratedDocumentEntity = GeneratedDocument;
 export type AutomationEmailLogEntity = AutomationEmailLog;
 export type EmailTemplateVersionEntity = EmailTemplateVersion;
 export type EmailTemplateOverrideEntity = EmailTemplateOverride;
@@ -440,6 +446,9 @@ export class InMemoryDataStore {
   automationEmailTemplates: AutomationEmailTemplateEntity[] = [];
   emailDesignTemplates: EmailDesignTemplateEntity[] = [];
   emailDesignSettings: EmailDesignSettingsEntity[] = [];
+  documentDesignTemplates: DocumentDesignTemplateEntity[] = [];
+  documentTemplateVersions: DocumentTemplateVersionEntity[] = [];
+  generatedDocuments: GeneratedDocumentEntity[] = [];
   automationEmailLogs: AutomationEmailLogEntity[] = [];
   emailTemplateVersions: EmailTemplateVersionEntity[] = [];
   emailTemplateOverrides: EmailTemplateOverrideEntity[] = [];
@@ -727,6 +736,18 @@ export class InMemoryDataStore {
     this.emailDesignSettings = new DBBackedArray(
       AppDataSource.getRepository(EmailDesignSettings),
       await AppDataSource.getRepository(EmailDesignSettings).find(),
+    );
+    this.documentDesignTemplates = new DBBackedArray(
+      AppDataSource.getRepository(DocumentDesignTemplate),
+      await AppDataSource.getRepository(DocumentDesignTemplate).find(),
+    );
+    this.documentTemplateVersions = new DBBackedArray(
+      AppDataSource.getRepository(DocumentTemplateVersion),
+      await AppDataSource.getRepository(DocumentTemplateVersion).find(),
+    );
+    this.generatedDocuments = new DBBackedArray(
+      AppDataSource.getRepository(GeneratedDocument),
+      await AppDataSource.getRepository(GeneratedDocument).find(),
     );
     this.automationEmailLogs = new DBBackedArray(
       AppDataSource.getRepository(AutomationEmailLog),

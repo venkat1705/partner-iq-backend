@@ -8,6 +8,7 @@ export interface OAuthStateRecord {
   state: string;
   flowType: OAuthFlowType;
   returnUrl: string;
+  frontendOrigin?: string;
   invitationToken?: string;
   currentUserId?: string;
   codeVerifier: string;
@@ -20,6 +21,7 @@ export interface OAuthStateRecord {
 export interface CreateStateOptions {
   flowType?: OAuthFlowType;
   returnUrl?: string;
+  frontendOrigin?: string;
   invitationToken?: string;
   currentUserId?: string;
 }
@@ -47,11 +49,13 @@ export class OAuthStateService {
     const codeVerifier = SecurityUtils.generatePkceVerifier(64);
     const codeChallenge = SecurityUtils.generatePkceChallenge(codeVerifier);
     const returnUrl = this.sanitizeReturnUrl(options.returnUrl, options.flowType);
+    const frontendOrigin = this.sanitizeFrontendOrigin(options.frontendOrigin);
 
     const record: OAuthStateRecord = {
       state,
       flowType: options.flowType || 'LOGIN',
       returnUrl,
+      frontendOrigin,
       invitationToken: options.invitationToken,
       currentUserId: options.currentUserId,
       codeVerifier,
@@ -127,6 +131,35 @@ export class OAuthStateService {
     }
 
     return trimmed;
+  }
+
+  /**
+   * Sanitizes allowed frontend origins for dynamic callback redirection.
+   */
+  sanitizeFrontendOrigin(origin?: string): string | undefined {
+    if (!origin || typeof origin !== 'string') {
+      return undefined;
+    }
+    const trimmed = origin.trim().replace(/\/+$/, '');
+    try {
+      const parsed = new URL(trimmed);
+      // Allow localhost on any port for development
+      if (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') {
+        return trimmed;
+      }
+      const config = getAppConfig();
+      const allowedOrigins = [
+        config.frontendUrl.replace(/\/+$/, ''),
+        config.affiliateFrontendUrl.replace(/\/+$/, ''),
+        ...(config.corsOrigins || []),
+      ];
+      if (allowedOrigins.some((allowed) => allowed && allowed.toLowerCase() === trimmed.toLowerCase())) {
+        return trimmed;
+      }
+    } catch {
+      // Invalid URL -> ignore
+    }
+    return undefined;
   }
 
   /**

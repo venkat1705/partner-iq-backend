@@ -11,11 +11,15 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { getAppConfig } from './config/app.config';
 import { dbStore } from './database/store';
-import { runSeed } from './database/seeds/run-seed';
+import { seedSystemDefaults, runSeed } from './database/seeds/run-seed';
 import { NotificationGateway } from './modules/notifications/notifications.gateway';
 
 export async function createPartnerIqApp() {
-  await runSeed();
+  if (process.env.SEED_DEMO_DATA === 'true') {
+    await runSeed();
+  } else {
+    await seedSystemDefaults();
+  }
   await dbStore.initialize();
 
   const appConfig = getAppConfig();

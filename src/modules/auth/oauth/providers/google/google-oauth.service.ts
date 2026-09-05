@@ -29,7 +29,7 @@ export class GoogleOAuthService implements OAuthProvider {
    */
   async getAuthorizationUrl(input: OAuthAuthorizationInput): Promise<string> {
     const config = getAppConfig();
-    const clientId = config.googleClientId;
+    const clientId = input.clientId || config.googleClientId;
 
     if (!clientId) {
       this.logger.warn('Google Client ID is not configured in environment variables.');
@@ -67,8 +67,8 @@ export class GoogleOAuthService implements OAuthProvider {
    */
   async exchangeCode(input: OAuthCodeExchangeInput): Promise<OAuthTokens> {
     const config = getAppConfig();
-    const clientId = config.googleClientId;
-    const clientSecret = config.googleClientSecret;
+    const clientId = input.clientId || config.googleClientId;
+    const clientSecret = input.clientSecret || config.googleClientSecret;
 
     if (!input.code) {
       throw new BadRequestException('Authorization code is required');
@@ -132,8 +132,9 @@ export class GoogleOAuthService implements OAuthProvider {
    * Validates and extracts the external identity from Google ID Token / Userinfo.
    * Performs cryptographic claim verification (issuer, audience, expiration, nonce, sub, email).
    */
-  async verifyAndExtractIdentity(tokens: OAuthTokens, expectedNonce?: string): Promise<ExternalIdentity> {
+  async verifyAndExtractIdentity(tokens: OAuthTokens, expectedNonce?: string, expectedClientId?: string): Promise<ExternalIdentity> {
     const config = getAppConfig();
+    const audienceClientId = expectedClientId || config.googleClientId;
     let payload: GoogleIdTokenPayload | null = null;
 
     if (tokens.idToken) {
@@ -149,9 +150,9 @@ export class GoogleOAuthService implements OAuthProvider {
       }
 
       // 2. Verify Audience (if client ID is configured)
-      if (config.googleClientId && payload.aud && payload.aud !== config.googleClientId) {
+      if (audienceClientId && payload.aud && payload.aud !== audienceClientId) {
         // Also check if azp matches
-        if (payload.azp !== config.googleClientId) {
+        if (payload.azp !== audienceClientId) {
           throw new UnauthorizedException('Invalid Google token audience.');
         }
       }

@@ -52,8 +52,14 @@ export class JwtAuthGuard implements CanActivate {
       };
 
       return true;
-    } catch (err) {
-      throw new UnauthorizedException('Token verification failed or expired');
+    } catch (err: any) {
+      if (err instanceof UnauthorizedException) {
+        throw err;
+      }
+      if (err?.name === 'TokenExpiredError') {
+        throw new UnauthorizedException('Session token expired. Please sign in again.');
+      }
+      throw new UnauthorizedException(err?.message || 'Token verification failed or expired');
     }
   }
 }

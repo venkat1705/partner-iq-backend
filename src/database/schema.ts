@@ -58,6 +58,12 @@ import {
   AutomationExecutionStatus,
   AutomationStepStatus,
   AutomationEmailDeliveryStatus,
+  TemplateChannel,
+  DocumentType,
+  DocumentStatus,
+  TemplateStatus,
+  PageSize,
+  PageOrientation,
 } from '../common/enums';
 import {
   RoleType,
@@ -775,6 +781,171 @@ export class Affiliate {
 
   @Column({ type: 'varchar', length: 100, nullable: true })
   payoutMethod?: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
+@Entity('affiliate_portal_profiles')
+export class AffiliatePortalProfile {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column({ type: 'uuid', unique: true })
+  userId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 255 })
+  email!: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  fullName?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  website?: string;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  phone?: string;
+
+  @Column({ type: 'varchar', length: 50, default: 'India' })
+  country!: string;
+
+  @Column({ type: 'varchar', length: 50, default: 'AFFILIATE' })
+  partnerType!: string;
+
+  @Column({ type: 'varchar', length: 255, default: 'India' })
+  primaryMarket!: string;
+
+  @Column({ type: 'varchar', length: 50, default: '0-1k' })
+  audienceSize!: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  socialProfiles?: Record<string, string>;
+
+  @Column({ type: 'text', nullable: true })
+  bio?: string;
+
+  @Column({ type: 'boolean', default: false })
+  onboardingCompleted!: boolean;
+
+  @Column({ type: 'varchar', length: 50, default: 'India' })
+  taxCountry!: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  panOrTaxId?: string;
+
+  @Column({ type: 'text', nullable: true })
+  panOrTaxIdEncrypted?: string;
+
+  @Column({ type: 'varchar', length: 50, default: 'INDIVIDUAL' })
+  taxClassification!: string;
+
+  @Column({ type: 'int', default: 0 })
+  withholdingRate!: number;
+
+  @Column({ type: 'boolean', default: false })
+  taxVerified!: boolean;
+
+  @Column({ type: 'varchar', length: 50, default: 'PAN_TDS' })
+  taxFormType!: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  taxSubmittedAt?: Date;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
+@Entity('affiliate_payout_methods')
+export class AffiliatePayoutMethod {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  userId!: string;
+
+  @Column({ type: 'varchar', length: 50 })
+  type!: string;
+
+  @Column({ type: 'boolean', default: false })
+  isDefault!: boolean;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  bankName?: string;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  accountNumberMasked?: string;
+
+  @Column({ type: 'text', nullable: true })
+  accountNumberEncrypted?: string;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  ifscCode?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  accountHolderName?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  upiIdMasked?: string;
+
+  @Column({ type: 'text', nullable: true })
+  upiIdEncrypted?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  paypalEmailMasked?: string;
+
+  @Column({ type: 'text', nullable: true })
+  paypalEmailEncrypted?: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  authorizedOrgIds?: string[];
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
+@Entity('affiliate_support_tickets')
+export class AffiliateSupportTicket {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  userId!: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  organizationId?: string;
+
+  @Column({ type: 'varchar', length: 255, default: 'Global Partner Support' })
+  organizationName!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  subject!: string;
+
+  @Column({ type: 'varchar', length: 100, default: 'General Support' })
+  category!: string;
+
+  @Column({ type: 'varchar', length: 50, default: 'NORMAL' })
+  priority!: string;
+
+  @Column({ type: 'varchar', length: 50, default: 'OPEN' })
+  status!: string;
+
+  @Column({ type: 'text', nullable: true })
+  message?: string;
+
+  @Column({ type: 'text', nullable: true })
+  lastReply?: string;
 
   @CreateDateColumn()
   createdAt!: Date;
@@ -4398,6 +4569,168 @@ export class EmailDesignSettings {
   updatedAt!: Date;
 }
 
+@Entity('document_design_templates')
+@Unique(['templateKey'])
+export class DocumentDesignTemplate {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column({ type: 'varchar', length: 150 })
+  templateKey!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  name!: string;
+
+  @Column({ type: 'varchar', length: 80 })
+  category!: string;
+
+  @Column({ type: 'varchar', length: 50, default: DocumentType.CUSTOM })
+  documentType!: DocumentType;
+
+  @Column({ type: 'varchar', length: 30, default: PageSize.A4 })
+  pageSize!: PageSize;
+
+  @Column({ type: 'varchar', length: 30, default: PageOrientation.PORTRAIT })
+  orientation!: PageOrientation;
+
+  @Column({ type: 'simple-json', nullable: true })
+  margins?: { top: number; right: number; bottom: number; left: number; unit: string };
+
+  @Column({ type: 'simple-json', nullable: true })
+  headerSettings?: { enabled: boolean; showOn: 'all' | 'first' | 'subsequent'; content?: string };
+
+  @Column({ type: 'simple-json', nullable: true })
+  footerSettings?: { enabled: boolean; showOn: 'all' | 'first' | 'last'; showPageNumber: boolean; format?: string; content?: string };
+
+  @Column({ type: 'simple-json', nullable: true })
+  watermarkSettings?: { enabled: boolean; text?: string; opacity?: number; rotation?: number };
+
+  @Column({ type: 'varchar', length: 50, default: TemplateStatus.DRAFT })
+  status!: TemplateStatus;
+
+  @Column({ type: 'int', default: 1 })
+  version!: number;
+
+  @Column({ type: 'boolean', default: false })
+  isCustom!: boolean;
+
+  @Column({ type: 'boolean', default: false })
+  isEdited!: boolean;
+
+  @Column({ type: 'simple-json' })
+  payload!: any;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
+@Entity('document_template_versions')
+export class DocumentTemplateVersion {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 150 })
+  templateKey!: string;
+
+  @Column({ type: 'int', default: 1 })
+  version!: number;
+
+  @Column({ type: 'varchar', length: 50, default: TemplateStatus.DRAFT })
+  status!: TemplateStatus;
+
+  @Column({ type: 'text' })
+  bodyTemplate!: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  variables?: any;
+
+  @Column({ type: 'simple-json', nullable: true })
+  settings?: any;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  changeSummary?: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  createdById?: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+}
+
+@Entity('generated_documents')
+export class GeneratedDocument {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 150 })
+  templateKey!: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  templateVersionId?: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 50, default: DocumentType.CUSTOM })
+  documentType!: DocumentType;
+
+  @Index()
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  documentNumber?: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 150, nullable: true })
+  referenceId?: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  organizationId?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  recipientName?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  recipientEmail?: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 50, default: DocumentStatus.GENERATED })
+  status!: DocumentStatus;
+
+  @Column({ type: 'text', nullable: true })
+  renderedHtmlSnapshot?: string;
+
+  @Column({ type: 'varchar', length: 1024, nullable: true })
+  pdfUrl?: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  fileName!: string;
+
+  @Column({ type: 'int', nullable: true })
+  fileSizeBytes?: number;
+
+  @Column({ type: 'simple-json', nullable: true })
+  metadata?: Record<string, any>;
+
+  @Column({ type: 'varchar', length: 1000, nullable: true })
+  errorMessage?: string;
+
+  @Column({ type: 'timestamp' })
+  generatedAt!: Date;
+
+  @Column({ type: 'uuid', nullable: true })
+  generatedById?: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
+
 @Entity('automation_email_logs')
 export class AutomationEmailLog {
   @PrimaryGeneratedColumn('uuid')
@@ -4641,4 +4974,3 @@ export class PlatformSetting {
   @UpdateDateColumn()
   updatedAt!: Date;
 }
-

@@ -36,6 +36,7 @@ export enum UserStatus {
 
 export enum PlatformRole {
   USER = 'USER',
+  AFFILIATE = 'AFFILIATE',
   SUPER_ADMIN = 'SUPER_ADMIN',
 }
 
@@ -110,6 +111,7 @@ export enum AffiliateStatus {
 export enum AffiliateInvitationStatus {
   PENDING = 'PENDING',
   ACCEPTED = 'ACCEPTED',
+  DECLINED = 'DECLINED',
   EXPIRED = 'EXPIRED',
   REVOKED = 'REVOKED',
 }
@@ -664,4 +666,49 @@ export enum RiskLevel {
 export enum AuthLevel {
   PASSWORD = 'PASSWORD',
   MFA = 'MFA',
+}
+
+export enum TemplateChannel {
+  EMAIL = 'EMAIL',
+  DOCUMENT = 'DOCUMENT',
+}
+
+export enum DocumentType {
+  INVOICE = 'INVOICE',
+  COMMISSION_STATEMENT = 'COMMISSION_STATEMENT',
+  PAYOUT_STATEMENT = 'PAYOUT_STATEMENT',
+  AFFILIATE_AGREEMENT = 'AFFILIATE_AGREEMENT',
+  PARTNER_AGREEMENT = 'PARTNER_AGREEMENT',
+  TAX_STATEMENT = 'TAX_STATEMENT',
+  CERTIFICATE = 'CERTIFICATE',
+  RECEIPT = 'RECEIPT',
+  REPORT = 'REPORT',
+  CUSTOM = 'CUSTOM',
+}
+
+export enum DocumentStatus {
+  DRAFT = 'DRAFT',
+  QUEUED = 'QUEUED',
+  GENERATING = 'GENERATING',
+  GENERATED = 'GENERATED',
+  FAILED = 'FAILED',
+  ARCHIVED = 'ARCHIVED',
+}
+
+export enum TemplateStatus {
+  DRAFT = 'DRAFT',
+  PUBLISHED = 'PUBLISHED',
+  ARCHIVED = 'ARCHIVED',
+}
+
+export enum PageSize {
+  A4 = 'A4',
+  LETTER = 'LETTER',
+  LEGAL = 'LEGAL',
+  CUSTOM = 'CUSTOM',
+}
+
+export enum PageOrientation {
+  PORTRAIT = 'PORTRAIT',
+  LANDSCAPE = 'LANDSCAPE',
 }

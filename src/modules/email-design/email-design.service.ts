@@ -1,11 +1,15 @@
 import { BadGatewayException, BadRequestException, Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { dbStore } from '../../database/store';
-import { EmailDesignSettings, EmailDesignTemplate, EmailTemplateOverride } from '../../database/schema';
+import { EmailDesignSettings, EmailDesignTemplate, EmailTemplateOverride, DocumentDesignTemplate, GeneratedDocument } from '../../database/schema';
 import { SYSTEM_TEMPLATE_CATALOG, SYSTEM_SECURITY_TEMPLATE_KEYS, SystemTemplateKey } from './constants/email-template-keys';
+import { DEFAULT_DOCUMENT_TEMPLATES } from './constants/document-template-defaults';
+import { DocumentType, TemplateStatus, PageSize, PageOrientation } from '../../common/enums';
 import { TemplateResolverService } from './services/template-resolver.service';
 import { TemplateRendererService } from './services/template-renderer.service';
 import { EmailSuppressionService } from './services/email-suppression.service';
+import { DocumentRendererService } from './services/document-renderer.service';
+import { PdfGeneratorService } from './services/pdf-generator.service';
 import { EmailQueueProducer } from './queue/email-queue.producer';
 import { EmailQueueWorker } from './queue/email-queue.worker';
 import { EmailProviderFactory } from './providers/email-provider.factory';
@@ -34,10 +38,14 @@ export class EmailDesignService {
     private readonly templateResolver: TemplateResolverService,
     private readonly templateRenderer: TemplateRendererService,
     private readonly suppressionService: EmailSuppressionService,
+    private readonly documentRenderer: DocumentRendererService,
+    private readonly pdfGenerator: PdfGeneratorService,
     private readonly queueProducer: EmailQueueProducer,
     private readonly queueWorker: EmailQueueWorker,
     private readonly providerFactory: EmailProviderFactory,
-  ) {}
+  ) {
+    this.ensureDefaultDocumentTemplates();
+  }
 
   getSettings() {
     return this.serializeSettings(this.ensureSettings());
@@ -288,12 +296,244 @@ export class EmailDesignService {
     };
   }
 
+  // ================= DOCUMENT & PDF GENERATOR METHODS =================
+
+  ensureDefaultDocumentTemplates() {
+    for (const [key, defaultTpl] of Object.entries(DEFAULT_DOCUMENT_TEMPLATES)) {
+      const existing = dbStore.documentDesignTemplates.find((d) => d.templateKey === key);
+      if (!existing) {
+        const record: DocumentDesignTemplate = {
+          id: uuidv4(),
+          templateKey: key,
+          name: defaultTpl.name,
+          category: defaultTpl.category,
+          documentType: defaultTpl.documentType,
+          pageSize: defaultTpl.pageSize,
+          orientation: defaultTpl.orientation,
+          margins: defaultTpl.margins,
+          headerSettings: defaultTpl.headerSettings,
+          footerSettings: defaultTpl.footerSettings,
+          watermarkSettings: defaultTpl.watermarkSettings,
+          status: TemplateStatus.PUBLISHED,
+          version: 1,
+          isCustom: false,
+          isEdited: false,
+          payload: {
+            id: key,
+            name: defaultTpl.name,
+            category: defaultTpl.category,
+            description: defaultTpl.description,
+            documentType: defaultTpl.documentType,
+            pageSize: defaultTpl.pageSize,
+            orientation: defaultTpl.orientation,
+            margins: defaultTpl.margins,
+            headerSettings: defaultTpl.headerSettings,
+            footerSettings: defaultTpl.footerSettings,
+            watermarkSettings: defaultTpl.watermarkSettings,
+            variables: defaultTpl.variables,
+            defaultData: defaultTpl.defaultData,
+            bodyTemplate: defaultTpl.bodyTemplate,
+          },
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        dbStore.documentDesignTemplates.push(record);
+      }
+    }
+  }
+
+  listDocumentTemplates() {
+    this.ensureDefaultDocumentTemplates();
+    return dbStore.documentDesignTemplates
+      .slice()
+      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+      .map((row) => this.serializeDocument(row));
+  }
+
+  getDocumentCatalog() {
+    this.ensureDefaultDocumentTemplates();
+    return Object.values(DEFAULT_DOCUMENT_TEMPLATES).map((item) => {
+      const dbTemplate = dbStore.documentDesignTemplates.find((t) => t.templateKey === item.key);
+      return {
+        ...item,
+        isCustom: Boolean(dbTemplate?.isCustom),
+        isEdited: Boolean(dbTemplate?.isEdited),
+        status: dbTemplate?.status || TemplateStatus.PUBLISHED,
+      };
+    });
+  }
+
+  saveDocumentTemplate(template: any) {
+    if (!template?.id && !template?.templateKey) {
+      throw new BadRequestException('Template key or id is required');
+    }
+
+    const key = template.templateKey || template.id;
+    const existing = dbStore.documentDesignTemplates.find((row) => row.templateKey === key);
+    const record = existing || ({
+      id: uuidv4(),
+      createdAt: new Date(),
+    } as DocumentDesignTemplate);
+
+    record.templateKey = key;
+    record.name = template.name || key;
+    record.category = template.category || 'organizations';
+    record.documentType = template.documentType || DocumentType.CUSTOM;
+    record.pageSize = template.pageSize || PageSize.A4;
+    record.orientation = template.orientation || PageOrientation.PORTRAIT;
+    record.margins = template.margins || { top: 20, right: 20, bottom: 20, left: 20, unit: 'mm' };
+    record.headerSettings = template.headerSettings;
+    record.footerSettings = template.footerSettings;
+    record.watermarkSettings = template.watermarkSettings;
+    record.status = template.status || TemplateStatus.DRAFT;
+    record.version = (record.version || 1) + 1;
+    record.isCustom = Boolean(template.isCustom);
+    record.isEdited = Boolean(template.isEdited);
+    record.payload = {
+      ...template,
+      id: key,
+      templateKey: key,
+      updatedAt: new Date().toISOString(),
+    };
+    record.updatedAt = new Date();
+
+    if (!existing) {
+      dbStore.documentDesignTemplates.push(record);
+    }
+
+    return this.serializeDocument(record);
+  }
+
+  deleteDocumentTemplate(templateKey: string) {
+    const index = dbStore.documentDesignTemplates.findIndex((row) => row.templateKey === templateKey);
+    if (index >= 0) {
+      dbStore.documentDesignTemplates.splice(index, 1);
+    }
+    return { success: true };
+  }
+
+  renderDocument(payload: any) {
+    const brandSettings = this.getSettings();
+    return this.documentRenderer.renderDocument({
+      pageSize: payload.pageSize,
+      orientation: payload.orientation,
+      margins: payload.margins,
+      headerHtml: payload.headerHtml || payload.headerSettings?.content,
+      footerHtml: payload.footerHtml || payload.footerSettings?.content,
+      watermark: payload.watermark || payload.watermarkSettings,
+      bodyHtml: payload.bodyHtml || payload.bodyTemplate || '',
+      data: payload.data || payload.defaultData || {},
+      brandSettings,
+      isTest: Boolean(payload.isTest),
+    });
+  }
+
+  async generatePdfDocument(payload: any) {
+    const brandSettings = this.getSettings();
+    const docRecord = await this.pdfGenerator.generateAndRecordDocument({
+      templateKey: payload.templateKey || payload.templateId || 'CUSTOM_DOCUMENT',
+      templateVersionId: payload.templateVersionId,
+      documentType: payload.documentType || DocumentType.CUSTOM,
+      documentNumber: payload.documentNumber,
+      referenceId: payload.referenceId,
+      organizationId: payload.organizationId,
+      recipientName: payload.recipientName,
+      recipientEmail: payload.recipientEmail,
+      renderOptions: {
+        pageSize: payload.pageSize,
+        orientation: payload.orientation,
+        margins: payload.margins,
+        headerHtml: payload.headerHtml || payload.headerSettings?.content,
+        footerHtml: payload.footerHtml || payload.footerSettings?.content,
+        watermark: payload.watermark || payload.watermarkSettings,
+        bodyHtml: payload.bodyHtml || payload.bodyTemplate || '',
+        data: payload.data || {},
+        brandSettings,
+        isTest: false,
+      },
+      isTest: false,
+    });
+
+    return docRecord;
+  }
+
+  async generateTestPdf(payload: any) {
+    const brandSettings = this.getSettings();
+    const docRecord = await this.pdfGenerator.generateAndRecordDocument({
+      templateKey: payload.templateKey || payload.templateId || 'TEST_DOCUMENT',
+      documentType: payload.documentType || DocumentType.CUSTOM,
+      documentNumber: payload.documentNumber || 'TEST-0001',
+      recipientName: payload.recipientName || 'Test Recipient',
+      recipientEmail: payload.recipientEmail || 'test@partneriq.io',
+      renderOptions: {
+        pageSize: payload.pageSize,
+        orientation: payload.orientation,
+        margins: payload.margins,
+        headerHtml: payload.headerHtml || payload.headerSettings?.content,
+        footerHtml: payload.footerHtml || payload.footerSettings?.content,
+        watermark: { enabled: true, text: 'TEST SAMPLE', opacity: 0.12, rotation: -35 },
+        bodyHtml: payload.bodyHtml || payload.bodyTemplate || '',
+        data: payload.data || payload.defaultData || {},
+        brandSettings,
+        isTest: true,
+      },
+      isTest: true,
+    });
+
+    return docRecord;
+  }
+
+  listGeneratedDocuments(query: {
+    search?: string;
+    documentType?: string;
+    status?: string;
+    organizationId?: string;
+    page?: string;
+    limit?: string;
+  }) {
+    return this.pdfGenerator.listGeneratedDocuments({
+      search: query.search,
+      documentType: query.documentType,
+      status: query.status,
+      organizationId: query.organizationId,
+      page: query.page ? Number(query.page) : 1,
+      limit: query.limit ? Number(query.limit) : 20,
+    });
+  }
+
+  getGeneratedDocument(id: string) {
+    return this.pdfGenerator.getDocumentById(id);
+  }
+
   private serialize(row: EmailDesignTemplate) {
     return {
       ...row.payload,
       id: row.templateId,
       name: row.name,
       category: row.category,
+      isCustom: row.isCustom,
+      isEdited: row.isEdited,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  }
+
+  private serializeDocument(row: DocumentDesignTemplate) {
+    return {
+      ...row.payload,
+      id: row.templateKey,
+      templateKey: row.templateKey,
+      name: row.name,
+      category: row.category,
+      documentType: row.documentType,
+      pageSize: row.pageSize,
+      orientation: row.orientation,
+      margins: row.margins,
+      headerSettings: row.headerSettings,
+      footerSettings: row.footerSettings,
+      watermarkSettings: row.watermarkSettings,
+      status: row.status,
+      version: row.version,
       isCustom: row.isCustom,
       isEdited: row.isEdited,
       createdAt: row.createdAt.toISOString(),
@@ -329,3 +569,4 @@ export class EmailDesignService {
 }
 
 export default EmailDesignService;
+

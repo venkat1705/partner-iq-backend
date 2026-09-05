@@ -15,12 +15,14 @@ import {
   OnboardingProgramDto,
 } from './dto/organization.dto';
 import { TrialService } from '../billing/services/trial.service';
+import { assertUserEligibleForOrganization } from '../affiliates/affiliate-eligibility.policy';
 
 @Injectable()
 export class OrganizationsService {
-  constructor(private readonly trialService?: TrialService) {}
+  constructor(private readonly trialService?: TrialService) { }
 
   async create(userId: string, dto: CreateOrganizationDto) {
+    assertUserEligibleForOrganization(userId);
     const slug = this.slugify(dto.slug || dto.name);
 
     const existing = dbStore.organizations.find((o) => o.slug === slug && !o.deletedAt);

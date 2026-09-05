@@ -12,6 +12,9 @@ import { EmailQueueProducer } from './queue/email-queue.producer';
 import { EmailQueueWorker } from './queue/email-queue.worker';
 import { DomainEventEmailListener } from './listeners/domain-event-email.listener';
 
+import { DocumentRendererService } from './services/document-renderer.service';
+import { PdfGeneratorService } from './services/pdf-generator.service';
+
 @Module({
   imports: [forwardRef(() => AuthModule)],
   controllers: [EmailDesignController],
@@ -20,6 +23,8 @@ import { DomainEventEmailListener } from './listeners/domain-event-email.listene
     TemplateResolverService,
     TemplateRendererService,
     EmailSuppressionService,
+    DocumentRendererService,
+    PdfGeneratorService,
     BrevoEmailProvider,
     DevelopmentEmailProvider,
     EmailProviderFactory,
@@ -32,11 +37,13 @@ import { DomainEventEmailListener } from './listeners/domain-event-email.listene
     TemplateResolverService,
     TemplateRendererService,
     EmailSuppressionService,
+    DocumentRendererService,
+    PdfGeneratorService,
     EmailQueueProducer,
     EmailQueueWorker,
     DomainEventEmailListener,
   ],
 })
-export class EmailDesignModule {}
+export class EmailDesignModule { }
 
 export default EmailDesignModule;

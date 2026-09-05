@@ -43,8 +43,79 @@ import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 
+/**
+ * Seeds ONLY essential system definitions (RBAC permissions, built-in system roles, email/document templates, settings).
+ * DOES NOT create any dummy organizations, users, programs, or affiliates.
+ */
+export async function seedSystemDefaults() {
+  console.log('⚙️ Initializing essential PartnerIQ system defaults (RBAC & Templates)...');
+
+  const dataSource = await initializeDataSource();
+  const permissionsRepo = dataSource.getRepository(PermissionDefinition);
+  const rolesRepo = dataSource.getRepository(RoleDefinition);
+  const rolePermissionsRepo = dataSource.getRepository(RolePermission);
+  const emailDesignTemplates = dataSource.getRepository(EmailDesignTemplate);
+  const emailDesignSettings = dataSource.getRepository(EmailDesignSettings);
+
+  // 1. Seed Permissions Catalog
+  for (const permission of PERMISSIONS) {
+    const existingPermission = await permissionsRepo.findOne({ where: { code: permission.code } });
+    if (!existingPermission) {
+      const permissionEntity = permissionsRepo.create({
+        code: permission.code,
+        resource: permission.resource,
+        action: permission.action,
+        description: permission.description,
+      });
+      await permissionsRepo.save(permissionEntity);
+    }
+  }
+
+  // 2. Seed Built-In System Roles
+  for (const roleCode of Object.keys(BUILT_IN_ROLES) as Array<keyof typeof BUILT_IN_ROLES>) {
+    const roleDef = BUILT_IN_ROLES[roleCode];
+    const existingRole = await rolesRepo.findOne({ where: { code: roleDef.code } });
+    let savedRole = existingRole;
+    if (!existingRole) {
+      const newRole = rolesRepo.create({
+        organizationId: undefined,
+        name: roleDef.name,
+        code: roleDef.code,
+        description: roleDef.description,
+        type: RoleType.SYSTEM,
+        isSystem: true,
+        isEditable: false,
+        createdBy: undefined,
+      });
+      savedRole = await rolesRepo.save(newRole);
+    }
+
+    const permissionEntities = await permissionsRepo.findBy(roleDef.permissions.map((code) => ({ code })));
+    for (const permissionEntity of permissionEntities) {
+      const existingLink = await rolePermissionsRepo.findOne({
+        where: { roleId: savedRole!.id, permissionId: permissionEntity.id },
+      });
+      if (!existingLink) {
+        const rolePermission = rolePermissionsRepo.create({
+          roleId: savedRole!.id,
+          permissionId: permissionEntity.id,
+        });
+        await rolePermissionsRepo.save(rolePermission);
+      }
+    }
+  }
+
+  // 3. Seed Email Design Defaults & Brand Settings
+  await seedEmailDesignDefaults(emailDesignTemplates);
+  await seedEmailDesignSettings(emailDesignSettings);
+
+  console.log('✅ Essential PartnerIQ system defaults initialized (0 dummy orgs/users created).');
+}
+
 export async function runSeed() {
-  console.log('🌱 Seeding PartnerIQ database...');
+  console.log('🌱 Seeding PartnerIQ database with demo organizations & test data...');
+
+  await seedSystemDefaults();
 
   const dataSource = await initializeDataSource();
   const users = dataSource.getRepository(User);
@@ -58,20 +129,6 @@ export async function runSeed() {
   const rolesRepo = dataSource.getRepository(RoleDefinition);
   const permissionsRepo = dataSource.getRepository(PermissionDefinition);
   const rolePermissionsRepo = dataSource.getRepository(RolePermission);
-
-  // Seed permissions and built-in roles
-  for (const permission of PERMISSIONS) {
-    const existingPermission = await permissionsRepo.findOne({ where: { code: permission.code } });
-    if (!existingPermission) {
-      const permissionEntity = permissionsRepo.create({
-        code: permission.code,
-        resource: permission.resource,
-        action: permission.action,
-        description: permission.description,
-      });
-      await permissionsRepo.save(permissionEntity);
-    }
-  }
 
   // Check if admin already exists
   let admin = await users.findOne({ where: { email: 'admin@partneriq.demo' } });
@@ -110,39 +167,6 @@ export async function runSeed() {
   } else if (superAdmin.platformRole !== PlatformRole.SUPER_ADMIN) {
     superAdmin.platformRole = PlatformRole.SUPER_ADMIN;
     superAdmin = await users.save(superAdmin);
-  }
-
-  for (const roleCode of Object.keys(BUILT_IN_ROLES) as Array<keyof typeof BUILT_IN_ROLES>) {
-    const roleDef = BUILT_IN_ROLES[roleCode];
-    const existingRole = await rolesRepo.findOne({ where: { code: roleDef.code } });
-    let savedRole = existingRole;
-    if (!existingRole) {
-      const newRole = rolesRepo.create({
-        organizationId: null,
-        name: roleDef.name,
-        code: roleDef.code,
-        description: roleDef.description,
-        type: RoleType.SYSTEM,
-        isSystem: true,
-        isEditable: false,
-        createdBy: admin.id,
-      });
-      savedRole = await rolesRepo.save(newRole);
-    }
-
-    const permissionEntities = await permissionsRepo.findBy(roleDef.permissions.map((code) => ({ code })));
-    for (const permissionEntity of permissionEntities) {
-      const existingLink = await rolePermissionsRepo.findOne({
-        where: { roleId: savedRole!.id, permissionId: permissionEntity.id },
-      });
-      if (!existingLink) {
-        const rolePermission = rolePermissionsRepo.create({
-          roleId: savedRole!.id,
-          permissionId: permissionEntity.id,
-        });
-        await rolePermissionsRepo.save(rolePermission);
-      }
-    }
   }
 
   // Create Acme SaaS Organization

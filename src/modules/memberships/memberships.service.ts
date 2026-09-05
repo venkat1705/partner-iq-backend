@@ -13,10 +13,11 @@ import { AuditAction, Role } from '../../common/enums';
 import { SecurityUtils } from '../../common/utils/security.utils';
 import { getAppConfig } from '../../config/app.config';
 import { BrevoEmailService } from './brevo-email.service';
+import { assertUserEligibleForOrganization } from '../affiliates/affiliate-eligibility.policy';
 
 @Injectable()
 export class MembershipsService {
-  constructor(private readonly brevoEmail: BrevoEmailService) {}
+  constructor(private readonly brevoEmail: BrevoEmailService) { }
 
   async getMembers(organizationId: string) {
     const memberships = dbStore.organizationMemberships.filter(
@@ -64,6 +65,7 @@ export class MembershipsService {
 
   async inviteMember(organizationId: string, invitedByUserId: string, dto: InviteMemberDto) {
     const email = dto.email.toLowerCase().trim();
+    assertUserEligibleForOrganization(email);
     const organization = dbStore.organizations.find((item) => item.id === organizationId && !item.deletedAt);
     if (!organization) {
       throw new NotFoundException('Organization not found');
@@ -119,25 +121,45 @@ export class MembershipsService {
     });
 
     const inviter = dbStore.users.find((item) => item.id === invitedByUserId);
-    await this.brevoEmail.sendInvitationEmail({
-      toEmail: email,
-      organizationName: organization.name,
-      inviterEmail: inviter?.email,
-      role,
-      inviteUrl,
-    });
+    try {
+      await this.brevoEmail.sendInvitationEmail({
+        toEmail: email,
+        organizationName: organization.name,
+        inviterEmail: inviter?.email,
+        role,
+        inviteUrl,
+      });
+    } catch {
+      // Non-blocking email dispatch
+    }
 
     return {
       id: invitation.id,
       organizationId,
       email,
       role,
-      status: 'Pending',
+      status: 'INVITED',
       token,
       invitedAt: invitation.createdAt,
       expiresAt: invitation.expiresAt,
-      inviteUrl: process.env.BREVO_API_KEY ? undefined : inviteUrl,
+      inviteUrl,
     };
+  }
+
+  async revokeInvitation(organizationId: string, invitationId: string, actorId?: string) {
+    const invitation = dbStore.organizationInvitations.find(
+      (invite) => invite.id === invitationId && invite.organizationId === organizationId,
+    );
+
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found');
+    }
+
+    invitation.revokedAt = new Date();
+    this.audit(organizationId, actorId || invitation.invitedBy, 'MEMBER_INVITATION_REVOKED', 'organization_invitation', invitationId, {
+      email: invitation.email,
+    });
+    return { success: true, message: 'Invitation revoked' };
   }
 
   getInvitation(token: string) {
@@ -146,6 +168,7 @@ export class MembershipsService {
     const role = this.roleForInvitation(invitation.roleId);
 
     return {
+      id: invitation.id,
       email: invitation.email,
       organizationId: invitation.organizationId,
       organizationName: organization?.name,
@@ -155,6 +178,7 @@ export class MembershipsService {
   }
 
   async acceptInvitationForUser(token: string, userId: string) {
+    assertUserEligibleForOrganization(userId);
     const invitation = this.findValidInvitation(token);
     const dataSource = await initializeDataSource();
     const user = await dataSource.getRepository(User).findOne({ where: { id: userId } });

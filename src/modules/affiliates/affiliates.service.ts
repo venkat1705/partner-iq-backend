@@ -2,12 +2,10 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-  ConflictException,
 } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { dbStore, AffiliateEntity, ProgramAffiliateEntity, AffiliateApplicationEntity, TrackingLinkEntity } from '../../database/store';
 import { AffiliateStatus, AffiliateInvitationStatus, ApplicationStatus, AuditAction, ProgramStatus, TrackingLinkStatus, AutomationTriggerType, TierTransitionType, EnvironmentType } from '../../common/enums';
-import { MembershipStatus } from '../../common/enums/rbac';
 import { SecurityUtils } from '../../common/utils/security.utils';
 import { EnvironmentUtils } from '../../common/utils/environment.utils';
 import { getAppConfig } from '../../config/app.config';
@@ -15,6 +13,7 @@ import { AcceptAffiliateInvitationDto, CreateAffiliateDto, CreateAffiliateInvita
 import { BrevoEmailService } from '../memberships/brevo-email.service';
 import { TierService } from '../gamification/tiers/tier.service';
 import { AutomationEngineService } from '../automations/engine/automation-engine.service';
+import { assertUserEligibleForAffiliate } from './affiliate-eligibility.policy';
 
 @Injectable()
 export class AffiliatesService {
@@ -24,46 +23,9 @@ export class AffiliatesService {
     private readonly automationEngineService: AutomationEngineService,
   ) {}
 
-  private assertUserEligibleForAffiliate(email: string) {
-    const setting = dbStore.platformSettings?.find(
-      (s) => s.key === 'affiliateEligibility.allowOrganizationMembers',
-    );
-    const allowOrganizationMembers = setting ? Boolean(setting.value) : false;
-
-    if (allowOrganizationMembers) {
-      return;
-    }
-
-    const normalizedEmail = email.toLowerCase().trim();
-    const existingUser = dbStore.users.find(
-      (u) => u.email.toLowerCase().trim() === normalizedEmail && !u.deletedAt,
-    );
-
-    if (!existingUser) {
-      return;
-    }
-
-    const activeOrgMembership = dbStore.organizationMemberships.find((m) => {
-      if (m.userId !== existingUser.id) return false;
-      if (m.status !== MembershipStatus.ACTIVE) return false;
-      const org = dbStore.organizations.find((o) => o.id === m.organizationId && !o.deletedAt);
-      if (org && (org.status === 'SUSPENDED' || org.status === 'CLOSED')) return false;
-      const role = String(m.role).toUpperCase();
-      return role === 'OWNER' || role === 'ADMIN' || role === 'MEMBER' || role === 'MANAGER';
-    });
-
-    if (activeOrgMembership) {
-      throw new ConflictException({
-        statusCode: 409,
-        code: 'AFFILIATE_INELIGIBLE_ORGANIZATION_MEMBER',
-        message: 'This user is already associated with an organization account and cannot be invited as an affiliate at this time.',
-      });
-    }
-  }
-
   async create(organizationId: string, dto: CreateAffiliateDto, actorId?: string, skipAudit = false, environment: EnvironmentType = EnvironmentType.LIVE) {
     const email = dto.email.toLowerCase().trim();
-    this.assertUserEligibleForAffiliate(email);
+    assertUserEligibleForAffiliate(email);
 
     let affiliate = dbStore.affiliates.find(
       (a) => a.organizationId === organizationId && a.email === email,
@@ -193,7 +155,7 @@ export class AffiliatesService {
 
   async inviteAffiliate(organizationId: string, dto: CreateAffiliateInvitationDto, actorId: string, environment: EnvironmentType = EnvironmentType.LIVE) {
     const email = dto.email.toLowerCase().trim();
-    this.assertUserEligibleForAffiliate(email);
+    assertUserEligibleForAffiliate(email);
     const partnerName = dto.partnerName.trim();
     const program = dbStore.programs.find((item) =>
       item.id === dto.programId &&
@@ -356,6 +318,46 @@ export class AffiliatesService {
       throw new BadRequestException('Program terms must be accepted.');
     }
     const invitation = this.findValidInvitationByToken(token);
+    return this.acceptInvitationRecord(invitation, dto, userId);
+  }
+
+  listInvitationsForEmail(email: string, environment: EnvironmentType = EnvironmentType.LIVE) {
+    this.expireOldInvitations();
+    const normalizedEmail = email.toLowerCase().trim();
+    return dbStore.affiliateInvitations
+      .filter((item) =>
+        item.email.toLowerCase().trim() === normalizedEmail
+        && (item.environment === environment || (!item.environment && environment === EnvironmentType.LIVE)),
+      )
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .map((item) => this.serializeInvitationForAffiliate(item));
+  }
+
+  async acceptInvitationForEmail(invitationId: string, email: string, dto: AcceptAffiliateInvitationDto, userId?: string) {
+    if (!dto.acceptedTerms) {
+      throw new BadRequestException('Program terms must be accepted.');
+    }
+    const invitation = this.findInvitationForEmail(invitationId, email);
+    this.assertInvitationCanBeAccepted(invitation);
+    return this.acceptInvitationRecord(invitation, dto, userId);
+  }
+
+  declineInvitationForEmail(invitationId: string, email: string, userId?: string) {
+    const invitation = this.findInvitationForEmail(invitationId, email);
+    if (invitation.status !== AffiliateInvitationStatus.PENDING) {
+      throw new BadRequestException('Only pending invitations can be declined.');
+    }
+    invitation.status = AffiliateInvitationStatus.DECLINED;
+    invitation.updatedAt = new Date();
+    this.audit(invitation.organizationId, userId || invitation.invitedBy, 'AFFILIATE_INVITATION_DECLINED', 'affiliate_invitation', invitation.id, {
+      programId: invitation.programId,
+      email: invitation.email,
+    });
+    return { success: true, invitation: this.serializeInvitationForAffiliate(invitation) };
+  }
+
+  private async acceptInvitationRecord(invitation: any, dto: AcceptAffiliateInvitationDto, userId?: string) {
+    assertUserEligibleForAffiliate(invitation.email);
     const program = dbStore.programs.find((item) => item.id === invitation.programId && item.organizationId === invitation.organizationId && !item.deletedAt);
     if (!program || program.status === ProgramStatus.PAUSED || program.status === ProgramStatus.ARCHIVED) {
       throw new BadRequestException('This program is currently unavailable.');
@@ -517,18 +519,33 @@ export class AffiliatesService {
     return invitation;
   }
 
+  private findInvitationForEmail(invitationId: string, email: string) {
+    const normalizedEmail = email.toLowerCase().trim();
+    const invitation = dbStore.affiliateInvitations.find((item) =>
+      item.id === invitationId && item.email.toLowerCase().trim() === normalizedEmail,
+    );
+    if (!invitation) throw new NotFoundException('Invitation not found');
+    return invitation;
+  }
+
   private findValidInvitationByToken(token: string) {
     this.expireOldInvitations();
     const tokenHash = SecurityUtils.hashToken(token);
     const invitation = dbStore.affiliateInvitations.find((item) => item.tokenHash === tokenHash);
     if (!invitation) throw new NotFoundException('Invitation not found');
+    this.assertInvitationCanBeAccepted(invitation);
+    return invitation;
+  }
+
+  private assertInvitationCanBeAccepted(invitation: any) {
+    this.expireOldInvitations();
     if (invitation.status === AffiliateInvitationStatus.REVOKED || invitation.revokedAt) throw new BadRequestException('This invitation is no longer valid.');
     if (invitation.status === AffiliateInvitationStatus.ACCEPTED || invitation.acceptedAt) throw new BadRequestException("You've already joined this program.");
+    if (invitation.status === AffiliateInvitationStatus.DECLINED) throw new BadRequestException('This invitation was declined.');
     if (new Date(invitation.expiresAt) <= new Date()) {
       invitation.status = AffiliateInvitationStatus.EXPIRED;
       throw new BadRequestException('This invitation has expired.');
     }
-    return invitation;
   }
 
   private expireOldInvitations() {
@@ -563,6 +580,26 @@ export class AffiliatesService {
       expiresAt: invitation.expiresAt,
       acceptedAt: invitation.acceptedAt,
       revokedAt: invitation.revokedAt,
+    };
+  }
+
+  private serializeInvitationForAffiliate(invitation: any) {
+    const organization = dbStore.organizations.find((item) => item.id === invitation.organizationId);
+    const program = dbStore.programs.find((item) => item.id === invitation.programId);
+    const serialized = this.serializeInvitation(invitation);
+    const commissionValue = invitation.commissionOverrideValue ?? program?.defaultCommissionValue ?? 0;
+    const commissionType = invitation.commissionOverrideType ?? program?.commissionType;
+    const commissionSummary = commissionType === InvitationCommissionType.PERCENTAGE
+      ? `${commissionValue / 100}% Recurring`
+      : `${program?.currency || 'USD'} ${(commissionValue / 100).toFixed(2)} per conversion`;
+
+    return {
+      ...serialized,
+      organizationName: organization?.name || 'Partner Brand',
+      organizationLogo: (organization as any)?.branding?.logoUrl,
+      programSlug: program?.slug,
+      personalMessage: invitation.personalMessage || `Join the official ${organization?.name || 'brand'} partner program.`,
+      commissionSummary,
     };
   }
 
