@@ -732,6 +732,27 @@ export class Program {
   @Column({ type: 'varchar', length: 1000, nullable: true })
   bannerUrl?: string;
 
+  @Column({ type: 'varchar', length: 50, default: 'PUBLIC', nullable: true })
+  visibility?: string;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  shortDescription?: string;
+
+  @Column({ type: 'text', nullable: true })
+  description?: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  category?: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  tags?: string[];
+
+  @Column({ type: 'varchar', length: 1000, nullable: true })
+  websiteUrl?: string;
+
+  @Column({ type: 'varchar', length: 1000, nullable: true })
+  landingUrl?: string;
+
   @Column({ type: 'uuid' })
   createdBy!: string;
 

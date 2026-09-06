@@ -28,7 +28,7 @@ export const getJwtConfig = (): JwtConfig => {
 
   return {
     accessSecret,
-    accessTtl: process.env.JWT_ACCESS_TTL || '15m',
+    accessTtl: process.env.JWT_ACCESS_TTL || '30m',
     refreshSecret,
     refreshTtl: process.env.JWT_REFRESH_TTL || '7d',
     passwordResetTtl: process.env.PASSWORD_RESET_TTL || '15m',

@@ -6,6 +6,7 @@ export interface PartnerIqRequestContext {
   userId?: string;
   email?: string;
   organizationId: string;
+  programId?: string;
   environment: EnvironmentType;
   apiKeyId?: string;
   isApiKey: boolean;

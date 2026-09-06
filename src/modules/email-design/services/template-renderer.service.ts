@@ -53,15 +53,21 @@ export class TemplateRendererService {
 
   interpolate(str: string, data: Record<string, any>, escapeValues = true): string {
     if (!str) return '';
+    const safeData = data || {};
 
-    return str.replace(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g, (_, key) => {
-      if (key in data && data[key] !== undefined && data[key] !== null) {
-        const val = String(data[key]);
+    return str.replace(/\{\{\{?\s*([a-zA-Z0-9_.$:-]+)(?:\s*\|[^{}]+)?\s*\}?\}\}/g, (_, rawKey) => {
+      const key = rawKey?.trim();
+      if (!key || key.startsWith('#') || key.startsWith('/') || key.startsWith('^') || key.startsWith('!') || key.startsWith('>')) {
+        return '';
+      }
+
+      if (key in safeData && safeData[key] !== undefined && safeData[key] !== null) {
+        const val = String(safeData[key]);
         return escapeValues ? this.escapeHtml(val) : val;
       }
 
       const parts = key.split('.');
-      let current: any = data;
+      let current: any = safeData;
       for (const p of parts) {
         if (current && typeof current === 'object' && p in current) {
           current = current[p];
@@ -77,9 +83,18 @@ export class TemplateRendererService {
       }
 
       const lastPart = parts[parts.length - 1];
-      if (lastPart in data && data[lastPart] !== undefined && data[lastPart] !== null) {
-        const val = String(data[lastPart]);
+      if (lastPart in safeData && safeData[lastPart] !== undefined && safeData[lastPart] !== null) {
+        const val = String(safeData[lastPart]);
         return escapeValues ? this.escapeHtml(val) : val;
+      }
+
+      // Case-insensitive fallback
+      const normalizedTarget = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+      for (const [k, v] of Object.entries(safeData)) {
+        if (k.toLowerCase().replace(/[^a-z0-9]/g, '') === normalizedTarget && v !== undefined && v !== null) {
+          const val = String(v);
+          return escapeValues ? this.escapeHtml(val) : val;
+        }
       }
 
       return '';
@@ -105,6 +120,29 @@ export class TemplateRendererService {
           exists = true;
         } else if (varKey === 'affiliate.firstName' && (payload.affiliateName || payload.partnerName || payload.firstName)) {
           cur = payload.affiliateName || payload.partnerName || payload.firstName;
+          exists = true;
+        } else if (varKey === 'user.firstName' && (payload.user?.firstName || payload.firstName || payload.userName)) {
+          cur = payload.user?.firstName || payload.firstName || payload.userName;
+          exists = true;
+        } else if (varKey === 'security.deviceName') {
+          if (!payload.security) payload.security = {};
+          payload.security.deviceName = payload.security.deviceName || payload.deviceName || 'Web Browser / Workstation';
+          cur = payload.security.deviceName;
+          exists = true;
+        } else if (varKey === 'security.location') {
+          if (!payload.security) payload.security = {};
+          payload.security.location = payload.security.location || payload.location || 'Current Network Location';
+          cur = payload.security.location;
+          exists = true;
+        } else if (varKey === 'security.ipAddress') {
+          if (!payload.security) payload.security = {};
+          payload.security.ipAddress = payload.security.ipAddress || payload.ipAddress || 'Authorized Network IP';
+          cur = payload.security.ipAddress;
+          exists = true;
+        } else if (varKey === 'security.timestamp') {
+          if (!payload.security) payload.security = {};
+          payload.security.timestamp = payload.security.timestamp || new Date().toLocaleString();
+          cur = payload.security.timestamp;
           exists = true;
         } else {
           exists = false;
@@ -267,6 +305,7 @@ export class TemplateRendererService {
                 <tr><td align="left" style="font-family: ${fontFamily}; font-size: 11px; color: #64748B; padding-top: 10px; line-height: 1.5;">&copy; ${currentYear} ${this.escapeHtml(brand.companyLegal || DEFAULT_BRAND.companyLegal)} &bull; ${this.escapeHtml(brand.physicalAddress || DEFAULT_BRAND.physicalAddress)}</td></tr>
               </table>
             </td>
+            
           </tr>
         </table>
       </td>

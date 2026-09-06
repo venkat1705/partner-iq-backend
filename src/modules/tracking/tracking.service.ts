@@ -20,7 +20,7 @@ export class TrackingService {
     private readonly fraudService: FraudService,
     private readonly performanceAggregationService?: PerformanceAggregationService,
     private readonly automationEngineService?: AutomationEngineService,
-  ) {}
+  ) { }
 
   async createLink(organizationId: string, dto: CreateTrackingLinkDto, actorId?: string, environment: EnvironmentType = EnvironmentType.LIVE) {
     const shortCode = (
@@ -86,9 +86,13 @@ export class TrackingService {
     return link;
   }
 
-  async getLinks(organizationId: string, environment: EnvironmentType = EnvironmentType.LIVE) {
+  async getLinks(organizationId: string, environment: EnvironmentType = EnvironmentType.LIVE, programId?: string) {
     return dbStore.trackingLinks
-      .filter((l) => l.organizationId === organizationId && (l.environment === environment || (!l.environment && environment === EnvironmentType.LIVE)))
+      .filter((l) =>
+        l.organizationId === organizationId &&
+        (l.environment === environment || (!l.environment && environment === EnvironmentType.LIVE)) &&
+        (!programId || l.programId === programId),
+      )
       .map((link) => {
         const {
           __dbStoreProxy: _proxyMarker,

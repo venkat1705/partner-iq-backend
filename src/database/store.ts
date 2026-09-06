@@ -225,9 +225,22 @@ class DBBackedArray<T extends object> extends Array<T> {
   }
 
   private static conflictPathsFor<T extends object>(repo: Repository<T>) {
-    return DBBackedArray.isBillingPlans(repo)
-      ? ['code', 'billingInterval', 'currency']
-      : ['id'];
+    if (DBBackedArray.isBillingPlans(repo)) {
+      return ['code', 'billingInterval', 'currency'];
+    }
+    if (repo.metadata.tableName === 'email_design_templates') {
+      return ['templateId'];
+    }
+    if (repo.metadata.tableName === 'document_design_templates') {
+      return ['templateKey'];
+    }
+    if (repo.metadata.tableName === 'email_design_settings') {
+      return ['settingsKey'];
+    }
+    if (repo.metadata.tableName === 'platform_settings') {
+      return ['key'];
+    }
+    return ['id'];
   }
 
   private static async persistEntity<T extends object>(repo: Repository<T>, item: T) {
@@ -256,6 +269,54 @@ class DBBackedArray<T extends object> extends Array<T> {
       const saved = await repo.save(item);
       Object.assign(item, saved);
       return;
+    }
+
+    if (repo.metadata.tableName === 'email_design_templates') {
+      const tpl = item as any;
+      if (tpl.templateId) {
+        const existing = await repo.findOne({ where: { templateId: tpl.templateId } as any });
+        if (existing) {
+          const saved = await repo.save({
+            ...tpl,
+            id: (existing as any).id,
+            createdAt: (existing as any).createdAt || tpl.createdAt,
+          });
+          Object.assign(item, saved);
+          return;
+        }
+      }
+    }
+
+    if (repo.metadata.tableName === 'document_design_templates') {
+      const doc = item as any;
+      if (doc.templateKey) {
+        const existing = await repo.findOne({ where: { templateKey: doc.templateKey } as any });
+        if (existing) {
+          const saved = await repo.save({
+            ...doc,
+            id: (existing as any).id,
+            createdAt: (existing as any).createdAt || doc.createdAt,
+          });
+          Object.assign(item, saved);
+          return;
+        }
+      }
+    }
+
+    if (repo.metadata.tableName === 'email_design_settings') {
+      const set = item as any;
+      if (set.settingsKey) {
+        const existing = await repo.findOne({ where: { settingsKey: set.settingsKey } as any });
+        if (existing) {
+          const saved = await repo.save({
+            ...set,
+            id: (existing as any).id,
+            createdAt: (existing as any).createdAt || set.createdAt,
+          });
+          Object.assign(item, saved);
+          return;
+        }
+      }
     }
 
     await repo.upsert(item, DBBackedArray.conflictPathsFor(repo) as any);

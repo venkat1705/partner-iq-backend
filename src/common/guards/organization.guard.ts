@@ -6,6 +6,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { dbStore } from '../../database/store';
+import { AppDataSource } from '../../database/data-source';
+import { Organization, OrganizationMembership } from '../../database/schema';
 import { RequestWithUser } from '../interfaces/request-with-user.interface';
 import { MembershipStatus } from '../enums/rbac';
 import { Role } from '../enums';
@@ -13,7 +15,7 @@ import { EnvironmentUtils } from '../utils/environment.utils';
 
 @Injectable()
 export class OrganizationGuard implements CanActivate {
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<RequestWithUser>();
     const user = request.user;
 
@@ -40,7 +42,23 @@ export class OrganizationGuard implements CanActivate {
     }
 
     // Verify organization exists and is active
-    const org = dbStore.organizations.find((o) => o.id === organizationId && !o.deletedAt);
+    let org = dbStore.organizations.find((o) => o.id === organizationId && !o.deletedAt);
+    if (!org && AppDataSource.isInitialized) {
+      try {
+        const dbOrg = await AppDataSource.getRepository(Organization).findOne({
+          where: { id: organizationId },
+        });
+        if (dbOrg && !dbOrg.deletedAt) {
+          if (!dbStore.organizations.some((o) => o.id === dbOrg.id)) {
+            dbStore.organizations.push(dbOrg);
+          }
+          org = dbOrg;
+        }
+      } catch (e) {
+        // ignore fallback errors
+      }
+    }
+
     if (!org) {
       throw new NotFoundException('Organization not found');
     }
@@ -57,9 +75,27 @@ export class OrganizationGuard implements CanActivate {
     }
 
     // Verify user membership in organization
-    const hasAnyOrgMembership = dbStore.organizationMemberships.some(
+    let hasAnyOrgMembership = dbStore.organizationMemberships.some(
       (m) => m.userId === user.userId && m.status === MembershipStatus.ACTIVE,
     );
+
+    if (!hasAnyOrgMembership && AppDataSource.isInitialized) {
+      try {
+        const dbMemberships = await AppDataSource.getRepository(OrganizationMembership).find({
+          where: { userId: user.userId, status: MembershipStatus.ACTIVE },
+        });
+        if (dbMemberships.length > 0) {
+          for (const m of dbMemberships) {
+            if (!dbStore.organizationMemberships.some((x) => x.id === m.id)) {
+              dbStore.organizationMemberships.push(m);
+            }
+          }
+          hasAnyOrgMembership = true;
+        }
+      } catch (e) {
+        // ignore fallback errors
+      }
+    }
 
     if (!hasAnyOrgMembership) {
       throw new ForbiddenException({
@@ -69,12 +105,32 @@ export class OrganizationGuard implements CanActivate {
       });
     }
 
-    const membership = dbStore.organizationMemberships.find(
+    let membership = dbStore.organizationMemberships.find(
       (m) =>
         m.organizationId === organizationId &&
         m.userId === user.userId &&
         m.status === MembershipStatus.ACTIVE,
     );
+
+    if (!membership && AppDataSource.isInitialized) {
+      try {
+        const dbMembership = await AppDataSource.getRepository(OrganizationMembership).findOne({
+          where: {
+            organizationId,
+            userId: user.userId,
+            status: MembershipStatus.ACTIVE,
+          },
+        });
+        if (dbMembership) {
+          if (!dbStore.organizationMemberships.some((x) => x.id === dbMembership.id)) {
+            dbStore.organizationMemberships.push(dbMembership);
+          }
+          membership = dbMembership;
+        }
+      } catch (e) {
+        // ignore fallback errors
+      }
+    }
 
     if (!membership) {
       throw new ForbiddenException({

@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { dbStore, OrganizationTrialEntity, BillingSubscriptionEntity } from '../../../database/store';
+import { AppDataSource } from '../../../database/data-source';
+import { Organization } from '../../../database/schema';
 import { AuditAction, SubscriptionStatus, BillingCycle } from '../../../common/enums';
 import { PlanService } from './plan.service';
 
@@ -23,7 +25,7 @@ export interface TrialStatusResult {
 
 @Injectable()
 export class TrialService {
-  constructor(private readonly planService: PlanService) {}
+  constructor(private readonly planService: PlanService) { }
 
   /**
    * Starts a 14-day free trial for an organization.
@@ -38,7 +40,20 @@ export class TrialService {
     await this.planService.ensureDefaultPlans();
 
     // 1. Verify organization exists
-    const org = dbStore.organizations.find((o) => o.id === organizationId && !o.deletedAt);
+    let org = dbStore.organizations.find((o) => o.id === organizationId && !o.deletedAt);
+    if (!org && AppDataSource.isInitialized) {
+      try {
+        const dbOrg = await AppDataSource.getRepository(Organization).findOne({
+          where: { id: organizationId },
+        });
+        if (dbOrg && !dbOrg.deletedAt) {
+          if (!dbStore.organizations.some((o) => o.id === dbOrg.id)) {
+            dbStore.organizations.push(dbOrg);
+          }
+          org = dbOrg;
+        }
+      } catch (e) { }
+    }
     if (!org) {
       throw new NotFoundException('Organization not found');
     }
@@ -162,19 +177,85 @@ export class TrialService {
   async getTrialStatus(organizationId: string): Promise<TrialStatusResult> {
     await this.planService.ensureDefaultPlans();
 
-    const subscription =
+    let subscription =
       this.findCurrentPaidSubscription(organizationId) ||
       dbStore.billingSubscriptions
         .filter((s) => s.organizationId === organizationId && s.rowStatus === 'ACTIVE')
         .sort((a, b) => new Date(b.createdDate).getTime() - new Date(a.createdDate).getTime())[0];
+
+    let trialRecord = dbStore.organizationTrials.find((t) => t.organizationId === organizationId);
+
+    // If no subscription exists, anchor trial permanently to the organization's creation date
+    if (!subscription) {
+      let org = dbStore.organizations.find((o) => o.id === organizationId && !o.deletedAt);
+      if (!org && AppDataSource.isInitialized) {
+        try {
+          const dbOrg = await AppDataSource.getRepository(Organization).findOne({
+            where: { id: organizationId },
+          });
+          if (dbOrg && !dbOrg.deletedAt) {
+            if (!dbStore.organizations.some((o) => o.id === dbOrg.id)) {
+              dbStore.organizations.push(dbOrg);
+            }
+            org = dbOrg;
+          }
+        } catch (e) { }
+      }
+      if (org) {
+        const startDate = org.createdAt ? new Date(org.createdAt) : new Date();
+        const endDate = new Date(startDate.getTime() + 14 * 24 * 60 * 60 * 1000);
+        if (!trialRecord) {
+          trialRecord = {
+            id: uuidv4(),
+            organizationId,
+            trialUsed: true,
+            firstTrialStartedAt: startDate,
+            firstTrialEndedAt: endDate,
+            extendedByAdminDays: 0,
+            createdAt: startDate,
+            updatedAt: new Date(),
+          };
+          dbStore.organizationTrials.push(trialRecord);
+        }
+
+        const proPlan =
+          dbStore.billingPlans.find((p) => p.code === 'PRO' && p.billingInterval === 'MONTHLY') ||
+          dbStore.billingPlans[0];
+
+        const now = new Date();
+        const isExpired = endDate.getTime() <= now.getTime();
+
+        subscription = {
+          id: uuidv4(),
+          organizationId,
+          planId: proPlan?.id || '',
+          provider: 'INTERNAL',
+          status: isExpired ? SubscriptionStatus.TRIAL_EXPIRED : SubscriptionStatus.TRIALING,
+          billingInterval: 'MONTHLY',
+          billingCycle: 'MONTHLY',
+          currentPeriodStart: startDate,
+          currentPeriodEnd: endDate,
+          trialStart: startDate,
+          trialEnd: endDate,
+          trialStartedAt: startDate,
+          trialEndsAt: endDate,
+          cancelAtPeriodEnd: false,
+          createdBy: org.createdBy || 'system',
+          createdDate: startDate,
+          modifiedDate: startDate,
+          rowStatus: 'ACTIVE',
+        };
+        dbStore.billingSubscriptions.push(subscription as any);
+      }
+    }
 
     const plan = subscription
       ? dbStore.billingPlans.find((p) => p.id === subscription.planId)
       : dbStore.billingPlans.find((p) => p.code === 'FREE' && p.billingInterval === 'MONTHLY');
 
     const now = new Date();
-    const trialEndsAt = subscription?.trialEndsAt || subscription?.trialEnd;
-    const trialStartedAt = subscription?.trialStartedAt || subscription?.trialStart;
+    const trialEndsAt = subscription?.trialEndsAt || subscription?.trialEnd || trialRecord?.firstTrialEndedAt;
+    const trialStartedAt = subscription?.trialStartedAt || subscription?.trialStart || trialRecord?.firstTrialStartedAt;
 
     let remainingSeconds = 0;
     let remainingDays = 0;
@@ -189,7 +270,7 @@ export class TrialService {
       subscription.modifiedDate = now;
     }
 
-    const currentStatus = subscription?.status || SubscriptionStatus.ACTIVE;
+    const currentStatus = subscription?.status || (remainingSeconds > 0 ? SubscriptionStatus.TRIALING : SubscriptionStatus.ACTIVE);
     const isTrialing = currentStatus === SubscriptionStatus.TRIALING;
     const isExpired =
       currentStatus === SubscriptionStatus.TRIAL_EXPIRED ||

@@ -1,6 +1,7 @@
 import { BadGatewayException, BadRequestException, Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { dbStore } from '../../database/store';
+import { AppDataSource } from '../../database/data-source';
 import { EmailDesignSettings, EmailDesignTemplate, EmailTemplateOverride, DocumentDesignTemplate, GeneratedDocument } from '../../database/schema';
 import { SYSTEM_TEMPLATE_CATALOG, SYSTEM_SECURITY_TEMPLATE_KEYS, SystemTemplateKey } from './constants/email-template-keys';
 import { DEFAULT_DOCUMENT_TEMPLATES } from './constants/document-template-defaults';
@@ -47,11 +48,58 @@ export class EmailDesignService {
     this.ensureDefaultDocumentTemplates();
   }
 
-  getSettings() {
+  async getSettings() {
+    if (AppDataSource.isInitialized) {
+      const repo = AppDataSource.getRepository(EmailDesignSettings);
+      let settings = await repo.findOne({ where: { settingsKey: 'default' } });
+      if (!settings) {
+        settings = repo.create({
+          id: uuidv4(),
+          settingsKey: 'default',
+          payload: {
+            ...DEFAULT_BRAND_SETTINGS,
+            updatedAt: new Date().toISOString(),
+          },
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+        await repo.save(settings);
+      }
+      return this.serializeSettings(settings);
+    }
     return this.serializeSettings(this.ensureSettings());
   }
 
-  saveSettings(payload: any) {
+  async saveSettings(payload: any) {
+    if (AppDataSource.isInitialized) {
+      const repo = AppDataSource.getRepository(EmailDesignSettings);
+      let settings = await repo.findOne({ where: { settingsKey: 'default' } });
+      if (!settings) {
+        settings = repo.create({
+          id: uuidv4(),
+          settingsKey: 'default',
+          createdAt: new Date(),
+        });
+      }
+      settings.payload = {
+        ...DEFAULT_BRAND_SETTINGS,
+        ...(settings.payload || {}),
+        ...payload,
+        updatedAt: new Date().toISOString(),
+      };
+      settings.updatedAt = new Date();
+      const saved = await repo.save(settings);
+
+      const memIdx = dbStore.emailDesignSettings.findIndex((row) => row.settingsKey === 'default');
+      if (memIdx >= 0) {
+        dbStore.emailDesignSettings[memIdx] = saved;
+      } else {
+        dbStore.emailDesignSettings.push(saved);
+      }
+
+      return this.serializeSettings(saved);
+    }
+
     const settings = this.ensureSettings();
     settings.payload = {
       ...DEFAULT_BRAND_SETTINGS,
@@ -63,18 +111,24 @@ export class EmailDesignService {
     return this.serializeSettings(settings);
   }
 
-  listTemplates() {
+  async listTemplates() {
+    if (AppDataSource.isInitialized) {
+      const repo = AppDataSource.getRepository(EmailDesignTemplate);
+      const rows = await repo.find({ order: { updatedAt: 'DESC' } });
+      return rows.map((row) => this.serialize(row));
+    }
     return dbStore.emailDesignTemplates
       .slice()
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
       .map((row) => this.serialize(row));
   }
 
-  getCatalog() {
+  async getCatalog() {
+    const list = await this.listTemplates();
     return Object.values(SYSTEM_TEMPLATE_CATALOG).map((item) => {
       const isSecurity = SYSTEM_SECURITY_TEMPLATE_KEYS.includes(item.key);
-      const dbTemplate = dbStore.emailDesignTemplates.find(
-        (t) => t.templateId === item.key || t.templateId === item.key.toLowerCase(),
+      const dbTemplate = list.find(
+        (t) => t.id === item.key || t.id === item.key.toLowerCase(),
       );
 
       return {
@@ -86,9 +140,44 @@ export class EmailDesignService {
     });
   }
 
-  saveTemplate(template: any) {
+  async saveTemplate(template: any) {
     if (!template?.id) {
       throw new NotFoundException('Template id is required');
+    }
+
+    if (AppDataSource.isInitialized) {
+      const repo = AppDataSource.getRepository(EmailDesignTemplate);
+      let record = await repo.findOne({ where: { templateId: template.id } });
+      if (!record) {
+        record = repo.create({
+          id: uuidv4(),
+          templateId: template.id,
+          createdAt: new Date(),
+        });
+      }
+
+      record.templateId = template.id;
+      record.name = template.name || template.id;
+      record.category = template.category || 'organizations';
+      record.isCustom = Boolean(template.isCustom);
+      record.isEdited = Boolean(template.isEdited);
+      record.payload = {
+        ...template,
+        id: template.id,
+        updatedAt: new Date().toISOString(),
+      };
+      record.updatedAt = new Date();
+
+      const saved = await repo.save(record);
+
+      const memIdx = dbStore.emailDesignTemplates.findIndex((row) => row.templateId === template.id);
+      if (memIdx >= 0) {
+        dbStore.emailDesignTemplates[memIdx] = saved;
+      } else {
+        dbStore.emailDesignTemplates.push(saved);
+      }
+
+      return this.serialize(saved);
     }
 
     const existing = dbStore.emailDesignTemplates.find((row) => row.templateId === template.id);
@@ -104,6 +193,7 @@ export class EmailDesignService {
     record.isEdited = Boolean(template.isEdited);
     record.payload = {
       ...template,
+      id: template.id,
       updatedAt: new Date().toISOString(),
     };
     record.updatedAt = new Date();
@@ -115,18 +205,25 @@ export class EmailDesignService {
     return this.serialize(record);
   }
 
-  saveTemplates(list: any[]) {
-    const saved = list.filter((template) => template?.id).map((template) => this.saveTemplate(template));
+  async saveTemplates(list: any[]) {
+    const valid = list.filter((template) => template?.id);
+    const saved = [];
+    for (const item of valid) {
+      saved.push(await this.saveTemplate(item));
+    }
     return saved;
   }
 
-  deleteTemplate(templateId: string) {
-    const index = dbStore.emailDesignTemplates.findIndex((row) => row.templateId === templateId);
-    if (index === -1) {
-      return { success: true };
+  async deleteTemplate(templateId: string) {
+    if (AppDataSource.isInitialized) {
+      const repo = AppDataSource.getRepository(EmailDesignTemplate);
+      await repo.delete({ templateId });
     }
 
-    dbStore.emailDesignTemplates.splice(index, 1);
+    const index = dbStore.emailDesignTemplates.findIndex((row) => row.templateId === templateId);
+    if (index >= 0) {
+      dbStore.emailDesignTemplates.splice(index, 1);
+    }
     return { success: true };
   }
 
@@ -296,13 +393,13 @@ export class EmailDesignService {
     };
   }
 
-  // ================= DOCUMENT & PDF GENERATOR METHODS =================
-
-  ensureDefaultDocumentTemplates() {
+  async ensureDefaultDocumentTemplates() {
+    if (!AppDataSource.isInitialized) return;
+    const repo = AppDataSource.getRepository(DocumentDesignTemplate);
     for (const [key, defaultTpl] of Object.entries(DEFAULT_DOCUMENT_TEMPLATES)) {
-      const existing = dbStore.documentDesignTemplates.find((d) => d.templateKey === key);
-      if (!existing) {
-        const record: DocumentDesignTemplate = {
+      const existingInDb = await repo.findOne({ where: { templateKey: key } });
+      if (!existingInDb) {
+        const record = repo.create({
           id: uuidv4(),
           templateKey: key,
           name: defaultTpl.name,
@@ -336,24 +433,33 @@ export class EmailDesignService {
           },
           createdAt: new Date(),
           updatedAt: new Date(),
-        };
-        dbStore.documentDesignTemplates.push(record);
+        });
+        const saved = await repo.save(record);
+        if (!dbStore.documentDesignTemplates.some((d) => d.templateKey === key)) {
+          dbStore.documentDesignTemplates.push(saved);
+        }
       }
     }
   }
 
-  listDocumentTemplates() {
-    this.ensureDefaultDocumentTemplates();
+  async listDocumentTemplates() {
+    await this.ensureDefaultDocumentTemplates();
+    if (AppDataSource.isInitialized) {
+      const repo = AppDataSource.getRepository(DocumentDesignTemplate);
+      const rows = await repo.find({ order: { updatedAt: 'DESC' } });
+      return rows.map((row) => this.serializeDocument(row));
+    }
     return dbStore.documentDesignTemplates
       .slice()
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
       .map((row) => this.serializeDocument(row));
   }
 
-  getDocumentCatalog() {
-    this.ensureDefaultDocumentTemplates();
+  async getDocumentCatalog() {
+    await this.ensureDefaultDocumentTemplates();
+    const list = await this.listDocumentTemplates();
     return Object.values(DEFAULT_DOCUMENT_TEMPLATES).map((item) => {
-      const dbTemplate = dbStore.documentDesignTemplates.find((t) => t.templateKey === item.key);
+      const dbTemplate = list.find((t) => t.id === item.key || t.templateKey === item.key);
       return {
         ...item,
         isCustom: Boolean(dbTemplate?.isCustom),
@@ -363,12 +469,58 @@ export class EmailDesignService {
     });
   }
 
-  saveDocumentTemplate(template: any) {
+  async saveDocumentTemplate(template: any) {
     if (!template?.id && !template?.templateKey) {
       throw new BadRequestException('Template key or id is required');
     }
 
     const key = template.templateKey || template.id;
+
+    if (AppDataSource.isInitialized) {
+      const repo = AppDataSource.getRepository(DocumentDesignTemplate);
+      let record = await repo.findOne({ where: { templateKey: key } });
+      if (!record) {
+        record = repo.create({
+          id: uuidv4(),
+          templateKey: key,
+          createdAt: new Date(),
+        });
+      }
+
+      record.templateKey = key;
+      record.name = template.name || key;
+      record.category = template.category || 'organizations';
+      record.documentType = template.documentType || DocumentType.CUSTOM;
+      record.pageSize = template.pageSize || PageSize.A4;
+      record.orientation = template.orientation || PageOrientation.PORTRAIT;
+      record.margins = template.margins || { top: 20, right: 20, bottom: 20, left: 20, unit: 'mm' };
+      record.headerSettings = template.headerSettings;
+      record.footerSettings = template.footerSettings;
+      record.watermarkSettings = template.watermarkSettings;
+      record.status = template.status || TemplateStatus.PUBLISHED;
+      record.version = (record.version || 1) + 1;
+      record.isCustom = Boolean(template.isCustom);
+      record.isEdited = Boolean(template.isEdited);
+      record.payload = {
+        ...template,
+        id: key,
+        templateKey: key,
+        updatedAt: new Date().toISOString(),
+      };
+      record.updatedAt = new Date();
+
+      const saved = await repo.save(record);
+
+      const memIdx = dbStore.documentDesignTemplates.findIndex((row) => row.templateKey === key);
+      if (memIdx >= 0) {
+        dbStore.documentDesignTemplates[memIdx] = saved;
+      } else {
+        dbStore.documentDesignTemplates.push(saved);
+      }
+
+      return this.serializeDocument(saved);
+    }
+
     const existing = dbStore.documentDesignTemplates.find((row) => row.templateKey === key);
     const record = existing || ({
       id: uuidv4(),
@@ -404,7 +556,12 @@ export class EmailDesignService {
     return this.serializeDocument(record);
   }
 
-  deleteDocumentTemplate(templateKey: string) {
+  async deleteDocumentTemplate(templateKey: string) {
+    if (AppDataSource.isInitialized) {
+      const repo = AppDataSource.getRepository(DocumentDesignTemplate);
+      await repo.delete({ templateKey });
+    }
+
     const index = dbStore.documentDesignTemplates.findIndex((row) => row.templateKey === templateKey);
     if (index >= 0) {
       dbStore.documentDesignTemplates.splice(index, 1);
@@ -412,8 +569,8 @@ export class EmailDesignService {
     return { success: true };
   }
 
-  renderDocument(payload: any) {
-    const brandSettings = this.getSettings();
+  async renderDocument(payload: any) {
+    const brandSettings = await this.getSettings();
     return this.documentRenderer.renderDocument({
       pageSize: payload.pageSize,
       orientation: payload.orientation,

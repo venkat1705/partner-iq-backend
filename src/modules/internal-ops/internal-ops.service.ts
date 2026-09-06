@@ -266,7 +266,7 @@ export class InternalOpsService {
     this.logger.log(`Triggering test email for template '${dto.templateKey}' to ${dto.recipientEmail}`);
 
     const brandSettings = this.emailDesignService
-      ? this.emailDesignService.getSettings()
+      ? await this.emailDesignService.getSettings()
       : {
         name: 'PartnerIQ Technologies',
         supportEmail: 'support@partneriq.io',

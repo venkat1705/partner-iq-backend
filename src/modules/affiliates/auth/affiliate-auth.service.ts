@@ -137,10 +137,6 @@ export class AffiliateAuthService {
     return this.toAffiliateMe(base);
   }
 
-  async forgotPassword(email: string) {
-    return this.authService.forgotPassword(email);
-  }
-
   async initiateGoogleAuth(query: { returnUrl?: string; flowType?: OAuthFlowType; invitationToken?: string; origin?: string }) {
     const config = getAppConfig();
     if (config.googleOAuthEnabled === false) {
@@ -451,6 +447,18 @@ export class AffiliateAuthService {
       taxFormType: 'PAN_TDS',
     });
     return await affiliatePortalProfiles.save(created);
+  }
+
+  async forgotPassword(email: string, origin?: string) {
+    return this.authService.forgotPassword(email, 'affiliate', origin);
+  }
+
+  async verifyResetToken(token: string) {
+    return this.authService.verifyResetToken(token);
+  }
+
+  async resetPassword(dto: { token: string; newPassword: string }) {
+    return this.authService.resetPassword(dto);
   }
 
   private sanitizeAffiliateReturnUrl(value?: string) {

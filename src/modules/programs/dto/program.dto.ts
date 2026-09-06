@@ -214,4 +214,39 @@ export class UpdateProgramDto {
   @IsOptional()
   @IsUrl()
   bannerUrl?: string;
+
+  @ApiPropertyOptional({ example: 'PUBLIC' })
+  @IsOptional()
+  @IsString()
+  visibility?: 'PUBLIC' | 'UNLISTED' | 'PRIVATE';
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  shortDescription?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsArray()
+  tags?: string[];
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUrl()
+  websiteUrl?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUrl()
+  landingUrl?: string;
 }

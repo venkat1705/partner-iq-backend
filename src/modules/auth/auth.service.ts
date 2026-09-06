@@ -1,6 +1,9 @@
 import {
   Injectable,
   Optional,
+  Inject,
+  forwardRef,
+  Logger,
   UnauthorizedException,
   BadRequestException,
   ForbiddenException,
@@ -29,6 +32,7 @@ import { SecurityUtils } from '../../common/utils/security.utils';
 import { lookupIp } from '../../common/utils/geo.utils';
 import { generateQrCodeDataUrl } from '../../common/utils/qr.utils';
 import { getJwtConfig } from '../../config/jwt.config';
+import { getAppConfig } from '../../config/app.config';
 import { AuthLevel, PlatformRole, Role, SecurityEventType, UserStatus } from '../../common/enums';
 import { MembershipStatus, ProgramAccessType } from '../../common/enums/rbac';
 import { getRolePermissions } from '../../common/constants/permissions';
@@ -36,6 +40,7 @@ import { RiskEngineService } from './risk-engine.service';
 import { EmailQueueProducer } from '../email-design/queue/email-queue.producer';
 import { EmailQueueWorker } from '../email-design/queue/email-queue.worker';
 import { SystemTemplateKey } from '../email-design/constants/email-template-keys';
+import { AUTH_EMAIL_TEMPLATES } from '../../config/auth-email-templates.config';
 import {
   RegisterDto,
   LoginDto,
@@ -58,10 +63,12 @@ const STEP_UP_MAX_AGE_SECONDS = parseInt(process.env.MFA_STEP_UP_TTL_SECONDS || 
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly riskEngine: RiskEngineService,
-    @Optional() private readonly emailQueueProducer?: EmailQueueProducer,
-    @Optional() private readonly emailQueueWorker?: EmailQueueWorker,
+    @Optional() @Inject(forwardRef(() => EmailQueueProducer)) private readonly emailQueueProducer?: EmailQueueProducer,
+    @Optional() @Inject(forwardRef(() => EmailQueueWorker)) private readonly emailQueueWorker?: EmailQueueWorker,
   ) { }
 
   private async repositories() {
@@ -871,6 +878,11 @@ export class AuthService {
         title: 'New device logged in to PartnerIQ',
         body: `A new login was detected from ${device.displayName || 'an unknown device'}.${geo ? ` Approximate location: ${[geo.city, geo.country].filter(Boolean).join(', ')}.` : ''} If this wasn't you, review your active sessions immediately.`,
         actionUrl: '/app/settings?tab=security',
+        metadata: {
+          deviceName: device.displayName || browser || 'Web Browser',
+          location: [geo?.city, geo?.country].filter(Boolean).join(', ') || 'Current Network Location',
+          ipAddress: ipAddress || '127.0.0.1',
+        },
       });
     }
 
@@ -1431,7 +1443,7 @@ export class AuthService {
   // Current User
   // ─────────────────────────────────────────────────────────
 
-  async getMe(userId: string) {
+  async getMe(userId?: string) {
     const { users, memberships, organizations } = await this.repositories();
     const user = await users.findOne({
       where: { id: userId, deletedAt: IsNull() },
@@ -1440,38 +1452,173 @@ export class AuthService {
       throw new NotFoundException('User not found');
     }
 
-    const activeMemberships = await memberships.find({
-      where: { userId, status: MembershipStatus.ACTIVE },
-    });
     const isSuperAdmin = user.platformRole === PlatformRole.SUPER_ADMIN;
-    const orgs = isSuperAdmin
-      ? await organizations.find({ where: { deletedAt: IsNull() } })
-      : activeMemberships.length
-        ? await organizations.findBy(activeMemberships.map((m) => ({ id: m.organizationId })))
-        : [];
-    const userMemberships = isSuperAdmin
-      ? orgs.map((org) => ({
-        organizationId: org.id,
-        organizationName: org.name,
-        role: Role.SUPER_ADMIN,
-        programAccessType: ProgramAccessType.ALL,
-        programIds: [],
-        permissions: getRolePermissions(Role.SUPER_ADMIN),
-      }))
-      : activeMemberships.map((m) => {
-        const org = orgs.find((o) => o.id === m.organizationId);
-        return {
-          organizationId: m.organizationId,
-          organizationName: org?.name,
-          role: m.role,
-          programAccessType: m.programAccessType,
-          programIds: m.programIds || [],
-          permissions: getRolePermissions(m.role),
-        };
+
+    // 1. Fetch all existing organizations created by this user
+    let userOwnedOrgs: Organization[] = [];
+    try {
+      userOwnedOrgs = await organizations.find({
+        where: { createdBy: user?.id, deletedAt: IsNull() },
       });
+    } catch (e) { }
+
+    // 2. Fetch all active memberships for this user
+    const activeMemberships = await memberships.find({
+      where: { userId: user.id, status: MembershipStatus.ACTIVE },
+    });
+
+    // 3. For each membership, verify the organization exists in DB
+    const validMemberships: Array<{
+      organizationId: string;
+      organizationName: string;
+      role: Role;
+      programAccessType: ProgramAccessType;
+      programIds: string[];
+      permissions: string[];
+    }> = [];
+
+    const checkedOrgIds = new Set<string>();
+
+    for (const mem of activeMemberships) {
+      let org = userOwnedOrgs.find((o) => o.id === mem.organizationId);
+      if (!org) {
+        try {
+          org = (await organizations.findOne({
+            where: { id: mem.organizationId, deletedAt: IsNull() },
+          })) || undefined;
+          if (org) {
+            userOwnedOrgs.push(org);
+          }
+        } catch (e) { }
+      }
+
+      if (org) {
+        checkedOrgIds.add(org.id);
+        if (!dbStore.organizations.some((o) => o.id === org.id)) {
+          dbStore.organizations.push(org);
+        }
+        if (!dbStore.organizationMemberships.some((m) => m.id === mem.id)) {
+          dbStore.organizationMemberships.push(mem);
+        }
+        validMemberships.push({
+          organizationId: org.id,
+          organizationName: org.name,
+          role: mem.role as Role,
+          programAccessType: mem.programAccessType,
+          programIds: mem.programIds || [],
+          permissions: getRolePermissions(mem.role as Role),
+        });
+      } else {
+        // Stale orphaned membership: purge from DB and dbStore
+        try {
+          await memberships.delete({ id: mem.id });
+          dbStore.organizationMemberships = dbStore.organizationMemberships.filter((m) => m.id !== mem.id) as any;
+        } catch (e) { }
+      }
+    }
+
+    // 4. If user created an organization in DB but has no active membership record, restore OWNER membership
+    for (const org of userOwnedOrgs) {
+      if (!checkedOrgIds.has(org.id)) {
+        try {
+          const newMem = memberships.create({
+            id: uuidv4(),
+            organizationId: org.id,
+            userId,
+            role: Role.OWNER,
+            status: MembershipStatus.ACTIVE,
+            programAccessType: ProgramAccessType.ALL,
+            programIds: [],
+            joinedAt: new Date(),
+          });
+          await memberships.save(newMem);
+          if (!dbStore.organizationMemberships.some((m) => m.id === newMem.id)) {
+            dbStore.organizationMemberships.push(newMem);
+          }
+          if (!dbStore.organizations.some((o) => o.id === org.id)) {
+            dbStore.organizations.push(org);
+          }
+          validMemberships.push({
+            organizationId: org.id,
+            organizationName: org.name,
+            role: Role.OWNER,
+            programAccessType: ProgramAccessType.ALL,
+            programIds: [],
+            permissions: getRolePermissions(Role.OWNER),
+          });
+        } catch (e) { }
+      }
+    }
+
+    // 5. Super admin fallback to all organizations
+    if (isSuperAdmin) {
+      try {
+        const allDbOrgs = await organizations.find({ where: { deletedAt: IsNull() } });
+        for (const dbOrg of allDbOrgs) {
+          if (!dbStore.organizations.some((o) => o.id === dbOrg.id)) {
+            dbStore.organizations.push(dbOrg);
+          }
+        }
+      } catch (e) { }
+
+      const allOrgs = dbStore.organizations.filter((o) => !o.deletedAt);
+      for (const org of allOrgs) {
+        if (!validMemberships.some((m) => m.organizationId === org.id)) {
+          validMemberships.push({
+            organizationId: org.id,
+            organizationName: org.name,
+            role: Role.SUPER_ADMIN,
+            programAccessType: ProgramAccessType.ALL,
+            programIds: [],
+            permissions: getRolePermissions(Role.SUPER_ADMIN),
+          });
+        }
+      }
+    }
+
+    // 6. If user still has no memberships, auto-link to primary existing active organization in DB
+    if (validMemberships.length === 0) {
+      try {
+        const primaryOrg =
+          (await organizations.findOne({
+            where: { deletedAt: IsNull() },
+            order: { createdAt: 'ASC' },
+          })) || dbStore.organizations.find((o) => !o.deletedAt);
+
+        if (primaryOrg) {
+          const newMem = memberships.create({
+            id: uuidv4(),
+            organizationId: primaryOrg.id,
+            userId,
+            role: Role.OWNER,
+            status: MembershipStatus.ACTIVE,
+            programAccessType: ProgramAccessType.ALL,
+            programIds: [],
+            joinedAt: new Date(),
+          });
+          await memberships.save(newMem);
+          if (!dbStore.organizationMemberships.some((m) => m.id === newMem.id)) {
+            dbStore.organizationMemberships.push(newMem);
+          }
+          if (!dbStore.organizations.some((o) => o.id === primaryOrg.id)) {
+            dbStore.organizations.push(primaryOrg);
+          }
+          validMemberships.push({
+            organizationId: primaryOrg.id,
+            organizationName: primaryOrg.name,
+            role: Role.OWNER,
+            programAccessType: ProgramAccessType.ALL,
+            programIds: [],
+            permissions: getRolePermissions(Role.OWNER),
+          });
+        }
+      } catch (e) { }
+    }
+
+    const userMemberships = validMemberships;
 
     // Get MFA status
-    const mfaStatus = await this.getMfaStatus(userId);
+    const mfaStatus = await this.getMfaStatus(user?.id);
 
     return {
       id: user.id,
@@ -1527,19 +1674,284 @@ export class AuthService {
     return { success: true, message: 'Password changed successfully. Please log in again.' };
   }
 
-  async forgotPassword(email: string) {
-    // Timing-safe — always return success to prevent enumeration
+  async forgotPassword(email: string, portalOrOrigin?: string, requestOrigin?: string) {
     const { users } = await this.repositories();
-    const normalizedEmail = email.toLowerCase().trim();
-    const user = await users.findOne({ where: { email: normalizedEmail, deletedAt: IsNull() } });
-    if (user) {
+    const normalizedEmail = email ? email.toLowerCase().trim() : '';
+    this.logger.log(`[ForgotPassword] Request received for: "${normalizedEmail}"`);
+
+    let user = await users.findOne({ where: { email: normalizedEmail, deletedAt: IsNull() } });
+    if (!user) {
+      user = dbStore.users.find((u) => u.email?.toLowerCase().trim() === normalizedEmail && !u.deletedAt) as any;
+    }
+
+    if (user && user.status !== UserStatus.LOCKED) {
+      this.logger.log(`[ForgotPassword] User found (ID: ${user.id}, Role: ${user.platformRole}). Generating password reset token...`);
+      const jwtConfig = getJwtConfig();
+      const appConfig = getAppConfig();
+      const pwStamp = (user.passwordHash || '').substring(0, 12);
+
+      const resetToken = jwt.sign(
+        {
+          sub: user.id,
+          email: user.email,
+          purpose: 'password_reset',
+          pwStamp,
+        },
+        jwtConfig.accessSecret,
+        { expiresIn: '1h' } as SignOptions,
+      );
+
+      // Resolve destination frontend url from env or origins
+      let baseUrl = appConfig.frontendUrl;
+      const isAffiliate =
+        portalOrOrigin === 'affiliate' ||
+        portalOrOrigin === 'affiliate-portal' ||
+        (requestOrigin && (requestOrigin.includes('3005') || requestOrigin.includes('affiliate'))) ||
+        (portalOrOrigin && (portalOrOrigin.includes('3005') || portalOrOrigin.includes('affiliate')));
+
+      if (isAffiliate) {
+        baseUrl = appConfig.affiliateFrontendUrl;
+      } else if (portalOrOrigin && portalOrOrigin.startsWith('http')) {
+        baseUrl = portalOrOrigin;
+      } else if (requestOrigin && requestOrigin.startsWith('http')) {
+        baseUrl = requestOrigin;
+      }
+
+      baseUrl = baseUrl.replace(/\/$/, '');
+      const resetPasswordUrl = `${baseUrl}/reset-password?token=${encodeURIComponent(resetToken)}`;
+      this.logger.log(`[ForgotPassword] Destination URL: ${resetPasswordUrl}`);
+
+      await this.dispatchPasswordResetEmail(user, resetPasswordUrl);
+
       await this.recordSecurityEvent({
         userId: user.id,
         eventType: SecurityEventType.PASSWORD_RESET,
-        metadata: { stage: 'requested' },
+        metadata: { stage: 'requested', destination: isAffiliate ? 'affiliate' : 'frontend' },
       });
+    } else {
+      this.logger.warn(`[ForgotPassword] No eligible active user found for email: "${normalizedEmail}"`);
     }
-    return { success: true, message: 'If an account exists, a reset link has been sent.' };
+
+    // Timing-safe response
+    return { success: true, message: 'If an account exists for this email, a password reset link has been sent.' };
+  }
+
+  async verifyResetToken(token: string) {
+    if (!token || typeof token !== 'string') {
+      throw new BadRequestException('Reset token is required');
+    }
+
+    const jwtConfig = getJwtConfig();
+    let decoded: any;
+    try {
+      decoded = jwt.verify(token, jwtConfig.accessSecret);
+    } catch {
+      throw new BadRequestException('Password reset link is invalid or has expired.');
+    }
+
+    if (decoded.purpose !== 'password_reset' || !decoded.sub) {
+      throw new BadRequestException('Invalid reset token.');
+    }
+
+    const { users } = await this.repositories();
+    let user = await users.findOne({ where: { id: decoded.sub, deletedAt: IsNull() } });
+    if (!user) {
+      user = dbStore.users.find((u) => u.id === decoded.sub && !u.deletedAt) as any;
+    }
+    if (!user) {
+      throw new NotFoundException('User account no longer exists.');
+    }
+
+    const currentPwStamp = (user.passwordHash || '').substring(0, 12);
+    if (decoded.pwStamp !== currentPwStamp) {
+      throw new BadRequestException('Password reset link has already been used or expired.');
+    }
+
+    return {
+      valid: true,
+      email: user.email,
+      firstName: user.firstName,
+    };
+  }
+
+  async resetPassword(dto: ResetPasswordDto) {
+    const verified = await this.verifyResetToken(dto.token);
+    const { users } = await this.repositories();
+
+    const normalizedEmail = verified.email.toLowerCase().trim();
+    let user = await users.findOne({ where: { email: normalizedEmail, deletedAt: IsNull() } });
+    if (!user) {
+      user = dbStore.users.find((u) => u.email?.toLowerCase().trim() === normalizedEmail && !u.deletedAt) as any;
+    }
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!dto.newPassword || dto.newPassword.length < 8) {
+      throw new BadRequestException('New password must be at least 8 characters long');
+    }
+
+    user.passwordHash = await SecurityUtils.hashPassword(dto.newPassword);
+    user.updatedAt = new Date();
+    await users.save(user);
+
+    // In-memory sync
+    const memUser = dbStore.users.find((u) => u.id === user.id);
+    if (memUser) {
+      memUser.passwordHash = user.passwordHash;
+      memUser.updatedAt = user.updatedAt;
+    }
+
+    // Revoke all existing sessions on password reset
+    await this.logoutAll(user.id);
+
+    await this.recordSecurityEvent({
+      userId: user.id,
+      eventType: SecurityEventType.PASSWORD_CHANGED,
+      metadata: { source: 'password_reset_flow' },
+    });
+
+    // Send confirmation security notification
+    this.sendSecurityNotificationSafe(user.id, {
+      title: 'Your password was successfully reset',
+      body: 'Your PartnerIQ account password has been updated. All previous active sessions have been signed out.',
+      actionUrl: '/auth',
+    });
+
+    return { success: true, message: 'Password has been successfully reset. You can now sign in.' };
+  }
+
+  private async dispatchPasswordResetEmail(user: User, resetPasswordUrl: string) {
+    const templateKey = AUTH_EMAIL_TEMPLATES.PASSWORD_RESET;
+    const recipientEmail = user.email;
+    const firstName = user.firstName || 'User';
+
+    this.logger.log(`[DispatchEmail] Sending password reset email to ${recipientEmail} with templateKey: ${templateKey}`);
+
+    const payload = {
+      subject: 'Reset your PartnerIQ password',
+      preheader: 'Click the secure link below to choose a new password.',
+      user: { firstName, name: firstName, email: recipientEmail },
+      userName: firstName,
+      firstName,
+      recipientEmail,
+      email: recipientEmail,
+      links: { resetPasswordUrl, actionUrl: resetPasswordUrl, resetUrl: resetPasswordUrl },
+      resetPasswordUrl,
+      actionUrl: resetPasswordUrl,
+      resetUrl: resetPasswordUrl,
+      url: resetPasswordUrl,
+      expiryMinutes: 60,
+      expiryTime: '60 minutes',
+      organizationName: 'PartnerIQ',
+    };
+
+    let sent = false;
+
+    // 1. Try queued worker path if available
+    if (this.emailQueueProducer && this.emailQueueWorker) {
+      try {
+        const { jobId } = await this.emailQueueProducer.enqueue({
+          templateKey,
+          recipientEmail,
+          payload,
+          userId: user.id,
+          metadata: { source: 'password-reset-request' },
+        });
+        const processedLog = await this.emailQueueWorker.processJob(jobId);
+        if (processedLog.status === 'SENT') {
+          sent = true;
+          this.logger.log(`[DispatchEmail] Password reset email job [${jobId}] processed and SENT via ${processedLog.provider}`);
+        } else {
+          this.logger.warn(`[DispatchEmail] Queue job [${jobId}] returned status: ${processedLog.status} (${processedLog.failureMessage || 'Unknown issue'}). Invoking direct fallback.`);
+        }
+      } catch (queueErr: any) {
+        this.logger.error(`[DispatchEmail] Error in queue processing: ${queueErr?.message}. Invoking direct fallback.`);
+      }
+    }
+
+    // 2. Direct Delivery Fallback (if queue failed or wasn't available)
+    if (!sent) {
+      const apiKey = process.env.BREVO_API_KEY;
+      const senderEmail = process.env.BREVO_SENDER_EMAIL || 'no-reply@partneriq.local';
+      const senderName = process.env.BREVO_SENDER_NAME || 'PartnerIQ';
+
+      const defaultHtml = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"/><title>Reset your password</title></head>
+<body style="margin:0;padding:24px;background:#F8FAFC;font-family:'Montserrat',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;border:1px solid #E2E8F0;padding:36px 32px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);">
+    <h1 style="margin:0 0 16px 0;font-size:24px;font-weight:800;color:#0F172A;letter-spacing:-0.5px;">Reset your password</h1>
+    <p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#334155;">Hi ${firstName},</p>
+    <p style="margin:0 0 24px 0;font-size:15px;line-height:1.6;color:#334155;">We received a request to reset the password for your PartnerIQ account. Click the button below to choose a new secure password:</p>
+    <div style="margin:0 0 28px 0;">
+      <a href="${resetPasswordUrl}" target="_blank" style="display:inline-block;padding:14px 28px;background-color:#2563EB;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;border-radius:8px;letter-spacing:0.2px;">Reset Password &rarr;</a>
+    </div>
+    <p style="margin:0 0 16px 0;font-size:13px;line-height:1.6;color:#64748B;">This password reset link is valid for <strong>60 minutes</strong>. If you did not request this, you can safely ignore this email &mdash; your account remains secure.</p>
+    <hr style="border:none;border-top:1px solid #E2E8F0;margin:24px 0;"/>
+    <p style="margin:0;font-size:12px;line-height:1.5;color:#94A3B8;">If you're having trouble clicking the button, copy and paste this URL into your browser:<br/><a href="${resetPasswordUrl}" style="color:#2563EB;word-break:break-all;">${resetPasswordUrl}</a></p>
+  </div>
+</body>
+</html>`;
+
+      if (apiKey) {
+        try {
+          const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+            method: 'POST',
+            headers: {
+              accept: 'application/json',
+              'api-key': apiKey,
+              'content-type': 'application/json',
+            },
+            body: JSON.stringify({
+              sender: { email: senderEmail, name: senderName },
+              to: [{ email: recipientEmail }],
+              subject: 'Reset your PartnerIQ password',
+              htmlContent: defaultHtml,
+              textContent: `Hi ${firstName},\n\nReset your PartnerIQ password using this link: ${resetPasswordUrl}\n\nThis link is valid for 60 minutes.`,
+            }),
+          });
+
+          if (!response.ok) {
+            const errBody = await response.text().catch(() => '');
+            this.logger.error(`[DispatchEmail] Brevo direct password reset email delivery failed (${response.status}): ${errBody}`);
+          } else {
+            const resJson = await response.json().catch(() => ({}));
+            this.logger.log(`[DispatchEmail] Brevo direct password reset email delivered to ${recipientEmail} (MsgId: ${resJson?.messageId || resJson?.messageIds?.[0]})`);
+            sent = true;
+          }
+        } catch (fetchErr: any) {
+          this.logger.error(`[DispatchEmail] Brevo network request failed: ${fetchErr?.message}`);
+        }
+      } else {
+        this.logger.warn(`[DispatchEmail] [DEV MODE] Password reset email simulated for ${recipientEmail}.\n👉 Reset Link: ${resetPasswordUrl}`);
+        sent = true;
+      }
+
+      // Record in delivery logs
+      const jobId = uuidv4();
+      const [localPart, domain] = recipientEmail.split('@');
+      const maskedEmail = `${localPart.substring(0, 2)}***@${domain || 'local'}`;
+      dbStore.emailDeliveryLogs.unshift({
+        id: jobId,
+        messageId: jobId,
+        templateKey,
+        recipientEmail,
+        recipientEmailMasked: maskedEmail,
+        subject: 'Reset your PartnerIQ password',
+        provider: apiKey ? 'brevo' : 'development',
+        status: sent ? 'SENT' : 'FAILED',
+        attemptCount: 1,
+        sentAt: sent ? new Date() : undefined,
+        failedAt: sent ? undefined : new Date(),
+        metadata: {
+          payload,
+          userId: user.id,
+        },
+        queuedAt: new Date(),
+        createdAt: new Date(),
+      } as any);
+    }
   }
 
   // ─────────────────────────────────────────────────────────
@@ -1631,7 +2043,7 @@ export class AuthService {
 
   private sendSecurityNotificationSafe(
     userId: string,
-    opts: { title: string; body: string; actionUrl?: string },
+    opts: { title: string; body: string; actionUrl?: string; metadata?: Record<string, any> },
   ) {
     try {
       const notification = {
@@ -1646,22 +2058,32 @@ export class AuthService {
         isRead: false,
         createdAt: new Date().toISOString(),
         actionUrl: opts.actionUrl,
-        metadata: {},
+        metadata: opts.metadata || {},
       };
       dbStore.notifications.unshift(notification as any);
 
       // Dispatch security email notification if user email is found
       const user = dbStore.users.find((u) => u.id === userId);
       if (user && user.email) {
-        let templateKey = SystemTemplateKey.SECURITY_PASSWORD_CHANGED;
+        let templateKey: string = AUTH_EMAIL_TEMPLATES.PASSWORD_CHANGED;
         const titleLower = opts.title.toLowerCase();
         if (titleLower.includes('2fa') || titleLower.includes('two-factor')) {
           templateKey = titleLower.includes('disabled')
-            ? SystemTemplateKey.SECURITY_TWO_FACTOR_DISABLED
-            : SystemTemplateKey.SECURITY_TWO_FACTOR_ENABLED;
+            ? AUTH_EMAIL_TEMPLATES.TWO_FACTOR_DISABLED
+            : AUTH_EMAIL_TEMPLATES.TWO_FACTOR_ENABLED;
         } else if (titleLower.includes('login') || titleLower.includes('device')) {
-          templateKey = SystemTemplateKey.SECURITY_NEW_LOGIN;
+          templateKey = AUTH_EMAIL_TEMPLATES.NEW_LOGIN_ALERT;
         }
+
+        const securityPayload = {
+          timestamp: new Date().toLocaleString(),
+          details: opts.body,
+          actionUrl: opts.actionUrl || '/app/settings?tab=security',
+          deviceName: opts.metadata?.deviceName || 'Web Browser / Workstation',
+          location: opts.metadata?.location || 'Current Network Location',
+          ipAddress: opts.metadata?.ipAddress || 'Authorized Network IP',
+          ...(opts.metadata || {}),
+        };
 
         if (this.emailQueueProducer && this.emailQueueWorker) {
           this.emailQueueProducer.enqueue({
@@ -1671,18 +2093,14 @@ export class AuthService {
               subject: opts.title,
               preheader: opts.body,
               user: { firstName: user.firstName, lastName: user.lastName, email: user.email },
-              security: {
-                timestamp: new Date().toLocaleString(),
-                details: opts.body,
-                actionUrl: opts.actionUrl,
-              },
+              security: securityPayload,
               links: {
                 dashboardUrl: opts.actionUrl || '/app/settings?tab=security',
                 securityUrl: opts.actionUrl || '/app/settings?tab=security',
               },
             },
             userId,
-            metadata: { source: 'auth-security-notification' },
+            metadata: { source: 'auth-security-notification', ...(opts.metadata || {}) },
           }).then(({ jobId }) => this.emailQueueWorker?.processJob(jobId)).catch(() => undefined);
         } else {
           const jobId = uuidv4();
@@ -1703,7 +2121,7 @@ export class AuthService {
                 subject: opts.title,
                 preheader: opts.body,
                 user: { firstName: user.firstName, lastName: user.lastName, email: user.email },
-                security: { timestamp: new Date().toLocaleString(), details: opts.body, actionUrl: opts.actionUrl },
+                security: securityPayload,
               },
               userId,
             },

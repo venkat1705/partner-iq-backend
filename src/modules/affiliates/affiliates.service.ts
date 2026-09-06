@@ -21,7 +21,7 @@ export class AffiliatesService {
     private readonly brevoEmail: BrevoEmailService,
     private readonly tierService: TierService,
     private readonly automationEngineService: AutomationEngineService,
-  ) {}
+  ) { }
 
   async create(organizationId: string, dto: CreateAffiliateDto, actorId?: string, skipAudit = false, environment: EnvironmentType = EnvironmentType.LIVE) {
     const email = dto.email.toLowerCase().trim();
@@ -418,13 +418,31 @@ export class AffiliatesService {
     };
   }
 
-  async findAll(organizationId: string, environment: EnvironmentType = EnvironmentType.LIVE) {
-    const affiliateIds = new Set(
-      dbStore.programAffiliates
-        .filter((pa) => pa.organizationId === organizationId && (pa.environment === environment || (!pa.environment && environment === EnvironmentType.LIVE)))
-        .map((pa) => pa.affiliateId),
+  async findAll(organizationId: string, environment: EnvironmentType = EnvironmentType.LIVE, programId?: string) {
+    const orgProgramAffiliates = dbStore.programAffiliates.filter(
+      (pa) =>
+        (pa.organizationId === organizationId || !pa.organizationId) &&
+        (pa.environment === environment || (!pa.environment && environment === EnvironmentType.LIVE)) &&
+        pa.status !== AffiliateStatus.REJECTED &&
+        (!programId || pa.programId === programId),
     );
-    return dbStore.affiliates.filter((a) => a.organizationId === organizationId && affiliateIds.has(a.id));
+    const affiliateIds = new Set(orgProgramAffiliates.map((pa) => pa.affiliateId));
+    const affiliates = dbStore.affiliates.filter(
+      (a) => a.organizationId === organizationId && (programId ? affiliateIds.has(a.id) : (affiliateIds.size === 0 || affiliateIds.has(a.id))),
+    );
+
+    const defaultProgramId = dbStore.programs.find(
+      (p) => p.organizationId === organizationId && !p.deletedAt && (p.environment === environment || (!p.environment && environment === EnvironmentType.LIVE)),
+    )?.id || '';
+
+    return affiliates.map((a) => {
+      const progAff = orgProgramAffiliates.find((pa) => pa.affiliateId === a.id);
+      return {
+        ...a,
+        programId: progAff?.programId || defaultProgramId,
+        referralCode: progAff?.referralCode || '',
+      };
+    });
   }
 
   async findOne(organizationId: string, affiliateId: string, environment: EnvironmentType = EnvironmentType.LIVE) {

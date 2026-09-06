@@ -24,7 +24,7 @@ export class ConversionsService {
     private readonly ledgerService: LedgerService,
     private readonly performanceAggregationService?: PerformanceAggregationService,
     private readonly automationEngineService?: AutomationEngineService,
-  ) {}
+  ) { }
 
   async createConversion(
     organizationId: string,
@@ -237,11 +237,12 @@ export class ConversionsService {
     return { conversion, commissionStatus: 'REFUNDED', message: 'Conversion refunded and commission clawed back' };
   }
 
-  async findAll(organizationId: string, environment: EnvironmentType | 'test' | 'live' = EnvironmentType.LIVE) {
+  async findAll(organizationId: string, environment: EnvironmentType | 'test' | 'live' = EnvironmentType.LIVE, programId?: string) {
     const currentEnvironment = EnvironmentUtils.normalizeEnvironment(environment);
     return dbStore.conversions.filter((c) =>
       c.organizationId === organizationId &&
-      (c.environment === currentEnvironment || (!c.environment && currentEnvironment === EnvironmentType.LIVE)),
+      (c.environment === currentEnvironment || (!c.environment && currentEnvironment === EnvironmentType.LIVE)) &&
+      (!programId || c.programId === programId),
     );
   }
 
@@ -299,7 +300,7 @@ export class ConversionsService {
       const weights = config.weights || {};
       const sharedWeight = typeof weights["first"] === 'number' && index === 0 ? weights["first"] :
         typeof weights["middle"] === 'number' && index > 0 && index < ordered.length - 1 ? weights["middle"] :
-        typeof weights["last"] === 'number' && index === ordered.length - 1 ? weights["last"] : 1;
+          typeof weights["last"] === 'number' && index === ordered.length - 1 ? weights["last"] : 1;
       const partnerBoost = typeof weights[item.affiliateId] === 'number' ? weights[item.affiliateId] : 1;
       const timeBoost = Math.max(0.1, 1 - ((Date.now() - new Date(item.createdAt).getTime()) / (1000 * 60 * 60 * 24 * 45)));
 

@@ -4,6 +4,7 @@ import {
   Post,
   Body,
   Param,
+  Query,
   Req,
   Res,
   UseGuards,
@@ -14,6 +15,7 @@ import { TrackingService } from './tracking.service';
 import { CreateTrackingLinkDto, BrowserClickDto, IdentifyCustomerDto } from './dto/tracking.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { OrganizationGuard } from '../../common/guards/organization.guard';
+import { ProgramGuard } from '../../common/guards/program.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -25,10 +27,10 @@ import type { AuthUserPayload } from '../../common/interfaces/request-with-user.
 @ApiTags('Tracking & Redirects')
 @Controller()
 export class TrackingController {
-  constructor(private readonly trackingService: TrackingService) {}
+  constructor(private readonly trackingService: TrackingService) { }
 
   @Post('api/v1/organizations/:organizationId/tracking-links')
-  @UseGuards(JwtAuthGuard, OrganizationGuard, EnvironmentGuard, PermissionsGuard)
+  @UseGuards(JwtAuthGuard, OrganizationGuard, EnvironmentGuard, ProgramGuard, PermissionsGuard)
   @RequirePermissions('manage.links')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a new tracking link for an affiliate' })
@@ -42,15 +44,16 @@ export class TrackingController {
   }
 
   @Get('api/v1/organizations/:organizationId/tracking-links')
-  @UseGuards(JwtAuthGuard, OrganizationGuard, EnvironmentGuard, PermissionsGuard)
+  @UseGuards(JwtAuthGuard, OrganizationGuard, EnvironmentGuard, ProgramGuard, PermissionsGuard)
   @RequirePermissions('manage.links')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'List tracking links for organization' })
+  @ApiOperation({ summary: 'List tracking links for organization or filtered by program' })
   async getLinks(
     @Param('organizationId') organizationId: string,
     @CurrentEnvironment() environment: EnvironmentType,
+    @Query('programId') programId?: string,
   ) {
-    return this.trackingService.getLinks(organizationId, environment);
+    return this.trackingService.getLinks(organizationId, environment, programId);
   }
 
   @Get('r/:shortCode')

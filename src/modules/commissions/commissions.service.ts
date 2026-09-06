@@ -7,7 +7,7 @@ import { CreateCommissionRuleDto, TestCommissionRulesDto } from './dto/commissio
 
 @Injectable()
 export class CommissionsService {
-  constructor(private readonly ledgerService: LedgerService) {}
+  constructor(private readonly ledgerService: LedgerService) { }
 
   /**
    * Apply retroactive commission adjustments for an affiliate when a tier
@@ -149,6 +149,36 @@ export class CommissionsService {
       .sort((a, b) => b.priority - a.priority);
   }
 
+  async deleteRule(organizationId: string, ruleId: string) {
+    const rule = dbStore.commissionRules.find(
+      (r) => r.id === ruleId && r.organizationId === organizationId && r.status !== 'ARCHIVED',
+    );
+    if (!rule) throw new NotFoundException('Commission rule not found');
+
+    // Check if any active program is currently referencing or assigned this commission configuration
+    const inUseProgram = dbStore.programs.find(
+      (p) =>
+        p.organizationId === organizationId &&
+        !p.deletedAt &&
+        (p.id === rule.programId ||
+          (p as any).commissionConfigurationId === ruleId ||
+          (p as any).commissionRuleId === ruleId),
+    );
+
+    if (inUseProgram) {
+      throw new BadRequestException(
+        `Cannot delete "${rule.name}": It is currently assigned to active program "${inUseProgram.name}". Please reassign the program's commission configuration before deleting this rule.`,
+      );
+    }
+
+    rule.status = 'ARCHIVED';
+    rule.active = false;
+    rule.updatedAt = new Date();
+
+    this.audit(organizationId, 'system', 'COMMISSION_RULE_DELETED', rule.id, { before: rule });
+    return { success: true, message: `Commission rule "${rule.name}" deleted successfully.` };
+  }
+
   async testRules(organizationId: string, programId: string, dto: TestCommissionRulesDto) {
     const program = dbStore.programs.find((p) => p.id === programId && p.organizationId === organizationId && !p.deletedAt);
     if (!program) throw new NotFoundException('Program not found');
@@ -277,8 +307,8 @@ export class CommissionsService {
     return commission;
   }
 
-  async getCommissions(organizationId: string) {
-    return dbStore.commissions.filter((c) => c.organizationId === organizationId);
+  async getCommissions(organizationId: string, programId?: string) {
+    return dbStore.commissions.filter((c) => c.organizationId === organizationId && (!programId || c.programId === programId));
   }
 
   private evaluateProgramRules(organizationId: string, programId: string, context: Record<string, any>) {

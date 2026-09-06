@@ -2,8 +2,10 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Body,
   Param,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
@@ -11,21 +13,25 @@ import { CommissionsService } from './commissions.service';
 import { CreateCommissionRuleDto, TestCommissionRulesDto } from './dto/commission.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { OrganizationGuard } from '../../common/guards/organization.guard';
+import { ProgramGuard } from '../../common/guards/program.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 
 @ApiTags('Commissions Engine')
 @Controller('api/v1/organizations/:organizationId/commissions')
-@UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+@UseGuards(JwtAuthGuard, OrganizationGuard, ProgramGuard, PermissionsGuard)
 @ApiBearerAuth()
 export class CommissionsController {
-  constructor(private readonly commissionsService: CommissionsService) {}
+  constructor(private readonly commissionsService: CommissionsService) { }
 
   @Get()
   @RequirePermissions('view.commissions')
-  @ApiOperation({ summary: 'List all commissions in organization' })
-  async getCommissions(@Param('organizationId') organizationId: string) {
-    return this.commissionsService.getCommissions(organizationId);
+  @ApiOperation({ summary: 'List all commissions in organization or filtered by program' })
+  async getCommissions(
+    @Param('organizationId') organizationId: string,
+    @Query('programId') programId?: string,
+  ) {
+    return this.commissionsService.getCommissions(organizationId, programId);
   }
 
   @Post('rules')
@@ -75,5 +81,15 @@ export class CommissionsController {
     @Body() dto: TestCommissionRulesDto,
   ) {
     return this.commissionsService.testRules(organizationId, programId, dto);
+  }
+
+  @Delete('rules/:ruleId')
+  @RequirePermissions('manage.commissions')
+  @ApiOperation({ summary: 'Delete a commission rule' })
+  async deleteRule(
+    @Param('organizationId') organizationId: string,
+    @Param('ruleId') ruleId: string,
+  ) {
+    return this.commissionsService.deleteRule(organizationId, ruleId);
   }
 }

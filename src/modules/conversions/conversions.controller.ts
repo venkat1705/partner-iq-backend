@@ -13,6 +13,7 @@ import { CreateConversionDto, RefundConversionDto } from './dto/conversion.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { ApiKeyGuard } from '../../common/guards/api-key.guard';
 import { OrganizationGuard } from '../../common/guards/organization.guard';
+import { ProgramGuard } from '../../common/guards/program.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -21,11 +22,12 @@ import { EnvironmentGuard } from '../../common/guards/environment.guard';
 import { EnvironmentType } from '../../common/enums';
 import type { AuthUserPayload } from '../../common/interfaces/request-with-user.interface';
 import { RequireApiScopes } from '../../common/decorators/require-api-scopes.decorator';
+import { Query } from '@nestjs/common';
 
 @ApiTags('Conversions & Idempotency')
 @Controller()
 export class ConversionsController {
-  constructor(private readonly conversionsService: ConversionsService) {}
+  constructor(private readonly conversionsService: ConversionsService) { }
 
   @Post('api/v1/conversions')
   @UseGuards(ApiKeyGuard)
@@ -54,15 +56,16 @@ export class ConversionsController {
   }
 
   @Get('api/v1/organizations/:organizationId/conversions')
-  @UseGuards(JwtAuthGuard, OrganizationGuard, EnvironmentGuard, PermissionsGuard)
+  @UseGuards(JwtAuthGuard, OrganizationGuard, EnvironmentGuard, ProgramGuard, PermissionsGuard)
   @RequirePermissions('view.conversions')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'List conversions for organization' })
+  @ApiOperation({ summary: 'List conversions for organization or filtered by program' })
   async findAll(
     @Param('organizationId') organizationId: string,
     @CurrentEnvironment() environment: EnvironmentType,
+    @Query('programId') programId?: string,
   ) {
-    return this.conversionsService.findAll(organizationId, environment);
+    return this.conversionsService.findAll(organizationId, environment, programId);
   }
 
   @Post('api/v1/conversions/:id/refund')

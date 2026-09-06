@@ -27,6 +27,7 @@ import {
   RefreshTokenDto,
   ChangePasswordDto,
   ForgotPasswordDto,
+  ResetPasswordDto,
   MfaVerifyDto,
   MfaSetupVerifyDto,
   MfaDisableDto,
@@ -52,7 +53,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly oAuthService: OAuthService,
-  ) {}
+  ) { }
 
   // ─────────────────────────────────────────────────────────
   // Register & Login
@@ -74,8 +75,7 @@ export class AuthController {
     );
 
     res.cookie('refreshToken', result.refreshToken, refreshCookieOptions(appConfig));
-    const { refreshToken: _, ...safeResult } = result;
-    return { success: true, data: safeResult };
+    return { success: true, data: result };
   }
 
   @Post('login')
@@ -96,8 +96,7 @@ export class AuthController {
     // Only set refresh cookie when login is fully complete (not when MFA challenge is pending)
     if (!('requiresMfa' in result) && 'refreshToken' in result) {
       res.cookie('refreshToken', (result as any).refreshToken, refreshCookieOptions(appConfig));
-      const { refreshToken: _, ...safeResult } = result as any;
-      return { success: true, data: safeResult };
+      return { success: true, data: result };
     }
 
     return { success: true, data: result };
@@ -112,7 +111,11 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const appConfig = getAppConfig();
-    const rawRefreshToken = req.cookies?.refreshToken || dto.refreshToken;
+    const rawRefreshToken =
+      req.cookies?.refreshToken ||
+      dto.refreshToken ||
+      (req.headers['x-refresh-token'] as string);
+
     const result = await this.authService.refreshToken(
       rawRefreshToken,
       req.headers['user-agent'],
@@ -120,8 +123,7 @@ export class AuthController {
     );
 
     res.cookie('refreshToken', result.refreshToken, refreshCookieOptions(appConfig));
-    const { refreshToken: _, ...safeResult } = result;
-    return { success: true, data: safeResult };
+    return { success: true, data: result };
   }
 
   @Post('logout')
@@ -195,8 +197,7 @@ export class AuthController {
 
     if ('refreshToken' in result) {
       res.cookie('refreshToken', result.refreshToken, refreshCookieOptions(appConfig));
-      const { refreshToken: _, ...safeResult } = result;
-      return { success: true, data: safeResult };
+      return { success: true, data: result };
     }
 
     return { success: true, data: result };
@@ -493,8 +494,25 @@ export class AuthController {
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Request password reset (timing-safe — always returns success)' })
-  async forgotPassword(@Body() dto: ForgotPasswordDto) {
-    const result = await this.authService.forgotPassword(dto.email);
+  async forgotPassword(@Body() dto: ForgotPasswordDto, @Req() req: Request) {
+    const origin = dto.origin || (req.headers.origin as string) || (req.headers.referer ? new URL(req.headers.referer).origin : undefined);
+    const result = await this.authService.forgotPassword(dto.email, dto.portal || origin, origin);
+    return { success: true, data: result };
+  }
+
+  @Get('verify-reset-token')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify password reset token validity' })
+  async verifyResetToken(@Query('token') token: string) {
+    const result = await this.authService.verifyResetToken(token);
+    return { success: true, data: result };
+  }
+
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reset password with secure token' })
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    const result = await this.authService.resetPassword(dto);
     return { success: true, data: result };
   }
 
@@ -507,7 +525,8 @@ export class AuthController {
   @ApiBearerAuth('JWT')
   @ApiOperation({ summary: 'Get current user profile, memberships, and MFA status' })
   async getMe(@CurrentUser() user: any) {
-    const result = await this.authService.getMe(user.userId);
+    const userId = user?.userId || user?.id || user?.sub;
+    const result = await this.authService.getMe(userId);
     return { success: true, data: result };
   }
 
@@ -597,8 +616,7 @@ export class AuthController {
     );
     if ('refreshToken' in result && result.refreshToken) {
       res.cookie('refreshToken', result.refreshToken, refreshCookieOptions(appConfig));
-      const { refreshToken: _, ...safeResult } = result;
-      return { success: true, data: safeResult };
+      return { success: true, data: result };
     }
     return { success: true, data: result };
   }

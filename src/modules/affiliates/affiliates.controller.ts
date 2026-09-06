@@ -4,6 +4,7 @@ import {
   Post,
   Body,
   Param,
+  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -13,6 +14,7 @@ import { AffiliatesService } from './affiliates.service';
 import { AcceptAffiliateInvitationDto, CreateAffiliateDto, CreateAffiliateInvitationDto, PublicApplyDto } from './dto/affiliate.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { OrganizationGuard } from '../../common/guards/organization.guard';
+import { ProgramGuard } from '../../common/guards/program.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -24,10 +26,10 @@ import type { AuthUserPayload } from '../../common/interfaces/request-with-user.
 @ApiTags('Affiliates & Applications')
 @Controller()
 export class AffiliatesController {
-  constructor(private readonly affiliatesService: AffiliatesService) {}
+  constructor(private readonly affiliatesService: AffiliatesService) { }
 
   @Post('api/v1/organizations/:organizationId/affiliates')
-  @UseGuards(JwtAuthGuard, OrganizationGuard, EnvironmentGuard, PermissionsGuard)
+  @UseGuards(JwtAuthGuard, OrganizationGuard, EnvironmentGuard, ProgramGuard, PermissionsGuard)
   @RequirePermissions('manage.affiliates')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Add affiliate directly to organization' })
@@ -41,15 +43,16 @@ export class AffiliatesController {
   }
 
   @Get('api/v1/organizations/:organizationId/affiliates')
-  @UseGuards(JwtAuthGuard, OrganizationGuard, EnvironmentGuard, PermissionsGuard)
+  @UseGuards(JwtAuthGuard, OrganizationGuard, EnvironmentGuard, ProgramGuard, PermissionsGuard)
   @RequirePermissions('manage.affiliates')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'List all affiliates for organization' })
+  @ApiOperation({ summary: 'List all affiliates for organization or filtered by program' })
   async findAll(
     @Param('organizationId') organizationId: string,
     @CurrentEnvironment() environment: EnvironmentType,
+    @Query('programId') programId?: string,
   ) {
-    return this.affiliatesService.findAll(organizationId, environment);
+    return this.affiliatesService.findAll(organizationId, environment, programId);
   }
 
   @Get('api/v1/organizations/:organizationId/affiliates/:affiliateId')

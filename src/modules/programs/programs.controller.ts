@@ -15,6 +15,7 @@ import { ProgramsService } from './programs.service';
 import { CreateProgramDto, UpdateProgramDto } from './dto/program.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { OrganizationGuard } from '../../common/guards/organization.guard';
+import { ProgramGuard } from '../../common/guards/program.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -24,10 +25,10 @@ import type { AuthUserPayload } from '../../common/interfaces/request-with-user.
 
 @ApiTags('Partner Programs')
 @Controller('api/v1/organizations/:organizationId/programs')
-@UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+@UseGuards(JwtAuthGuard, OrganizationGuard, ProgramGuard, PermissionsGuard)
 @ApiBearerAuth()
 export class ProgramsController {
-  constructor(private readonly programsService: ProgramsService) {}
+  constructor(private readonly programsService: ProgramsService) { }
 
   @Post()
   @RequirePermissions('manage.programs')

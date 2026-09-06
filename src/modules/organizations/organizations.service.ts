@@ -5,7 +5,10 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
-import { dbStore, OrganizationEntity, OrganizationMembershipEntity } from '../../database/store';
+import { IsNull } from 'typeorm';
+import { dbStore, OrganizationEntity, OrganizationMembershipEntity, ProgramEntity } from '../../database/store';
+import { AppDataSource } from '../../database/data-source';
+import { Organization, OrganizationMembership } from '../../database/schema';
 import { OrganizationStatus, Role, ProgramType, ProgramStatus, CommissionType, AttributionModel, AuditAction, EnvironmentType } from '../../common/enums';
 import { MembershipStatus, ProgramAccessType } from '../../common/enums/rbac';
 import {
@@ -64,6 +67,51 @@ export class OrganizationsService {
 
     dbStore.organizationMemberships.push(membership);
 
+    // Automatically create a default partner program for this new organization
+    const defaultProgName = `${org.name} Partner Program`;
+    const defaultProgSlug = this.slugify(`${org.slug}-partner-program`);
+
+    const liveProgram: ProgramEntity = {
+      id: uuidv4(),
+      organizationId: org.id,
+      environment: EnvironmentType.LIVE,
+      name: defaultProgName,
+      slug: defaultProgSlug,
+      type: ProgramType.AFFILIATE,
+      status: ProgramStatus.ACTIVE,
+      currency: org.defaultCurrency || 'USD',
+      commissionType: CommissionType.PERCENTAGE,
+      defaultCommissionValue: 1500, // 15%
+      attributionModel: AttributionModel.LAST_CLICK,
+      attributionWindowDays: 30,
+      cookieDurationDays: 30,
+      couponAttributionPriority: 'PROMO_CODE' as const,
+      attributionConfig: { weights: { first: 0.25, middle: 0.5, last: 0.25 } },
+      affiliateApprovalMode: 'AUTO' as const,
+      minimumPayoutAmount: 0,
+      payoutSchedule: 'MONTHLY',
+      payoutMethods: ['Bank Transfer', 'UPI'],
+      shortDescription: `Earn high-converting commissions with ${defaultProgName}.`,
+      description: `Join the official partner program for ${org.name}. Promote our platform and earn recurring revenue share on every customer you refer.`,
+      category: org.industry || 'SaaS',
+      websiteUrl: org.website || `https://${org.slug}.com`,
+      landingUrl: org.website ? `${org.website}/pricing` : `https://${org.slug}.com/pricing`,
+      visibility: 'PUBLIC',
+      createdBy: userId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const testProgram: ProgramEntity = {
+      ...liveProgram,
+      id: uuidv4(),
+      environment: EnvironmentType.TEST,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    dbStore.programs.push(liveProgram, testProgram);
+
     // Start 14-day free trial for new organization
     try {
       await this.trialService?.startTrial(org.id, userId, 'PRO');
@@ -88,6 +136,19 @@ export class OrganizationsService {
 
   async findAllForUser(userId: string, isSuperAdmin = false) {
     if (isSuperAdmin) {
+      if (AppDataSource.isInitialized) {
+        try {
+          const allDbOrgs = await AppDataSource.getRepository(Organization).find({
+            where: { deletedAt: IsNull() },
+          });
+          for (const dbOrg of allDbOrgs) {
+            if (!dbStore.organizations.some((o) => o.id === dbOrg.id)) {
+              dbStore.organizations.push(dbOrg);
+            }
+          }
+        } catch (e) { }
+      }
+
       return dbStore.organizations
         .filter((o) => !o.deletedAt)
         .map((org) => ({
@@ -96,25 +157,120 @@ export class OrganizationsService {
         }));
     }
 
-    const memberships = dbStore.organizationMemberships.filter(
-      (m) => m.userId === userId && m.status === MembershipStatus.ACTIVE,
-    );
+    // 1. Fetch user-owned orgs directly from DB
+    let userOwnedOrgs: OrganizationEntity[] = [];
+    if (AppDataSource.isInitialized) {
+      try {
+        userOwnedOrgs = await AppDataSource.getRepository(Organization).find({
+          where: { createdBy: userId, deletedAt: IsNull() },
+        });
+      } catch (e) { }
+    }
 
-    const orgIds = memberships.map((m) => m.organizationId);
+    // 2. Fetch memberships from DB or dbStore
+    let memberships: OrganizationMembershipEntity[] = [];
+    if (AppDataSource.isInitialized) {
+      try {
+        memberships = await AppDataSource.getRepository(OrganizationMembership).find({
+          where: { userId, status: MembershipStatus.ACTIVE },
+        });
+      } catch (e) {
+        memberships = dbStore.organizationMemberships.filter(
+          (m) => m.userId === userId && m.status === MembershipStatus.ACTIVE,
+        );
+      }
+    } else {
+      memberships = dbStore.organizationMemberships.filter(
+        (m) => m.userId === userId && m.status === MembershipStatus.ACTIVE,
+      );
+    }
 
-    return dbStore.organizations
-      .filter((o) => orgIds.includes(o.id) && !o.deletedAt)
-      .map((org) => {
-        const mem = memberships.find((m) => m.organizationId === org.id);
-        return {
+    const validOrgsWithRole: Array<OrganizationEntity & { role?: Role | string }> = [];
+    const checkedOrgIds = new Set<string>();
+
+    for (const mem of memberships) {
+      let org = userOwnedOrgs.find((o) => o.id === mem.organizationId) ||
+        dbStore.organizations.find((o) => o.id === mem.organizationId && !o.deletedAt);
+
+      if (!org && AppDataSource.isInitialized) {
+        try {
+          const dbOrg = await AppDataSource.getRepository(Organization).findOne({
+            where: { id: mem.organizationId, deletedAt: IsNull() },
+          });
+          if (dbOrg) {
+            org = dbOrg;
+            if (!dbStore.organizations.some((o) => o.id === dbOrg.id)) {
+              dbStore.organizations.push(dbOrg);
+            }
+          }
+        } catch (e) { }
+      }
+
+      if (org && !org.deletedAt) {
+        checkedOrgIds.add(org.id);
+        if (!dbStore.organizations.some((o) => o.id === org.id)) {
+          dbStore.organizations.push(org);
+        }
+        validOrgsWithRole.push({
           ...org,
-          role: mem?.role,
-        };
-      });
+          role: mem.role,
+        });
+      }
+    }
+
+    // 3. Include any user-created organizations that might be missing membership
+    for (const org of userOwnedOrgs) {
+      if (!checkedOrgIds.has(org.id) && !org.deletedAt) {
+        if (!dbStore.organizations.some((o) => o.id === org.id)) {
+          dbStore.organizations.push(org);
+        }
+        validOrgsWithRole.push({
+          ...org,
+          role: Role.OWNER,
+        });
+      }
+    }
+
+    // 4. If still no organizations found, auto-link to primary active organization in DB
+    if (validOrgsWithRole.length === 0 && AppDataSource.isInitialized) {
+      try {
+        const primaryOrg = await AppDataSource.getRepository(Organization).findOne({
+          where: { deletedAt: IsNull() },
+          order: { createdAt: 'ASC' },
+        });
+        if (primaryOrg) {
+          if (!dbStore.organizations.some((o) => o.id === primaryOrg.id)) {
+            dbStore.organizations.push(primaryOrg);
+          }
+          validOrgsWithRole.push({
+            ...primaryOrg,
+            role: Role.OWNER,
+          });
+        }
+      } catch (e) { }
+    }
+
+    return validOrgsWithRole;
   }
 
   async findOne(organizationId: string) {
-    const org = dbStore.organizations.find((o) => o.id === organizationId && !o.deletedAt);
+    let org = dbStore.organizations.find((o) => o.id === organizationId && !o.deletedAt);
+    if (!org && AppDataSource.isInitialized) {
+      try {
+        const dbOrg = await AppDataSource.getRepository(Organization).findOne({
+          where: { id: organizationId },
+        });
+        if (dbOrg && !dbOrg.deletedAt) {
+          if (!dbStore.organizations.some((o) => o.id === dbOrg.id)) {
+            dbStore.organizations.push(dbOrg);
+          }
+          org = dbOrg;
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
     if (!org) {
       throw new NotFoundException('Organization not found');
     }

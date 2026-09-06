@@ -94,8 +94,26 @@ export class AffiliateAuthController {
 
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
-  async forgotPassword(@Body() body: any) {
-    const result = await this.affiliateAuthService.forgotPassword(body.email);
+  @ApiOperation({ summary: 'Request password reset for affiliate account' })
+  async forgotPassword(@Body() body: any, @Req() req: Request) {
+    const origin = body?.origin || req.headers.origin || (req.headers.referer ? new URL(req.headers.referer).origin : undefined);
+    const result = await this.affiliateAuthService.forgotPassword(body.email, origin as string);
+    return { success: true, data: result };
+  }
+
+  @Get('verify-reset-token')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify affiliate password reset token validity' })
+  async verifyResetToken(@Query('token') token: string) {
+    const result = await this.affiliateAuthService.verifyResetToken(token);
+    return { success: true, data: result };
+  }
+
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reset affiliate password with secure token' })
+  async resetPassword(@Body() body: any) {
+    const result = await this.affiliateAuthService.resetPassword(body);
     return { success: true, data: result };
   }
 

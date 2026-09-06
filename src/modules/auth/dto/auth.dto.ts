@@ -56,6 +56,16 @@ export class ForgotPasswordDto {
   @ApiProperty({ example: 'user@example.com' })
   @IsEmail()
   email!: string;
+
+  @ApiPropertyOptional({ example: 'http://localhost:3000' })
+  @IsOptional()
+  @IsString()
+  origin?: string;
+
+  @ApiPropertyOptional({ example: 'frontend' })
+  @IsOptional()
+  @IsString()
+  portal?: string;
 }
 
 export class ResetPasswordDto {
@@ -65,7 +75,7 @@ export class ResetPasswordDto {
 
   @ApiProperty({ example: 'NewStrongPassword456!' })
   @IsString()
-  @MinLength(12)
+  @MinLength(8)
   newPassword!: string;
 }
 

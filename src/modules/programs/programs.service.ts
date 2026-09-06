@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { dbStore, ProgramEntity } from '../../database/store';
-import { ProgramStatus, AuditAction, EnvironmentType } from '../../common/enums';
+import { ProgramStatus, AuditAction, EnvironmentType, AffiliateStatus } from '../../common/enums';
 import { CreateProgramDto, UpdateProgramDto } from './dto/program.dto';
 import { EnvironmentUtils } from '../../common/utils/environment.utils';
 
@@ -60,6 +60,13 @@ export class ProgramsService {
       payoutMethods: dto.payoutMethods || payoutPolicy.payoutMethods || [],
       logoUrl: dto.logoUrl,
       bannerUrl: dto.bannerUrl,
+      visibility: (dto.visibility || 'PUBLIC').toUpperCase(),
+      shortDescription: dto.shortDescription,
+      description: dto.description,
+      category: dto.category,
+      tags: dto.tags,
+      websiteUrl: dto.websiteUrl,
+      landingUrl: dto.landingUrl,
       createdBy: createdByUserId,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -79,20 +86,44 @@ export class ProgramsService {
         environment,
         name: program.name,
         slug: program.slug,
+        visibility: program.visibility,
       },
       createdAt: new Date(),
     });
 
-    return program;
+    return {
+      ...program,
+      visibility: program.visibility || 'PUBLIC',
+      affiliatesCount: 0,
+    };
   }
 
   async findAll(organizationId: string, environment: EnvironmentType = EnvironmentType.LIVE) {
-    return dbStore.programs.filter(
+    const programs = dbStore.programs.filter(
       (p) =>
         p.organizationId === organizationId &&
         (p.environment === environment || (!p.environment && environment === EnvironmentType.LIVE)) &&
         !p.deletedAt,
     );
+
+    const totalOrgAffiliates = dbStore.affiliates.filter((a) => a.organizationId === organizationId).length;
+
+    return programs.map((p) => {
+      const explicitCount = dbStore.programAffiliates.filter(
+        (pa) =>
+          pa.programId === p.id &&
+          (pa.organizationId === organizationId || !pa.organizationId) &&
+          pa.status !== AffiliateStatus.REJECTED,
+      ).length;
+
+      const affiliatesCount = explicitCount > 0 ? explicitCount : (programs.length === 1 ? totalOrgAffiliates : 0);
+
+      return {
+        ...p,
+        visibility: p.visibility || 'PUBLIC',
+        affiliatesCount,
+      };
+    });
   }
 
   async findOne(organizationId: string, programId: string, environment?: EnvironmentType) {
@@ -110,7 +141,22 @@ export class ProgramsService {
       throw new NotFoundException('Program not found in current environment context');
     }
 
-    return program;
+    const explicitCount = dbStore.programAffiliates.filter(
+      (pa) =>
+        pa.programId === program.id &&
+        (pa.organizationId === organizationId || !pa.organizationId) &&
+        pa.status !== AffiliateStatus.REJECTED,
+    ).length;
+
+    const orgProgramsCount = dbStore.programs.filter((p) => p.organizationId === organizationId && !p.deletedAt).length;
+    const totalOrgAffiliates = dbStore.affiliates.filter((a) => a.organizationId === organizationId).length;
+    const affiliatesCount = explicitCount > 0 ? explicitCount : (orgProgramsCount === 1 ? totalOrgAffiliates : 0);
+
+    return {
+      ...program,
+      visibility: program.visibility || 'PUBLIC',
+      affiliatesCount,
+    };
   }
 
   async update(
@@ -121,30 +167,41 @@ export class ProgramsService {
     environment?: EnvironmentType,
   ) {
     const program = await this.findOne(organizationId, programId, environment);
-    const previous = { ...program };
+    const rawProgram = dbStore.programs.find((p) => p.id === programId && p.organizationId === organizationId && !p.deletedAt);
+    if (!rawProgram) {
+      throw new NotFoundException('Program not found in current environment context');
+    }
+    const previous = { ...rawProgram };
 
     // Prevent edits if any affiliates have already joined this program
-    const hasAffiliates = dbStore.programAffiliates.some((pa) => pa.programId === programId);
+    const hasAffiliates = dbStore.programAffiliates.some((pa) => pa.programId === programId && pa.status !== AffiliateStatus.REJECTED);
     if (hasAffiliates) {
       throw new BadRequestException('Cannot edit program after affiliates have joined');
     }
 
-    if (dto.name) program.name = dto.name;
-    if (dto.defaultCommissionValue !== undefined) program.defaultCommissionValue = dto.defaultCommissionValue;
-    if (dto.commissionType) program.commissionType = dto.commissionType;
-    if (dto.attributionModel) program.attributionModel = dto.attributionModel;
-    if (dto.attributionWindowDays !== undefined) program.attributionWindowDays = dto.attributionWindowDays;
-    if (dto.cookieDurationDays !== undefined) program.cookieDurationDays = dto.cookieDurationDays;
-    if (dto.couponAttributionPriority !== undefined) program.couponAttributionPriority = dto.couponAttributionPriority;
-    if (dto.attributionConfig !== undefined) program.attributionConfig = dto.attributionConfig;
-    if (dto.minimumPayoutAmount !== undefined) program.minimumPayoutAmount = dto.minimumPayoutAmount;
-    if (dto.payoutSchedule !== undefined) program.payoutSchedule = dto.payoutSchedule;
-    if (dto.payoutDay !== undefined) program.payoutDay = dto.payoutDay;
-    if (dto.payoutMethods !== undefined) program.payoutMethods = dto.payoutMethods;
-    if (dto.logoUrl !== undefined) program.logoUrl = dto.logoUrl;
-    if (dto.bannerUrl !== undefined) program.bannerUrl = dto.bannerUrl;
+    if (dto.name) rawProgram.name = dto.name;
+    if (dto.defaultCommissionValue !== undefined) rawProgram.defaultCommissionValue = dto.defaultCommissionValue;
+    if (dto.commissionType) rawProgram.commissionType = dto.commissionType;
+    if (dto.attributionModel) rawProgram.attributionModel = dto.attributionModel;
+    if (dto.attributionWindowDays !== undefined) rawProgram.attributionWindowDays = dto.attributionWindowDays;
+    if (dto.cookieDurationDays !== undefined) rawProgram.cookieDurationDays = dto.cookieDurationDays;
+    if (dto.couponAttributionPriority !== undefined) rawProgram.couponAttributionPriority = dto.couponAttributionPriority;
+    if (dto.attributionConfig !== undefined) rawProgram.attributionConfig = dto.attributionConfig;
+    if (dto.minimumPayoutAmount !== undefined) rawProgram.minimumPayoutAmount = dto.minimumPayoutAmount;
+    if (dto.payoutSchedule !== undefined) rawProgram.payoutSchedule = dto.payoutSchedule;
+    if (dto.payoutDay !== undefined) rawProgram.payoutDay = dto.payoutDay;
+    if (dto.payoutMethods !== undefined) rawProgram.payoutMethods = dto.payoutMethods;
+    if (dto.logoUrl !== undefined) rawProgram.logoUrl = dto.logoUrl;
+    if (dto.bannerUrl !== undefined) rawProgram.bannerUrl = dto.bannerUrl;
+    if (dto.visibility !== undefined) rawProgram.visibility = (dto.visibility || 'PUBLIC').toUpperCase();
+    if (dto.shortDescription !== undefined) rawProgram.shortDescription = dto.shortDescription;
+    if (dto.description !== undefined) rawProgram.description = dto.description;
+    if (dto.category !== undefined) rawProgram.category = dto.category;
+    if (dto.tags !== undefined) rawProgram.tags = dto.tags;
+    if (dto.websiteUrl !== undefined) rawProgram.websiteUrl = dto.websiteUrl;
+    if (dto.landingUrl !== undefined) rawProgram.landingUrl = dto.landingUrl;
 
-    program.updatedAt = new Date();
+    rawProgram.updatedAt = new Date();
 
     dbStore.auditLogs.push({
       id: uuidv4(),
@@ -153,16 +210,20 @@ export class ProgramsService {
       actorId,
       action: AuditAction.PROGRAM_UPDATED,
       resourceType: 'program',
-      resourceId: program.id,
+      resourceId: rawProgram.id,
       metadata: {
         previous,
         updates: dto,
-        environment: program.environment,
+        environment: rawProgram.environment,
       },
       createdAt: new Date(),
     });
 
-    return program;
+    return {
+      ...rawProgram,
+      visibility: rawProgram.visibility || 'PUBLIC',
+      affiliatesCount: program.affiliatesCount ?? 0,
+    };
   }
 
   /**
@@ -314,15 +375,19 @@ export class ProgramsService {
   }
 
   async remove(organizationId: string, programId: string, actorId: string, environment?: EnvironmentType) {
-    const program = await this.findOne(organizationId, programId, environment);
-    const hasAffiliates = dbStore.programAffiliates.some((pa) => pa.programId === programId);
+    const rawProgram = dbStore.programs.find((p) => p.id === programId && p.organizationId === organizationId && !p.deletedAt);
+    if (!rawProgram) {
+      throw new NotFoundException('Program not found in current environment context');
+    }
+
+    const hasAffiliates = dbStore.programAffiliates.some((pa) => pa.programId === programId && pa.status !== AffiliateStatus.REJECTED);
     if (hasAffiliates) {
       throw new BadRequestException('Cannot delete program with joined affiliates');
     }
 
-    program.deletedAt = new Date();
-    program.status = ProgramStatus.ARCHIVED;
-    this.audit(organizationId, actorId, 'PROGRAM_ARCHIVED', 'program', program.id, { name: program.name, environment: program.environment });
+    rawProgram.deletedAt = new Date();
+    rawProgram.status = ProgramStatus.ARCHIVED;
+    this.audit(organizationId, actorId, 'PROGRAM_ARCHIVED', 'program', rawProgram.id, { name: rawProgram.name, environment: rawProgram.environment });
     return { success: true, message: 'Program archived' };
   }
 
