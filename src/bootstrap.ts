@@ -9,7 +9,7 @@ import { AppModule } from './AppModule';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
-import { getAppConfig } from './config/app.config';
+import { getAppConfig, isAllowedCorsOrigin } from './config/app.config';
 import { dbStore } from './database/store';
 import { seedSystemDefaults, runSeed } from './database/seeds/run-seed';
 import { NotificationGateway } from './modules/notifications/notifications.gateway';
@@ -26,8 +26,27 @@ export async function createPartnerIqApp() {
   const app = await NestFactory.create(AppModule, { rawBody: true, bodyParser: false });
 
   app.enableCors({
-    origin: appConfig.corsOrigins,
+    origin: (origin, callback) => {
+      if (!origin || isAllowedCorsOrigin(origin, appConfig.corsOrigins)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(null, false);
+    },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Requested-With',
+      'x-request-id',
+      'x-partneriq-environment',
+      'X-PartnerIQ-Environment',
+      'Accept',
+      'Origin',
+      'Cookie',
+    ],
   });
 
   app.use(cookieParser());
@@ -47,6 +66,7 @@ export async function createPartnerIqApp() {
   app.use(
     helmet({
       contentSecurityPolicy: false,
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
     }),
   );
 

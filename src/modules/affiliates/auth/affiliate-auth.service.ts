@@ -8,7 +8,7 @@ import {
 import { IsNull } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import { initializeDataSource } from '../../../database/data-source';
-import { AffiliatePortalProfile, User, UserIdentity } from '../../../database/schema';
+import { Affiliate, AffiliateInvitation, AffiliatePortalProfile, AuditLog, User, UserIdentity } from '../../../database/schema';
 import { dbStore } from '../../../database/store';
 import { AuditAction, PlatformRole, UserStatus } from '../../../common/enums';
 import { SecurityUtils } from '../../../common/utils/security.utils';
@@ -44,6 +44,9 @@ export class AffiliateAuthService {
       users: dataSource.getRepository(User),
       userIdentities: dataSource.getRepository(UserIdentity),
       affiliatePortalProfiles: dataSource.getRepository(AffiliatePortalProfile),
+      affiliates: dataSource.getRepository(Affiliate),
+      affiliateInvitations: dataSource.getRepository(AffiliateInvitation),
+      auditLogs: dataSource.getRepository(AuditLog),
     };
   }
 
@@ -337,6 +340,11 @@ export class AffiliateAuthService {
   }
 
   private async toAffiliateMe(user: any) {
+    const { userIdentities } = await this.repositories();
+    const googleIdentity = user.id
+      ? await userIdentities.findOne({ where: { userId: user.id, provider: 'GOOGLE' } })
+      : null;
+
     return {
       id: user.id,
       email: user.email,
@@ -347,7 +355,7 @@ export class AffiliateAuthService {
       platformRole: user.platformRole,
       emailVerified: user.emailVerified,
       mfaEnabled: Boolean(user.mfa?.enabled),
-      googleConnected: dbStore.userIdentities.some((item) => item.userId === user.id && item.provider === 'GOOGLE'),
+      googleConnected: Boolean(googleIdentity),
       hasPassword: Boolean(user.passwordHash),
       affiliate: await this.getAffiliateContext(user.id, user.email),
     };
@@ -355,10 +363,21 @@ export class AffiliateAuthService {
 
   private async getAffiliateContext(userId: string, email: string) {
     const normalizedEmail = email.toLowerCase().trim();
-    const affiliateRows = dbStore.affiliates.filter((item) => item.email.toLowerCase().trim() === normalizedEmail);
-    const pendingInvitations = dbStore.affiliateInvitations.filter(
-      (item) => item.email.toLowerCase().trim() === normalizedEmail && item.status === 'PENDING' && !item.revokedAt && new Date(item.expiresAt) > new Date(),
-    );
+    const { affiliates, affiliateInvitations } = await this.repositories();
+
+    const affiliateRows = await affiliates
+      .createQueryBuilder('affiliate')
+      .where('LOWER(affiliate.email) = :email', { email: normalizedEmail })
+      .getMany();
+
+    const pendingInvitations = await affiliateInvitations
+      .createQueryBuilder('inv')
+      .where('LOWER(inv.email) = :email', { email: normalizedEmail })
+      .andWhere("inv.status = 'PENDING'")
+      .andWhere('inv.revokedAt IS NULL')
+      .andWhere('inv.expiresAt > :now', { now: new Date() })
+      .getMany();
+
     const storedProfile = await this.ensureAffiliateProfile({ userId, email });
     const isOnboarded = Boolean(
       storedProfile.onboardingCompleted ?? (storedProfile.primaryMarket && (storedProfile.bio || storedProfile.website))
@@ -470,16 +489,34 @@ export class AffiliateAuthService {
     return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
   }
 
-  private audit(actorId: string, action: AuditAction, resourceType: string, resourceId: string, metadata?: Record<string, any>) {
-    dbStore.auditLogs.unshift({
-      id: uuidv4(),
-      actorType: actorId === 'unauthenticated' ? 'system' : 'user',
-      actorId,
-      action,
-      resourceType,
-      resourceId,
-      metadata: SecurityUtils.sanitizeForLogging(metadata),
-      createdAt: new Date(),
-    } as any);
+  private async audit(actorId: string, action: AuditAction, resourceType: string, resourceId: string, metadata?: Record<string, any>) {
+    try {
+      const { auditLogs } = await this.repositories();
+      const log = auditLogs.create({
+        id: uuidv4(),
+        actorType: actorId === 'unauthenticated' ? 'system' : 'user',
+        actorId,
+        action,
+        resourceType,
+        resourceId,
+        metadata: SecurityUtils.sanitizeForLogging(metadata),
+        createdAt: new Date(),
+      } as any);
+      await auditLogs.save(log);
+    } catch {
+      // Non-critical audit logging failure fallback
+      if (dbStore.auditLogs) {
+        dbStore.auditLogs.unshift({
+          id: uuidv4(),
+          actorType: actorId === 'unauthenticated' ? 'system' : 'user',
+          actorId,
+          action,
+          resourceType,
+          resourceId,
+          metadata: SecurityUtils.sanitizeForLogging(metadata),
+          createdAt: new Date(),
+        } as any);
+      }
+    }
   }
 }

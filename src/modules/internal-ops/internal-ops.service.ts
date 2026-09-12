@@ -269,8 +269,8 @@ export class InternalOpsService {
       ? await this.emailDesignService.getSettings()
       : {
         name: 'PartnerIQ Technologies',
-        supportEmail: 'support@partneriq.io',
-        websiteUrl: 'https://partneriq.io',
+        supportEmail: 'info@partneriq.in',
+        websiteUrl: 'https://partneriq.in',
       };
 
     const mergedVariables = {
@@ -278,8 +278,8 @@ export class InternalOpsService {
       recipientEmail: dto.recipientEmail,
       affiliateName: dto.recipientName || 'Sarah Jenkins',
       organizationName: brandSettings.name || 'PartnerIQ Technologies',
-      supportEmail: brandSettings.supportEmail || 'support@partneriq.io',
-      websiteUrl: brandSettings.websiteUrl || 'https://partneriq.io',
+      supportEmail: brandSettings.supportEmail || 'info@partneriq.in',
+      websiteUrl: brandSettings.websiteUrl || 'https://partneriq.in',
       date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' }),
       ...(dto.variables || {}),
     };

@@ -64,8 +64,8 @@ export const DEFAULT_DOCUMENT_TEMPLATES: Record<string, DefaultDocumentTemplate>
     watermarkSettings: { enabled: false, text: 'CONFIDENTIAL', opacity: 0.08, rotation: -35 },
     variables: [
       { key: 'organization.name', label: 'Organization Name', type: 'string', defaultValue: 'PartnerIQ Technologies' },
-      { key: 'organization.supportEmail', label: 'Support Email', type: 'string', defaultValue: 'finance@partneriq.io' },
-      { key: 'organization.websiteUrl', label: 'Website', type: 'string', defaultValue: 'https://partneriq.io' },
+      { key: 'organization.supportEmail', label: 'Support Email', type: 'string', defaultValue: 'info@partneriq.in' },
+      { key: 'organization.websiteUrl', label: 'Website', type: 'string', defaultValue: 'https://partneriq.in' },
       { key: 'affiliate.name', label: 'Affiliate Name', type: 'string', defaultValue: 'Sarah Jenkins' },
       { key: 'affiliate.email', label: 'Affiliate Email', type: 'string', defaultValue: 'sarah.j@creators.network' },
       { key: 'affiliate.code', label: 'Affiliate Code', type: 'string', defaultValue: 'CREATOR-SJ89' },
@@ -370,8 +370,8 @@ export const DEFAULT_DOCUMENT_TEMPLATES: Record<string, DefaultDocumentTemplate>
       { key: 'organization.name', label: 'Organization Name', type: 'string', defaultValue: 'PartnerIQ Technologies Inc.' },
       { key: 'organization.taxId', label: 'Tax ID / EIN', type: 'string', defaultValue: 'US-EIN 94-3829104' },
       { key: 'organization.address', label: 'PartnerIQ Address', type: 'string', defaultValue: '548 Market St, Suite 39201, San Francisco, CA 94104' },
-      { key: 'organization.supportEmail', label: 'Billing Support Email', type: 'string', defaultValue: 'billing@partneriq.io' },
-      { key: 'organization.websiteUrl', label: 'Website', type: 'string', defaultValue: 'https://partneriq.io' },
+      { key: 'organization.supportEmail', label: 'Billing Support Email', type: 'string', defaultValue: 'info@partneriq.in' },
+      { key: 'organization.websiteUrl', label: 'Website', type: 'string', defaultValue: 'https://partneriq.in' },
       { key: 'customer.name', label: 'Customer Organization', type: 'string', defaultValue: 'Acme Growth Labs' },
       { key: 'customer.contactName', label: 'Contact Person', type: 'string', defaultValue: 'Alex Vance' },
       { key: 'customer.email', label: 'Customer Billing Email', type: 'string', defaultValue: 'billing@acmegrowth.com' },
@@ -401,8 +401,8 @@ export const DEFAULT_DOCUMENT_TEMPLATES: Record<string, DefaultDocumentTemplate>
         name: 'PartnerIQ Technologies Inc.',
         taxId: 'US-EIN 94-3829104',
         address: '548 Market St, Suite 39201, San Francisco, CA 94104',
-        supportEmail: 'billing@partneriq.io',
-        websiteUrl: 'https://partneriq.io',
+        supportEmail: 'info@partneriq.in',
+        websiteUrl: 'https://partneriq.in',
       },
       customer: {
         name: 'Acme Growth Labs LLC',
@@ -622,7 +622,7 @@ export const DEFAULT_DOCUMENT_TEMPLATES: Record<string, DefaultDocumentTemplate>
         taxAmount: 900,
         total: 5899,
         status: 'PAID',
-        qrVerificationUrl: 'https://partneriq.io/verify/inv/INV-2026-000123',
+        qrVerificationUrl: 'https://partneriq.in/verify/inv/INV-2026-000123',
       },
       items: [
         { description: 'PartnerIQ Pro Plan (Annual License - 1 User Seat)', qty: 1, unitPrice: 3999, total: 3999 },
@@ -679,7 +679,7 @@ export const DEFAULT_DOCUMENT_TEMPLATES: Record<string, DefaultDocumentTemplate>
         <div style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 12px; font-size: 11px; color: #64748B;">
           <strong>Authorized Signatory & Verification</strong><br/>
           Digitally signed by PartnerIQ Financial Engine.<br/>
-          Verify invoice authenticity at: <a href="{{invoice.qrVerificationUrl}}" style="color: #2563EB;">partneriq.io/verify</a>
+          Verify invoice authenticity at: <a href="{{invoice.qrVerificationUrl}}" style="color: #2563EB;">partneriq.in/verify</a>
         </div>
       </td>
       <td style="width: 45%; vertical-align: top;">

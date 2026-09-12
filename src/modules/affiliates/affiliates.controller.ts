@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AffiliatesService } from './affiliates.service';
-import { AcceptAffiliateInvitationDto, CreateAffiliateDto, CreateAffiliateInvitationDto, PublicApplyDto } from './dto/affiliate.dto';
+import { AcceptAffiliateInvitationDto, BulkUploadAffiliateInvitationsDto, CreateAffiliateDto, CreateAffiliateInvitationDto, PublicApplyDto } from './dto/affiliate.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { OrganizationGuard } from '../../common/guards/organization.guard';
 import { ProgramGuard } from '../../common/guards/program.guard';
@@ -82,6 +82,20 @@ export class AffiliatesController {
     return this.affiliatesService.inviteAffiliate(organizationId, dto, user.userId, environment);
   }
 
+  @Post('api/v1/organizations/:organizationId/affiliate-invitations/bulk-upload')
+  @UseGuards(JwtAuthGuard, OrganizationGuard, EnvironmentGuard, PermissionsGuard)
+  @RequirePermissions('manage.affiliates')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Bulk invite affiliate partners via CSV or XLSX file' })
+  async bulkUploadInvitations(
+    @Param('organizationId') organizationId: string,
+    @Body() dto: BulkUploadAffiliateInvitationsDto,
+    @CurrentUser() user: AuthUserPayload,
+    @CurrentEnvironment() environment: EnvironmentType,
+  ) {
+    return this.affiliatesService.bulkInviteAffiliates(organizationId, dto, user.userId, environment);
+  }
+
   @Get('api/v1/organizations/:organizationId/affiliate-invitations')
   @UseGuards(JwtAuthGuard, OrganizationGuard, EnvironmentGuard, PermissionsGuard)
   @RequirePermissions('manage.affiliates')
@@ -92,6 +106,19 @@ export class AffiliatesController {
     @CurrentEnvironment() environment: EnvironmentType,
   ) {
     return this.affiliatesService.listInvitations(organizationId, environment);
+  }
+
+  @Get('api/v1/organizations/:organizationId/partner-suggestions')
+  @UseGuards(JwtAuthGuard, OrganizationGuard, EnvironmentGuard, PermissionsGuard)
+  @RequirePermissions('manage.affiliates')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get suggested network partners for invitation' })
+  async getPartnerSuggestions(
+    @Param('organizationId') organizationId: string,
+    @CurrentEnvironment() environment: EnvironmentType,
+    @Query('programId') programId?: string,
+  ) {
+    return this.affiliatesService.getPartnerSuggestions(organizationId, environment, programId);
   }
 
   @Post('api/v1/organizations/:organizationId/affiliate-invitations/:invitationId/resend')
@@ -153,6 +180,18 @@ export class AffiliatesController {
     return this.affiliatesService.getApplications(organizationId);
   }
 
+  @Get('api/v1/organizations/:organizationId/applications/:applicationId')
+  @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+  @RequirePermissions('manage.affiliates')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get details of a specific affiliate application' })
+  async getApplication(
+    @Param('organizationId') organizationId: string,
+    @Param('applicationId') applicationId: string,
+  ) {
+    return this.affiliatesService.getApplication(organizationId, applicationId);
+  }
+
   @Post('api/v1/organizations/:organizationId/applications/:applicationId/approve')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
@@ -165,5 +204,19 @@ export class AffiliatesController {
     @CurrentUser() user: AuthUserPayload,
   ) {
     return this.affiliatesService.approveApplication(organizationId, applicationId, user.userId);
+  }
+
+  @Post('api/v1/organizations/:organizationId/applications/:applicationId/reject')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+  @RequirePermissions('manage.affiliates')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Reject an affiliate application' })
+  async rejectApplication(
+    @Param('organizationId') organizationId: string,
+    @Param('applicationId') applicationId: string,
+    @CurrentUser() user: AuthUserPayload,
+  ) {
+    return this.affiliatesService.rejectApplication(organizationId, applicationId, user.userId);
   }
 }

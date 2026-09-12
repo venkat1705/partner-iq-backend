@@ -752,6 +752,13 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
+    if (user.platformRole !== PlatformRole.SUPER_ADMIN && this.isConfiguredSuperAdmin(normalizedEmail)) {
+      user.platformRole = PlatformRole.SUPER_ADMIN;
+      try {
+        await users.save(user);
+      } catch { }
+    }
+
     if (user.platformRole === PlatformRole.AFFILIATE && !options.allowAffiliate) {
       throw new ForbiddenException(
         'This account is registered as an affiliate partner and cannot sign in to the organization portal. Please use the affiliate portal at /affiliate.',
@@ -1314,6 +1321,54 @@ export class AuthService {
     }
 
     if (session.revokedAt || session.refreshTokenHash !== incomingHash) {
+      // Rotation Grace Period: If the session was rotated recently (within 15 minutes),
+      // allow concurrent requests from the same client to retrieve the active session tokens
+      // instead of falsely triggering token reuse revocation.
+      const ROTATION_GRACE_PERIOD_MS = 15 * 60 * 1000; // 15 minutes
+      if (
+        session.revokedAt &&
+        session.revokeReason === 'TOKEN_ROTATED' &&
+        Date.now() - new Date(session.revokedAt).getTime() < ROTATION_GRACE_PERIOD_MS
+      ) {
+        const activeSession = await authSessions.findOne({
+          where: { tokenFamilyId: decoded.tfid, revokedAt: IsNull() },
+          order: { createdAt: 'DESC' },
+        });
+
+        if (activeSession) {
+          const activeUser = await users.findOne({
+            where: { id: activeSession.userId, deletedAt: IsNull() },
+          });
+          if (activeUser) {
+            const freshAccessToken = jwt.sign(
+              { sub: activeUser.id, sid: activeSession.id, type: 'access' },
+              jwtConfig.accessSecret,
+              { expiresIn: jwtConfig.accessTtl } as SignOptions,
+            );
+            const freshRefreshToken = jwt.sign(
+              { sub: activeUser.id, sid: activeSession.id, tfid: activeSession.tokenFamilyId, type: 'refresh' },
+              jwtConfig.refreshSecret,
+              { expiresIn: jwtConfig.refreshTtl } as SignOptions,
+            );
+            activeSession.refreshTokenHash = SecurityUtils.hashToken(freshRefreshToken);
+            activeSession.lastUsedAt = new Date();
+            await authSessions.save(activeSession);
+
+            return {
+              accessToken: freshAccessToken,
+              refreshToken: freshRefreshToken,
+              sessionId: activeSession.id,
+              user: {
+                id: activeUser.id,
+                email: activeUser.email,
+                firstName: activeUser.firstName,
+                lastName: activeUser.lastName,
+              },
+            };
+          }
+        }
+      }
+
       // Token reuse detected — revoke entire family
       await authSessions.update(
         { tokenFamilyId: decoded.tfid },
@@ -1452,7 +1507,13 @@ export class AuthService {
       throw new NotFoundException('User not found');
     }
 
-    const isSuperAdmin = user.platformRole === PlatformRole.SUPER_ADMIN;
+    let isSuperAdmin = user.platformRole === PlatformRole.SUPER_ADMIN || this.isConfiguredSuperAdmin(user.email);
+    if (isSuperAdmin && user.platformRole !== PlatformRole.SUPER_ADMIN) {
+      user.platformRole = PlatformRole.SUPER_ADMIN;
+      try {
+        await users.save(user);
+      } catch { }
+    }
 
     // 1. Fetch all existing organizations created by this user
     let userOwnedOrgs: Organization[] = [];
@@ -1575,46 +1636,6 @@ export class AuthService {
         }
       }
     }
-
-    // 6. If user still has no memberships, auto-link to primary existing active organization in DB
-    if (validMemberships.length === 0) {
-      try {
-        const primaryOrg =
-          (await organizations.findOne({
-            where: { deletedAt: IsNull() },
-            order: { createdAt: 'ASC' },
-          })) || dbStore.organizations.find((o) => !o.deletedAt);
-
-        if (primaryOrg) {
-          const newMem = memberships.create({
-            id: uuidv4(),
-            organizationId: primaryOrg.id,
-            userId,
-            role: Role.OWNER,
-            status: MembershipStatus.ACTIVE,
-            programAccessType: ProgramAccessType.ALL,
-            programIds: [],
-            joinedAt: new Date(),
-          });
-          await memberships.save(newMem);
-          if (!dbStore.organizationMemberships.some((m) => m.id === newMem.id)) {
-            dbStore.organizationMemberships.push(newMem);
-          }
-          if (!dbStore.organizations.some((o) => o.id === primaryOrg.id)) {
-            dbStore.organizations.push(primaryOrg);
-          }
-          validMemberships.push({
-            organizationId: primaryOrg.id,
-            organizationName: primaryOrg.name,
-            role: Role.OWNER,
-            programAccessType: ProgramAccessType.ALL,
-            programIds: [],
-            permissions: getRolePermissions(Role.OWNER),
-          });
-        }
-      } catch (e) { }
-    }
-
     const userMemberships = validMemberships;
 
     // Get MFA status
@@ -2140,10 +2161,10 @@ export class AuthService {
   // ─────────────────────────────────────────────────────────
 
   public isConfiguredSuperAdmin(email: string) {
-    const superAdminEmails = (process.env.SUPER_ADMIN_EMAILS || 'admin@partneriq.demo')
+    const superAdminEmails = (process.env.SUPER_ADMIN_EMAILS || 'admin@partneriq.demo,superadmin@partneriq.demo')
       .split(',')
       .map((value) => value.trim().toLowerCase())
       .filter(Boolean);
-    return superAdminEmails.includes(email);
+    return superAdminEmails.includes((email || '').trim().toLowerCase());
   }
 }

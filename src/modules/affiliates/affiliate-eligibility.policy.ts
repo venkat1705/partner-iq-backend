@@ -24,6 +24,11 @@ export function assertUserEligibleForAffiliate(email: string) {
     return;
   }
 
+  // If user already has PlatformRole.AFFILIATE, they are an authorized affiliate
+  if (existingUser.platformRole === PlatformRole.AFFILIATE) {
+    return;
+  }
+
   const activeOrgMembership = dbStore.organizationMemberships.find((membership) => {
     if (membership.userId !== existingUser.id) return false;
     if (membership.status !== MembershipStatus.ACTIVE) return false;

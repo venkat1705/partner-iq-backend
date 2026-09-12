@@ -22,13 +22,12 @@ const DEFAULT_BRAND_SETTINGS = {
   companyLegal: 'PartnerIQ Technologies Inc.',
   logoUrl:
     'https://res.cloudinary.com/bunny1705/image/upload/v1787584202/partneriq/92977d80-3e51-4a12-a382-64b42fb5466a/organization-logo/rrhwttefwtgrxico2rtv.png',
-  websiteUrl: 'https://partneriq.io',
-  docsUrl: 'https://docs.partneriq.io',
-  helpCenterUrl: 'https://help.partneriq.io',
-  privacyUrl: 'https://partneriq.io/privacy',
-  termsUrl: 'https://partneriq.io/terms',
-  supportEmail: 'support@partneriq.io',
-  physicalAddress: '548 Market St, Suite 39201, San Francisco, CA 94104',
+  websiteUrl: 'https://partneriq.in',
+  docsUrl: 'https://docs.partneriq.in',
+  privacyUrl: 'https://partneriq.in/privacy',
+  termsUrl: 'https://partneriq.in/terms',
+  supportEmail: 'info@partneriq.in',
+  physicalAddress: 'Bangalore, India',
 };
 
 @Injectable()
@@ -298,7 +297,7 @@ export class EmailDesignService {
         billing: { amountFormatted: '$99.00', planName: 'Growth Plan' },
         user: { firstName: 'Admin' },
         security: { deviceName: 'Chrome on macOS', location: 'San Francisco, CA', ipAddress: '127.0.0.1', timestamp: new Date().toLocaleString() },
-        links: { dashboardUrl: 'https://affiliate.partneriq.in', verificationUrl: 'https://partneriq.io/verify', resetPasswordUrl: 'https://partneriq.io/reset' },
+        links: { dashboardUrl: 'https://affiliate.partneriq.in', verificationUrl: 'https://partneriq.in/verify', resetPasswordUrl: 'https://partneriq.in/reset' },
         ...(payload.sampleData || {}),
       },
       metadata: { isTestEmail: true },
@@ -621,7 +620,7 @@ export class EmailDesignService {
       documentType: payload.documentType || DocumentType.CUSTOM,
       documentNumber: payload.documentNumber || 'TEST-0001',
       recipientName: payload.recipientName || 'Test Recipient',
-      recipientEmail: payload.recipientEmail || 'test@partneriq.io',
+      recipientEmail: payload.recipientEmail || 'info@partneriq.in',
       renderOptions: {
         pageSize: payload.pageSize,
         orientation: payload.orientation,

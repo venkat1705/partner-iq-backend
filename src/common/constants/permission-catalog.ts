@@ -470,6 +470,7 @@ export const PERMISSION_ALIASES: Record<string, string[]> = {
   'view.programs': ['programs.read'],
   'view.affiliates': ['affiliates.read'],
   'view.conversions': ['conversions.read'],
+  'view.payouts': ['payouts.read'],
   'view.fraud': ['fraud.read'],
   'manage.links': ['links.read', 'links.create', 'links.update'],
   'manage.assets': ['assets.view', 'assets.create', 'assets.edit', 'assets.delete', 'assets.publish', 'assets.download'],

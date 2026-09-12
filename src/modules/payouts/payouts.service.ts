@@ -12,7 +12,7 @@ export class PayoutsService {
   constructor(
     private readonly ledgerService: LedgerService,
     private readonly fraudService: FraudService,
-  ) {}
+  ) { }
 
   async createBatch(
     organizationId: string,
@@ -219,5 +219,20 @@ export class PayoutsService {
         b.organizationId === organizationId &&
         (b.environment === environment || (!b.environment && environment === EnvironmentType.LIVE)),
     );
+  }
+
+  async getItems(organizationId: string, environment: EnvironmentType = EnvironmentType.LIVE) {
+    const items = dbStore.payoutItems.filter(
+      (item) =>
+        item.organizationId === organizationId &&
+        (item.environment === environment || (!item.environment && environment === EnvironmentType.LIVE)),
+    );
+    return items.map((item) => {
+      const affiliate = dbStore.affiliates.find((a) => a.id === item.affiliateId);
+      return {
+        ...item,
+        affiliateName: affiliate?.displayName || affiliate?.companyName || 'Affiliate Partner',
+      };
+    });
   }
 }

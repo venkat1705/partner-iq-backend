@@ -111,6 +111,7 @@ import {
   EmailDeliveryLog,
   EmailSuppression,
   PlatformSetting,
+  OrganizationBranding,
 } from './schema';
 import {
   RoleDefinition,
@@ -216,6 +217,7 @@ export type RolePermissionEntity = import('./schema-rbac').RolePermission;
 export type OrganizationPolicyEntity = import('./schema-rbac').OrganizationPolicy;
 export type OrganizationInvitationEntity = import('./schema-rbac').OrganizationInvitation;
 export type PlatformSettingEntity = PlatformSetting;
+export type OrganizationBrandingEntity = OrganizationBranding;
 
 class DBBackedArray<T extends object> extends Array<T> {
   private repo: Repository<T>;
@@ -521,6 +523,7 @@ export class InMemoryDataStore {
   organizationPolicies: OrganizationPolicyEntity[] = [];
   organizationInvitations: OrganizationInvitationEntity[] = [];
   platformSettings: PlatformSettingEntity[] = [];
+  organizationBrandings: OrganizationBrandingEntity[] = [];
 
   // Counter maps for Redis rate-limit/fraud tracking
   ipClickCounters: Map<string, { count: number; expiresAt: number }> = new Map();
@@ -836,6 +839,7 @@ export class InMemoryDataStore {
     this.organizationPolicies = new DBBackedArray(AppDataSource.getRepository(OrganizationPolicy), await AppDataSource.getRepository(OrganizationPolicy).find());
     this.organizationInvitations = new DBBackedArray(AppDataSource.getRepository(OrganizationInvitation), await AppDataSource.getRepository(OrganizationInvitation).find());
     this.platformSettings = new DBBackedArray(AppDataSource.getRepository(PlatformSetting), await AppDataSource.getRepository(PlatformSetting).find());
+    this.organizationBrandings = new DBBackedArray(AppDataSource.getRepository(OrganizationBranding), await AppDataSource.getRepository(OrganizationBranding).find());
 
     // Preload default affiliate eligibility setting if not present
     if (!this.platformSettings.some((s) => s.key === 'affiliateEligibility.allowOrganizationMembers')) {

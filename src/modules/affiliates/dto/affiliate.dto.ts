@@ -50,13 +50,22 @@ export class PublicApplyDto {
 
   @ApiPropertyOptional({ example: 'https://myblog.com' })
   @IsOptional()
-  @IsUrl()
+  @IsString()
   website?: string;
 
   @ApiPropertyOptional({ example: 'SEO & Content Marketing' })
   @IsOptional()
   @IsString()
   promotionMethod?: string;
+
+  @ApiPropertyOptional({ example: 'AFFILIATE' })
+  @IsOptional()
+  @IsString()
+  partnerType?: string;
+
+  @ApiPropertyOptional({ example: { trafficChannel: 'YOUTUBE' } })
+  @IsOptional()
+  answers?: Record<string, any>;
 }
 
 export enum AffiliateTypeCode {
@@ -156,3 +165,24 @@ export class AcceptAffiliateInvitationDto {
   @IsNumber()
   termsVersionAccepted?: number;
 }
+
+export class BulkUploadAffiliateInvitationsDto {
+  @ApiProperty({ description: 'Base64 encoded content of the CSV or XLSX file' })
+  @IsString()
+  fileBase64!: string;
+
+  @ApiProperty({ description: 'Name of the uploaded file' })
+  @IsString()
+  fileName!: string;
+
+  @ApiPropertyOptional({ description: 'Default program ID if not specified in row' })
+  @IsOptional()
+  @IsString()
+  defaultProgramId?: string;
+
+  @ApiPropertyOptional({ description: 'Default personal message for invitees' })
+  @IsOptional()
+  @IsString()
+  defaultPersonalMessage?: string;
+}
+

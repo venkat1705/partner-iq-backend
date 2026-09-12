@@ -27,16 +27,26 @@ import type { AuthUserPayload } from '../../common/interfaces/request-with-user.
 @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
 @ApiBearerAuth()
 export class PayoutsController {
-  constructor(private readonly payoutsService: PayoutsService) {}
+  constructor(private readonly payoutsService: PayoutsService) { }
 
   @Get()
-  @RequirePermissions('manage.payouts')
+  @RequirePermissions('view.payouts')
   @ApiOperation({ summary: 'List payout batches for organization in current environment' })
   async getBatches(
     @Param('organizationId') organizationId: string,
     @CurrentEnvironment() environment: EnvironmentType,
   ) {
     return this.payoutsService.getBatches(organizationId, environment);
+  }
+
+  @Get('items')
+  @RequirePermissions('view.payouts')
+  @ApiOperation({ summary: 'List all payout items for organization in current environment' })
+  async getItems(
+    @Param('organizationId') organizationId: string,
+    @CurrentEnvironment() environment: EnvironmentType,
+  ) {
+    return this.payoutsService.getItems(organizationId, environment);
   }
 
   @Post('batches')

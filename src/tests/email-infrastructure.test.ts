@@ -83,7 +83,7 @@ async function runEmailInfrastructureTests() {
     },
     payload: {
       user: { firstName: '<Jane>' },
-      links: { verificationUrl: 'https://partneriq.io/verify' },
+      links: { verificationUrl: 'https://partneriq.in/verify' },
     },
     recipientEmail: 'jane@example.com',
   });

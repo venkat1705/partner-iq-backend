@@ -239,11 +239,21 @@ export class ConversionsService {
 
   async findAll(organizationId: string, environment: EnvironmentType | 'test' | 'live' = EnvironmentType.LIVE, programId?: string) {
     const currentEnvironment = EnvironmentUtils.normalizeEnvironment(environment);
-    return dbStore.conversions.filter((c) =>
+    const conversions = dbStore.conversions.filter((c) =>
       c.organizationId === organizationId &&
       (c.environment === currentEnvironment || (!c.environment && currentEnvironment === EnvironmentType.LIVE)) &&
       (!programId || c.programId === programId),
     );
+    return conversions.map((c) => {
+      const affiliate = c.affiliateId ? dbStore.affiliates.find((a) => a.id === c.affiliateId) : undefined;
+      const commission = dbStore.commissions.find((com) => com.conversionId === c.id);
+      return {
+        ...c,
+        affiliateName: affiliate?.displayName || affiliate?.companyName || 'Direct / Organic',
+        customerEmail: c.customerExternalId || (c.metadata as any)?.customerEmail || 'customer@example.com',
+        commissionAmount: commission?.commissionAmount ?? 0,
+      };
+    });
   }
 
   async findOne(organizationId: string, id: string, environment: EnvironmentType | 'test' | 'live' = EnvironmentType.LIVE) {

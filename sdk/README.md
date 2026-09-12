@@ -36,9 +36,9 @@ import { PartnerIQ } from '@partneriq/sdk';
 
 const partneriq = new PartnerIQ({
   apiKey: process.env.PARTNERIQ_API_KEY!, // e.g., 'pi_live_...'
-  baseUrl: 'https://api.partneriq.io',     // Optional (defaults to http://localhost:3000)
+  baseUrl: 'https://api.partneriq.in',     // Optional (defaults to http://localhost:3000)
   apiKey: process.env.PARTNERIQ_API_KEY!, // e.g., 'pi_live_sk_...'
-  baseUrl: 'https://api.partneriq.io',     // Optional (defaults to http://localhost:5000 in dev)
+  baseUrl: 'https://api.partneriq.in',     // Optional (defaults to http://localhost:5000 in dev)
 });
 ```
 
@@ -151,4 +151,4 @@ To publish this package to npm:
 
 ## License
 
-MIT © [PartnerIQ](https://partneriq.io)
+MIT © [PartnerIQ](https://partneriq.in)

@@ -34,8 +34,7 @@ export class AffiliateAuthController {
     if (result.refreshToken) {
       res.cookie('affiliateRefreshToken', result.refreshToken, affiliateRefreshCookieOptions());
     }
-    const { refreshToken: _, ...safeResult } = result;
-    return { success: true, data: safeResult };
+    return { success: true, data: result };
   }
 
   @Post('login')
@@ -50,8 +49,6 @@ export class AffiliateAuthController {
     );
     if (result.refreshToken) {
       res.cookie('affiliateRefreshToken', result.refreshToken, affiliateRefreshCookieOptions());
-      const { refreshToken: _, ...safeResult } = result;
-      return { success: true, data: safeResult };
     }
     return { success: true, data: result };
   }
@@ -60,15 +57,17 @@ export class AffiliateAuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refresh affiliate portal session' })
   async refresh(@Body() body: any, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const rawRefreshToken = req.cookies?.affiliateRefreshToken || body?.refreshToken;
+    const rawRefreshToken =
+      req.cookies?.affiliateRefreshToken ||
+      (req.headers['x-refresh-token'] as string) ||
+      body?.refreshToken;
     const result = await this.affiliateAuthService.refresh(
       rawRefreshToken,
       req.headers['user-agent'],
       req.ip || (req.headers['x-forwarded-for'] as string),
     );
     res.cookie('affiliateRefreshToken', result.refreshToken, affiliateRefreshCookieOptions());
-    const { refreshToken: _, ...safeResult } = result;
-    return { success: true, data: safeResult };
+    return { success: true, data: result };
   }
 
   @Post('logout')

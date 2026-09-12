@@ -264,8 +264,8 @@ export class DocumentRendererService {
       ...options.data,
       organization: {
         name: options.brandSettings?.name || 'PartnerIQ Technologies',
-        supportEmail: options.brandSettings?.supportEmail || 'support@partneriq.io',
-        websiteUrl: options.brandSettings?.websiteUrl || 'https://partneriq.io',
+        supportEmail: options.brandSettings?.supportEmail || 'info@partneriq.in',
+        websiteUrl: options.brandSettings?.websiteUrl || 'https://partneriq.in',
         address: options.brandSettings?.physicalAddress || '548 Market St, San Francisco, CA',
         logoUrl: options.brandSettings?.logoUrl,
         ...(options.data?.organization || {}),

@@ -109,6 +109,17 @@ export async function seedSystemDefaults() {
   await seedEmailDesignDefaults(emailDesignTemplates);
   await seedEmailDesignSettings(emailDesignSettings);
 
+  // 4. Ensure organization_brandings table columns support large image URLs / data URLs
+  try {
+    await dataSource.query(`ALTER TABLE organization_brandings MODIFY COLUMN logoUrl MEDIUMTEXT NULL`);
+    await dataSource.query(`ALTER TABLE organization_brandings MODIFY COLUMN logoDarkUrl MEDIUMTEXT NULL`);
+    await dataSource.query(`ALTER TABLE organization_brandings MODIFY COLUMN faviconUrl MEDIUMTEXT NULL`);
+    await dataSource.query(`ALTER TABLE organization_brandings MODIFY COLUMN heroImageUrl MEDIUMTEXT NULL`);
+    await dataSource.query(`ALTER TABLE organization_brandings MODIFY COLUMN seoImageUrl MEDIUMTEXT NULL`);
+  } catch (err) {
+    // Ignore if table doesn't exist yet or columns already altered
+  }
+
   console.log('✅ Essential PartnerIQ system defaults initialized (0 dummy orgs/users created).');
 }
 
@@ -1100,12 +1111,11 @@ async function seedEmailDesignSettings(emailDesignSettingsRepo: any) {
       companyLegal: 'PartnerIQ Technologies Inc.',
       logoUrl:
         'https://res.cloudinary.com/bunny1705/image/upload/v1787584202/partneriq/92977d80-3e51-4a12-a382-64b42fb5466a/organization-logo/rrhwttefwtgrxico2rtv.png',
-      websiteUrl: 'https://partneriq.io',
-      docsUrl: 'https://docs.partneriq.io',
-      helpCenterUrl: 'https://help.partneriq.io',
-      privacyUrl: 'https://partneriq.io/privacy',
-      termsUrl: 'https://partneriq.io/terms',
-      supportEmail: 'support@partneriq.io',
+      websiteUrl: 'https://partneriq.in',
+      docsUrl: 'https://docs.partneriq.in',
+      privacyUrl: 'https://partneriq.in/privacy',
+      termsUrl: 'https://partneriq.in/terms',
+      supportEmail: 'info@partneriq.in',
       physicalAddress: '548 Market St, Suite 39201, San Francisco, CA 94104',
       updatedAt: new Date().toISOString(),
     },

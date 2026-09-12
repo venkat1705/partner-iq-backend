@@ -19,16 +19,39 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { v4 as uuidv4 } from 'uuid';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { dbStore } from '../../database/store';
-import { AffiliateStatus, TrackingLinkStatus, EnvironmentType } from '../../common/enums';
+import { AffiliateStatus, TrackingLinkStatus, EnvironmentType, PayoutStatus } from '../../common/enums';
 import { SecurityUtils } from '../../common/utils/security.utils';
 import { AuthService } from '../auth/auth.service';
 import { initializeDataSource } from '../../database/data-source';
-import { AffiliatePayoutMethod, AffiliatePortalProfile, AffiliateSupportTicket, User } from '../../database/schema';
-import { IsNull } from 'typeorm';
+import {
+  User,
+  UserIdentity,
+  AuthSession,
+  Affiliate,
+  AffiliatePortalProfile,
+  AffiliatePayoutMethod,
+  AffiliateSupportTicket,
+  AffiliateInvitation,
+  Program,
+  ProgramAffiliate,
+  Organization,
+  OrganizationBranding,
+  TrackingLink,
+  Conversion,
+  Commission,
+  PayoutBatch,
+  PayoutItem,
+  BillingCoupon,
+  BillingCouponOrganization,
+  Asset,
+  PartnerTier,
+  AffiliateTier,
+  AffiliateApplication,
+} from '../../database/schema';
+import { IsNull, In } from 'typeorm';
 import { UserStatus, PlatformRole } from '../../common/enums';
 import { assertUserEligibleForAffiliate } from './affiliate-eligibility.policy';
 import { AffiliatesService } from './affiliates.service';
-
 
 @ApiTags('Affiliate Self Portal')
 @Controller()
@@ -48,9 +71,28 @@ export class AffiliatePortalController {
     const dataSource = await initializeDataSource();
     return {
       users: dataSource.getRepository(User),
+      userIdentities: dataSource.getRepository(UserIdentity),
+      authSessions: dataSource.getRepository(AuthSession),
+      affiliates: dataSource.getRepository(Affiliate),
       affiliatePortalProfiles: dataSource.getRepository(AffiliatePortalProfile),
       affiliatePayoutMethods: dataSource.getRepository(AffiliatePayoutMethod),
       affiliateSupportTickets: dataSource.getRepository(AffiliateSupportTicket),
+      affiliateInvitations: dataSource.getRepository(AffiliateInvitation),
+      programs: dataSource.getRepository(Program),
+      programAffiliates: dataSource.getRepository(ProgramAffiliate),
+      organizations: dataSource.getRepository(Organization),
+      organizationBrandings: dataSource.getRepository(OrganizationBranding),
+      trackingLinks: dataSource.getRepository(TrackingLink),
+      conversions: dataSource.getRepository(Conversion),
+      commissions: dataSource.getRepository(Commission),
+      payoutBatches: dataSource.getRepository(PayoutBatch),
+      payoutItems: dataSource.getRepository(PayoutItem),
+      billingCoupons: dataSource.getRepository(BillingCoupon),
+      billingCouponOrganizations: dataSource.getRepository(BillingCouponOrganization),
+      assets: dataSource.getRepository(Asset),
+      partnerTiers: dataSource.getRepository(PartnerTier),
+      affiliateTiers: dataSource.getRepository(AffiliateTier),
+      affiliateApplications: dataSource.getRepository(AffiliateApplication),
     };
   }
 
@@ -110,9 +152,14 @@ export class AffiliatePortalController {
 
   private async serializeAffiliateProfile(req: any) {
     const { user, profile } = await this.resolveAffiliateProfile(req);
+    const { userIdentities } = await this.repositories();
     const isOnboarded = Boolean(
       profile.onboardingCompleted ?? (profile.primaryMarket && (profile.bio || profile.website))
     );
+
+    const googleIdentity = user?.id
+      ? await userIdentities.findOne({ where: { userId: user.id, provider: 'GOOGLE' } })
+      : null;
 
     return {
       user: {
@@ -121,7 +168,7 @@ export class AffiliatePortalController {
         fullName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email.split('@')[0],
         avatarUrl: user.avatarUrl || '',
         is2faEnabled: Boolean((user as any).mfa?.enabled || (user as any).mfaEnabled),
-        googleConnected: dbStore.userIdentities.some((item) => item.userId === user.id && item.provider === 'GOOGLE'),
+        googleConnected: Boolean(googleIdentity),
         hasPassword: Boolean((user as any).passwordHash),
         createdAt: user.createdAt,
       },
@@ -184,13 +231,32 @@ export class AffiliatePortalController {
     return updates;
   }
 
-  private resolveAffiliatesForUser(email: string) {
-    const matched = dbStore.affiliates.filter((a) => a.email.toLowerCase() === email);
-    return matched;
+  private async resolveAffiliatesForUser(email: string, userId?: string) {
+    const { affiliates } = await this.repositories();
+    const normalized = email.toLowerCase().trim();
+    const qb = affiliates.createQueryBuilder('affiliate');
+    if (userId) {
+      qb.where('(LOWER(affiliate.email) = :email OR affiliate.userId = :userId)', { email: normalized, userId });
+    } else {
+      qb.where('LOWER(affiliate.email) = :email', { email: normalized });
+    }
+    const list = await qb.getMany();
+    if (userId && list.length > 0) {
+      const missingUserId = list.filter((a) => !a.userId);
+      if (missingUserId.length > 0) {
+        for (const a of missingUserId) {
+          a.userId = userId;
+          try {
+            await affiliates.save(a);
+          } catch { }
+        }
+      }
+    }
+    return list;
   }
 
   // ----------------------------------------------------
-  // Affiliate Auth — Register (relaxed rules for affiliates)
+  // Affiliate Auth — Register
   // ----------------------------------------------------
   @Post('api/v1/affiliate/legacy/auth/register')
   @HttpCode(HttpStatus.CREATED)
@@ -213,8 +279,7 @@ export class AffiliatePortalController {
     const firstName = nameParts[0] || 'Partner';
     const lastName = nameParts.slice(1).join(' ') || '';
 
-    const dataSource = await initializeDataSource();
-    const users = dataSource.getRepository(User);
+    const { users, affiliatePortalProfiles } = await this.repositories();
 
     const existing = await users.findOne({
       where: { email: normalizedEmail, deletedAt: IsNull() },
@@ -236,11 +301,10 @@ export class AffiliatePortalController {
     });
     const savedUser = await users.save(newUser);
 
-    if (!dbStore.users.some((item) => item.id === savedUser.id)) {
+    if (dbStore.users && !dbStore.users.some((item) => item.id === savedUser.id)) {
       dbStore.users.push(savedUser);
     }
 
-    const { affiliatePortalProfiles } = await this.repositories();
     await affiliatePortalProfiles.save(affiliatePortalProfiles.create({
       userId: savedUser.id,
       email: normalizedEmail,
@@ -258,7 +322,6 @@ export class AffiliatePortalController {
       taxFormType: 'PAN_TDS',
     }));
 
-    // Use AuthService to create session tokens if available
     if (this.authService) {
       const loginResult = await this.authService.login(
         { email: normalizedEmail, password },
@@ -293,7 +356,6 @@ export class AffiliatePortalController {
     };
   }
 
-
   @Get('api/v1/affiliate/me/profile')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -316,7 +378,7 @@ export class AffiliatePortalController {
       ...(profileUpdates.socialProfiles || {}),
     };
 
-    if (user) {
+    if (user && user.id) {
       if (body.fullName) {
         const parts = body.fullName.trim().split(' ');
         user.firstName = parts[0] || user.firstName;
@@ -344,24 +406,77 @@ export class AffiliatePortalController {
   @ApiOperation({ summary: 'Aggregated affiliate dashboard metrics' })
   async getDashboard(@Req() req: any, @Query('organizationId') organizationId?: string) {
     const email = this.resolveAffiliateEmail(req);
-    const affiliates = this.resolveAffiliatesForUser(email);
-    const scopedAffiliates = organizationId ? affiliates.filter((affiliate) => affiliate.organizationId === organizationId) : affiliates;
-    const affiliateIds = scopedAffiliates.map((affiliate) => affiliate.id);
-    const links = dbStore.trackingLinks.filter((link) => affiliateIds.includes(link.affiliateId));
-    const conversions = dbStore.conversions.filter((conversion) => affiliateIds.includes(conversion.affiliateId));
-    const commissions = dbStore.commissions.filter((commission) => affiliateIds.includes(commission.affiliateId));
-    const payoutItems = dbStore.payoutItems.filter((item) => affiliateIds.includes(item.affiliateId));
+    const userId = req.user?.userId || req.user?.id || req.user?.sub;
+    const affiliates = await this.resolveAffiliatesForUser(email, userId);
+    const scopedAffiliates = organizationId ? affiliates.filter((a) => a.organizationId === organizationId) : affiliates;
+    const affiliateIds = scopedAffiliates.map((a) => a.id);
 
-    const totalEarnings = commissions.reduce((sum, commission: any) => sum + (commission.amount || commission.commissionAmount || 0), 0);
-    const pendingCommission = commissions
-      .filter((commission: any) => commission.status === 'PENDING')
-      .reduce((sum, commission: any) => sum + (commission.amount || commission.commissionAmount || 0), 0);
-    const payableCommission = commissions
-      .filter((commission: any) => commission.status === 'PAYABLE' || commission.status === 'APPROVED')
-      .reduce((sum, commission: any) => sum + (commission.amount || commission.commissionAmount || 0), 0);
-    const paidCommission = payoutItems.reduce((sum, item: any) => sum + (item.netAmount || item.amount || 0), 0);
-    const clicks = links.reduce((sum, link: any) => sum + (link.clickCount || link.clicks || 0), 0);
-    const revenue = conversions.reduce((sum, conversion: any) => sum + (conversion.amount || conversion.value || 0), 0);
+    if (affiliateIds.length === 0) {
+      return {
+        totalEarnings: 0,
+        pendingCommission: 0,
+        payableCommission: 0,
+        paidCommission: 0,
+        clicks: 0,
+        uniqueVisitors: 0,
+        conversions: 0,
+        conversionRate: 0,
+        revenue: 0,
+        currentTier: {
+          name: 'Not enrolled',
+          tierLevel: 0,
+          minEarnings: 0,
+        },
+        topLinks: [],
+        topPrograms: [],
+        recentConversions: [],
+        recentPayouts: [],
+      };
+    }
+
+    const { trackingLinks, conversions, commissions, payoutItems, programAffiliates } = await this.repositories();
+
+    const linksQuery = trackingLinks.createQueryBuilder('tl')
+      .where('tl.affiliateId IN (:...affiliateIds)', { affiliateIds });
+    if (organizationId) {
+      linksQuery.andWhere('tl.organizationId = :organizationId', { organizationId });
+    }
+    const links = await linksQuery.orderBy('tl.createdAt', 'DESC').getMany();
+
+    const convQuery = conversions.createQueryBuilder('c')
+      .where('c.affiliateId IN (:...affiliateIds)', { affiliateIds });
+    if (organizationId) {
+      convQuery.andWhere('c.organizationId = :organizationId', { organizationId });
+    }
+    const convList = await convQuery.orderBy('c.createdAt', 'DESC').getMany();
+
+    const commQuery = commissions.createQueryBuilder('comm')
+      .where('comm.affiliateId IN (:...affiliateIds)', { affiliateIds });
+    if (organizationId) {
+      commQuery.andWhere('comm.organizationId = :organizationId', { organizationId });
+    }
+    const commList = await commQuery.orderBy('comm.createdAt', 'DESC').getMany();
+
+    const poList = await payoutItems.createQueryBuilder('po')
+      .where('po.affiliateId IN (:...affiliateIds)', { affiliateIds })
+      .orderBy('po.createdAt', 'DESC')
+      .getMany();
+
+    const progAffs = await programAffiliates.createQueryBuilder('pa')
+      .where('pa.affiliateId IN (:...affiliateIds)', { affiliateIds })
+      .take(5)
+      .getMany();
+
+    const totalEarnings = commList.reduce((sum, c: any) => sum + Number(c.amount || c.commissionAmount || 0), 0);
+    const pendingCommission = commList
+      .filter((c: any) => c.status === 'PENDING')
+      .reduce((sum, c: any) => sum + Number(c.amount || c.commissionAmount || 0), 0);
+    const payableCommission = commList
+      .filter((c: any) => c.status === 'PAYABLE' || c.status === 'APPROVED')
+      .reduce((sum, c: any) => sum + Number(c.amount || c.commissionAmount || 0), 0);
+    const paidCommission = poList.reduce((sum, item: any) => sum + Number(item.amount || (item as any).netAmount || 0), 0);
+    const clicks = links.reduce((sum, link: any) => sum + Number((link as any).clickCount || (link as any).clicks || 0), 0);
+    const revenue = convList.reduce((sum, conversion: any) => sum + Number(conversion.amount || (conversion as any).value || 0), 0);
 
     return {
       totalEarnings,
@@ -370,8 +485,8 @@ export class AffiliatePortalController {
       paidCommission,
       clicks,
       uniqueVisitors: Math.round(clicks * 0.82),
-      conversions: conversions.length,
-      conversionRate: clicks > 0 ? Number(((conversions.length / clicks) * 100).toFixed(2)) : 0,
+      conversions: convList.length,
+      conversionRate: clicks > 0 ? Number(((convList.length / clicks) * 100).toFixed(2)) : 0,
       revenue,
       currentTier: {
         name: scopedAffiliates.length ? 'Standard Partner' : 'Not enrolled',
@@ -379,9 +494,9 @@ export class AffiliatePortalController {
         minEarnings: 0,
       },
       topLinks: links.slice(0, 5),
-      topPrograms: dbStore.programAffiliates.filter((item) => affiliateIds.includes(item.affiliateId)).slice(0, 5),
-      recentConversions: conversions.slice(0, 5),
-      recentPayouts: payoutItems.slice(0, 5),
+      topPrograms: progAffs,
+      recentConversions: convList.slice(0, 5),
+      recentPayouts: poList.slice(0, 5),
     };
   }
 
@@ -394,55 +509,87 @@ export class AffiliatePortalController {
   @ApiOperation({ summary: 'List all organization partnerships for current affiliate' })
   async getPartnerships(@Req() req: any) {
     const email = this.resolveAffiliateEmail(req);
-    const affiliates = this.resolveAffiliatesForUser(email);
+    const userId = req.user?.userId || req.user?.id || req.user?.sub;
+    const affiliates = await this.resolveAffiliatesForUser(email, userId);
+    if (affiliates.length === 0) return [];
+
+    const orgIds = affiliates.map((a) => a.organizationId).filter(Boolean);
+    const {
+      organizations,
+      organizationBrandings,
+      programAffiliates,
+      trackingLinks,
+      conversions,
+      commissions,
+      payoutItems,
+      affiliateTiers,
+      partnerTiers,
+    } = await this.repositories();
+
+    const orgList = orgIds.length > 0 ? await organizations.createQueryBuilder('o')
+      .where('o.id IN (:...orgIds) AND o.deletedAt IS NULL', { orgIds })
+      .getMany() : [];
+
+    // load brandings for the organizations
+    const brandingList = orgIds.length > 0 ? await organizationBrandings.find({ where: { organizationId: In(orgIds) } }) : [];
+    const brandingMap: Record<string, any> = {};
+    for (const b of brandingList) brandingMap[b.organizationId] = b;
 
     const partnerships = [];
 
-    for (const org of dbStore.organizations) {
-      const aff = affiliates.find((a) => a.organizationId === org.id);
-      if (!aff) continue;
+    for (const aff of affiliates) {
+      let org = orgList.find((o) => o.id === aff.organizationId);
+      if (!org && aff.organizationId) {
+        org = await organizations.findOne({ where: { id: aff.organizationId } }) as any;
+        if (!org) {
+          org = {
+            id: aff.organizationId,
+            name: aff.displayName || 'Partner Brand',
+            slug: 'partner-brand',
+            status: 'ACTIVE',
+            defaultCurrency: 'USD',
+          } as any;
+        }
+      }
+      if (!org) continue;
 
-      // Find program affiliations
-      const progAffs = dbStore.programAffiliates.filter(
-        (pa) => pa.organizationId === org.id && pa.affiliateId === aff.id,
-      );
+      const progAffs = await programAffiliates.find({
+        where: { organizationId: org.id, affiliateId: aff.id },
+      });
 
-      // Find tracking links
-      const links = dbStore.trackingLinks.filter(
-        (tl) => tl.organizationId === org.id && tl.affiliateId === aff.id,
-      );
+      const links = await trackingLinks.find({
+        where: { organizationId: org.id, affiliateId: aff.id },
+      });
 
-      // Find conversions
-      const conversions = dbStore.conversions.filter(
-        (c) => c.organizationId === org.id && c.affiliateId === aff.id,
-      );
+      const convs = await conversions.find({
+        where: { organizationId: org.id, affiliateId: aff.id },
+      });
 
-      // Find commissions
-      const commissions = dbStore.commissions.filter(
-        (c) => c.organizationId === org.id && c.affiliateId === aff.id,
-      );
+      const comms = await commissions.find({
+        where: { organizationId: org.id, affiliateId: aff.id },
+      });
 
-      // Find payouts
-      const payoutItems = dbStore.payoutItems.filter(
-        (pi) => pi.affiliateId === aff.id,
-      );
+      const pos = await payoutItems.find({
+        where: { affiliateId: aff.id },
+      });
 
-      const totalClicks = links.reduce((acc, l) => acc + ((l as any).clickCount || (l as any).clicks || 0), 0);
-      const totalEarnings = commissions.reduce((acc, c) => acc + ((c as any).amount || (c as any).commissionAmount || 0), 0);
-      const pendingCommission = commissions
+      const totalClicks = links.reduce((acc, l: any) => acc + Number(l.clickCount || l.clicks || 0), 0);
+      const totalEarnings = comms.reduce((acc, c: any) => acc + Number(c.amount || c.commissionAmount || 0), 0);
+      const pendingCommission = comms
         .filter((c: any) => c.status === 'PENDING')
-        .reduce((acc, c) => acc + ((c as any).amount || (c as any).commissionAmount || 0), 0);
-      const payableCommission = commissions
+        .reduce((acc, c: any) => acc + Number(c.amount || c.commissionAmount || 0), 0);
+      const payableCommission = comms
         .filter((c: any) => c.status === 'PAYABLE' || c.status === 'APPROVED')
-        .reduce((acc, c) => acc + ((c as any).amount || (c as any).commissionAmount || 0), 0);
-      const paidCommission = payoutItems.reduce((acc, p) => acc + ((p as any).netAmount || p.amount || 0), 0);
-      const attributedRevenue = conversions.reduce((acc, c) => acc + (c.amount || (c as any).value || 0), 0);
+        .reduce((acc, c: any) => acc + Number(c.amount || c.commissionAmount || 0), 0);
+      const paidCommission = pos.reduce((acc, p: any) => acc + Number(p.amount || (p as any).netAmount || 0), 0);
+      const attributedRevenue = convs.reduce((acc, c: any) => acc + Number(c.amount || (c as any).value || 0), 0);
 
-      // Tier name
-      const affTier = dbStore.affiliateTiers.find(
-        (at) => at.organizationId === org.id && at.affiliateId === aff.id,
-      );
-      const tierDef = affTier ? dbStore.partnerTiers.find((t) => t.id === affTier.currentTierId) : null;
+      const affTier = await affiliateTiers.findOne({
+        where: { organizationId: org.id, affiliateId: aff.id },
+      });
+      const tierDef = affTier?.currentTierId
+        ? await partnerTiers.findOne({ where: { id: affTier.currentTierId } })
+        : null;
 
       partnerships.push({
         id: `orgaff_${org.id}`,
@@ -455,7 +602,7 @@ export class AffiliatePortalController {
         payableCommission,
         paidCommission,
         clicks: totalClicks,
-        conversions: conversions.length,
+        conversions: convs.length,
         attributedRevenue,
         activeProgramsCount: progAffs.length || 1,
         currentTierName: tierDef?.name || 'Standard Partner',
@@ -475,14 +622,14 @@ export class AffiliatePortalController {
           industry: (org as any).industry || 'Software',
           description: (org as any).description || `${org.name} Official Partner Network`,
           branding: {
-            primaryColor: (org as any).branding?.primaryColor || (org.slug === 'zenpay' ? '158 64% 40%' : '221 83% 53%'),
-            accentColor: (org as any).branding?.accentColor || (org.slug === 'zenpay' ? '173 80% 36%' : '262 83% 58%'),
-            logoUrl: (org as any).branding?.logoUrl || (org.slug === 'zenpay'
+            primaryColor: (brandingMap[org.id]?.primaryColor) || (org.slug === 'zenpay' ? '158 64% 40%' : '221 83% 53%'),
+            accentColor: (brandingMap[org.id]?.secondaryColor) || (org.slug === 'zenpay' ? '173 80% 36%' : '262 83% 58%'),
+            logoUrl: (brandingMap[org.id]?.logoUrl) || (org.slug === 'zenpay'
               ? 'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?w=120&auto=format&fit=crop&q=80'
               : 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80'),
-            coverImageUrl: (org as any).branding?.coverImageUrl,
-            headline: (org as any).branding?.headline || `Partner with ${org.name}`,
-            tagline: (org as any).branding?.tagline || `Earn competitive recurring commissions with ${org.name}.`,
+            coverImageUrl: (brandingMap[org.id]?.heroImageUrl),
+            headline: (brandingMap[org.id]?.heroTitle) || `Partner with ${org.name}`,
+            tagline: (brandingMap[org.id]?.heroDescription) || `Earn competitive recurring commissions with ${org.name}.`,
           },
         },
       });
@@ -500,23 +647,47 @@ export class AffiliatePortalController {
   @ApiOperation({ summary: 'List programs available to or joined by current affiliate' })
   async getPrograms(@Req() req: any, @Query('organizationId') organizationId?: string) {
     const email = this.resolveAffiliateEmail(req);
-    const affiliates = this.resolveAffiliatesForUser(email);
+    const userId = req.user?.userId || req.user?.id || req.user?.sub;
+    const affiliates = await this.resolveAffiliatesForUser(email, userId);
+    const { programs, organizations, programAffiliates, partnerTiers, affiliateApplications } = await this.repositories();
 
-    let programs = dbStore.programs.filter((p) => !p.deletedAt);
-    if (organizationId) {
-      programs = programs.filter((p) => p.organizationId === organizationId);
-    }
+    const programList = await programs.find({
+      where: {
+        deletedAt: IsNull(),
+        ...(organizationId ? { organizationId } : {}),
+      },
+    });
 
-    return programs.map((p) => {
-      const org = dbStore.organizations.find((o) => o.id === p.organizationId);
+    const orgIds = [...new Set(programList.map((p) => p.organizationId))];
+    const orgList = orgIds.length ? await organizations.find({ where: { id: In(orgIds) } }) : [];
+
+    const programAffList = affiliates.length
+      ? await programAffiliates.find({ where: { affiliateId: In(affiliates.map((a) => a.id)) } })
+      : [];
+
+    let dbApps: any[] = [];
+    try {
+      dbApps = await affiliateApplications.find({ where: { email: email.toLowerCase().trim() } });
+    } catch { }
+    const memApps = dbStore.affiliateApplications.filter(
+      (a) => a.email.toLowerCase().trim() === email.toLowerCase().trim()
+    );
+    const allUserApps = [...memApps, ...dbApps];
+
+    const allTiers = orgIds.length
+      ? await partnerTiers.find({ where: { organizationId: In(orgIds), isActive: true, deletedAt: IsNull() } })
+      : [];
+
+    return programList.map((p) => {
+      const org = orgList.find((o) => o.id === p.organizationId);
       const aff = affiliates.find((a) => a.organizationId === p.organizationId);
-      const progAff = aff ? dbStore.programAffiliates.find((pa) => pa.programId === p.id && pa.affiliateId === aff.id) : null;
+      const progAff = aff ? programAffList.find((pa) => pa.programId === p.id && pa.affiliateId === aff.id) : null;
+      const userApp = allUserApps.find((a) => a.programId === p.id);
       const isFlat = (p as any).commissionType === 'FIXED_AMOUNT';
       const rate = p.defaultCommissionValue ? (isFlat ? p.defaultCommissionValue / 100 : p.defaultCommissionValue / 100) : 20;
 
-      // Partner Tiers
-      const tiers = dbStore.partnerTiers
-        .filter((t) => t.organizationId === p.organizationId && (!t.programId || t.programId === p.id) && t.isActive && !t.deletedAt)
+      const tiers = allTiers
+        .filter((t) => t.organizationId === p.organizationId && (!t.programId || t.programId === p.id))
         .map((t) => ({
           id: t.id,
           name: t.name,
@@ -547,6 +718,9 @@ export class AffiliatePortalController {
         category: (p as any).category || 'Software & Tech',
         landingPageUrl: (p as any).landingPageUrl || (org?.website ? `${org.website}/partners` : 'https://partneriq.in'),
         termsAndConditions: (p as any).termsAndConditions || 'Brand bidding on search ads is strictly prohibited.',
+        affiliateApprovalMode: p.affiliateApprovalMode || 'AUTO',
+        applicationStatus: userApp?.status || (progAff ? (progAff.status === 'ACTIVE' ? 'APPROVED' : 'PENDING') : null),
+        applicationId: userApp?.id || null,
         tiers: tiers.length > 0 ? tiers : [
           { id: 'tier_1', name: 'Standard Partner', minMonthlyRevenue: 0, commissionRateBonus: 0, perks: ['Standard cookie attribution', 'Monthly payouts'] },
           { id: 'tier_2', name: 'Gold Partner', minMonthlyRevenue: 5000, commissionRateBonus: 5, perks: ['+5% commission bonus', 'Dedicated Partner Manager'] },
@@ -567,10 +741,32 @@ export class AffiliatePortalController {
   // ----------------------------------------------------
   @Get('api/v1/public/programs')
   @ApiOperation({ summary: 'Public marketplace programs' })
-  async getPublicPrograms(@Query('category') category?: string) {
-    let programs = dbStore.programs.filter((p) => !p.deletedAt);
-    return programs.map((p) => {
-      const org = dbStore.organizations.find((o) => o.id === p.organizationId);
+  async getPublicPrograms(
+    @Query('category') category?: string,
+    @Query('organizationId') organizationId?: string,
+    @Query('slug') slug?: string,
+  ) {
+    const { programs, organizations, organizationBrandings } = await this.repositories();
+    let targetOrgId = organizationId;
+    if (!targetOrgId && slug) {
+      const cleanSlug = slug.toLowerCase().trim();
+      const matchedOrg = await organizations.findOne({ where: { slug: cleanSlug } });
+      if (matchedOrg) targetOrgId = matchedOrg.id;
+    }
+
+    const whereClause: any = { deletedAt: IsNull() };
+    if (targetOrgId) {
+      whereClause.organizationId = targetOrgId;
+    }
+    const programList = await programs.find({ where: whereClause });
+    const orgIds = [...new Set(programList.map((p) => p.organizationId))];
+    const orgList = orgIds.length ? await organizations.find({ where: { id: In(orgIds) } }) : [];
+    const brandingList = orgIds.length ? await organizationBrandings.find({ where: { organizationId: In(orgIds) } }) : [];
+    const brandingMap: Record<string, any> = {};
+    for (const b of brandingList) brandingMap[b.organizationId] = b;
+
+    return programList.map((p) => {
+      const org = orgList.find((o) => o.id === p.organizationId);
       const isFlat = (p as any).commissionType === 'FIXED_AMOUNT';
       const rate = p.defaultCommissionValue ? (isFlat ? p.defaultCommissionValue / 100 : p.defaultCommissionValue / 100) : 25;
 
@@ -578,7 +774,7 @@ export class AffiliatePortalController {
         id: p.id,
         organizationId: p.organizationId,
         brandName: org?.name || 'PartnerIQ Brand',
-        brandLogo: (org as any)?.branding?.logoUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80',
+        brandLogo: (brandingMap[org?.id]?.logoUrl) || (org as any)?.branding?.logoUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80',
         title: p.name,
         slug: p.slug,
         category: (p as any).category || 'SAAS',
@@ -586,10 +782,144 @@ export class AffiliatePortalController {
         cookieWindow: `${p.cookieDurationDays || 60} Days`,
         avgEpc: '$4.20',
         featured: (p as any).featured ?? true,
+        affiliateApprovalMode: p.affiliateApprovalMode || 'AUTO',
         instantApproval: p.affiliateApprovalMode === 'AUTO',
         description: (p as any).description || `Earn high-converting commissions with ${org?.name || p.name}.`,
       };
     });
+  }
+
+  @Get('api/v1/public/organizations/:slug/programs')
+  @ApiOperation({ summary: 'Public programs for specific organization by slug' })
+  async getPublicProgramsByOrg(
+    @Param('slug') slug: string,
+    @Query('category') category?: string,
+  ) {
+    return this.getPublicPrograms(category, undefined, slug);
+  }
+
+  // ----------------------------------------------------
+  // Applications
+  // ----------------------------------------------------
+  @Get('api/v1/affiliate/me/applications')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List program applications submitted by current affiliate' })
+  async getMyApplications(@Req() req: any, @Query('organizationId') organizationId?: string) {
+    const email = this.resolveAffiliateEmail(req);
+    const { affiliateApplications, programs, organizations } = await this.repositories();
+
+    let apps: any[] = [];
+    try {
+      apps = await affiliateApplications.find({
+        where: {
+          email: email.toLowerCase().trim(),
+          ...(organizationId ? { organizationId } : {}),
+        },
+        order: { createdAt: 'DESC' },
+      });
+    } catch { }
+
+    if (!apps.length) {
+      apps = dbStore.affiliateApplications.filter(
+        (a) => a.email.toLowerCase().trim() === email.toLowerCase().trim() && (!organizationId || a.organizationId === organizationId)
+      );
+    } else {
+      const dbIds = new Set(apps.map((a) => a.id));
+      const memoryApps = dbStore.affiliateApplications.filter(
+        (a) => a.email.toLowerCase().trim() === email.toLowerCase().trim() && (!organizationId || a.organizationId === organizationId) && !dbIds.has(a.id)
+      );
+      apps = [...memoryApps, ...apps];
+    }
+
+    const progIds = [...new Set(apps.map((a) => a.programId))];
+    const orgIds = [...new Set(apps.map((a) => a.organizationId))];
+    const progList = progIds.length ? await programs.find({ where: { id: In(progIds) } }) : [];
+    const orgList = orgIds.length ? await organizations.find({ where: { id: In(orgIds) } }) : [];
+
+    return apps.map((app) => {
+      const prog = progList.find((p) => p.id === app.programId) || dbStore.programs.find((p) => p.id === app.programId);
+      const org = orgList.find((o) => o.id === app.organizationId) || dbStore.organizations.find((o) => o.id === app.organizationId);
+      const isFlat = (prog as any)?.commissionType === 'FIXED_AMOUNT';
+      const rate = prog?.defaultCommissionValue ? (isFlat ? prog.defaultCommissionValue / 100 : prog.defaultCommissionValue / 100) : 20;
+
+      return {
+        id: app.id,
+        organizationId: app.organizationId,
+        organizationName: org?.name || 'Partner Organization',
+        programId: app.programId,
+        programName: prog?.name || 'Affiliate Program',
+        programCategory: (prog as any)?.category || 'SaaS',
+        programDescription: (prog as any)?.description || '',
+        commissionSummary: isFlat ? `$${rate} Flat` : `${rate}% Recurring`,
+        cookieWindow: `${prog?.cookieDurationDays || 60} Days`,
+        affiliateApprovalMode: prog?.affiliateApprovalMode || 'AUTO',
+        name: app.name,
+        email: app.email,
+        website: app.website,
+        promotionMethod: app.promotionMethod,
+        audienceSize: app.audienceSize,
+        country: app.country,
+        status: app.status,
+        reviewedBy: app.reviewedBy,
+        reviewedAt: app.reviewedAt,
+        createdAt: app.createdAt,
+      };
+    });
+  }
+
+  @Get('api/v1/affiliate/me/applications/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get a specific program application for current affiliate' })
+  async getMyApplicationById(@Req() req: any, @Param('id') id: string) {
+    const email = this.resolveAffiliateEmail(req);
+    const { affiliateApplications, programs, organizations } = await this.repositories();
+
+    let app: any = null;
+    try {
+      app = await affiliateApplications.findOne({
+        where: { id, email: email.toLowerCase().trim() },
+      });
+    } catch { }
+
+    if (!app) {
+      app = dbStore.affiliateApplications.find(
+        (a) => a.id === id && a.email.toLowerCase().trim() === email.toLowerCase().trim()
+      );
+    }
+
+    if (!app) {
+      throw new NotFoundException('Application not found');
+    }
+
+    const prog = await programs.findOne({ where: { id: app.programId } }) || dbStore.programs.find((p) => p.id === app.programId);
+    const org = await organizations.findOne({ where: { id: app.organizationId } }) || dbStore.organizations.find((o) => o.id === app.organizationId);
+    const isFlat = (prog as any)?.commissionType === 'FIXED_AMOUNT';
+    const rate = prog?.defaultCommissionValue ? (isFlat ? prog.defaultCommissionValue / 100 : prog.defaultCommissionValue / 100) : 20;
+
+    return {
+      id: app.id,
+      organizationId: app.organizationId,
+      organizationName: org?.name || 'Partner Organization',
+      programId: app.programId,
+      programName: prog?.name || 'Affiliate Program',
+      programCategory: (prog as any)?.category || 'SaaS',
+      programDescription: (prog as any)?.description || '',
+      commissionSummary: isFlat ? `$${rate} Flat` : `${rate}% Recurring`,
+      cookieWindow: `${prog?.cookieDurationDays || 60} Days`,
+      affiliateApprovalMode: prog?.affiliateApprovalMode || 'AUTO',
+      name: app.name,
+      email: app.email,
+      website: app.website,
+      promotionMethod: app.promotionMethod,
+      audienceSize: app.audienceSize,
+      country: app.country,
+      status: app.status,
+      reviewedBy: app.reviewedBy,
+      reviewedAt: app.reviewedAt,
+      createdAt: app.createdAt,
+    };
   }
 
   // ----------------------------------------------------
@@ -601,22 +931,41 @@ export class AffiliatePortalController {
   @ApiOperation({ summary: 'List tracking links for current affiliate' })
   async getLinks(@Req() req: any, @Query('organizationId') organizationId?: string) {
     const email = this.resolveAffiliateEmail(req);
-    const affiliates = this.resolveAffiliatesForUser(email);
+    const userId = req.user?.userId || req.user?.id || req.user?.sub;
+    const affiliates = await this.resolveAffiliatesForUser(email, userId);
     const affiliateIds = affiliates.map((a) => a.id);
+    if (affiliateIds.length === 0) return [];
 
-    let links = dbStore.trackingLinks.filter((tl) => affiliateIds.includes(tl.affiliateId));
-    if (organizationId) {
-      links = links.filter((tl) => tl.organizationId === organizationId);
-    }
+    const { trackingLinks, programs, organizations, conversions, commissions } = await this.repositories();
 
-    return links.map((l) => {
-      const prog = dbStore.programs.find((p) => p.id === l.programId);
-      const org = dbStore.organizations.find((o) => o.id === l.organizationId);
-      const clicks = (l as any).clickCount || (l as any).clicks || 0;
-      const conversions = dbStore.conversions.filter((c: any) => c.trackingLinkId === l.id).length;
-      const commissionEarned = dbStore.commissions
-        .filter((c: any) => c.trackingLinkId === l.id)
-        .reduce((acc, c) => acc + ((c as any).amount || (c as any).commissionAmount || 0), 0);
+    const linkList = await trackingLinks.find({
+      where: {
+        affiliateId: In(affiliateIds),
+        ...(organizationId ? { organizationId } : {}),
+      },
+      order: { createdAt: 'DESC' },
+    });
+
+    const progIds = [...new Set(linkList.map((l) => l.programId).filter(Boolean))];
+    const orgIds = [...new Set(linkList.map((l) => l.organizationId).filter(Boolean))];
+    const progList = progIds.length ? await programs.find({ where: { id: In(progIds) } }) : [];
+    const orgList = orgIds.length ? await organizations.find({ where: { id: In(orgIds) } }) : [];
+
+    const convList = await conversions.find({
+      where: { affiliateId: In(affiliateIds) },
+    });
+    const commList = await commissions.find({
+      where: { affiliateId: In(affiliateIds) },
+    });
+
+    return linkList.map((l) => {
+      const prog = progList.find((p) => p.id === l.programId);
+      const org = orgList.find((o) => o.id === l.organizationId);
+      const clicks = Number((l as any).clickCount || (l as any).clicks || 0);
+      const linkConversions = convList.filter((c: any) => (c.trackingLinkId === l.id || c.metadata?.trackingLinkId === l.id)).length;
+      const commissionEarned = commList
+        .filter((c: any) => (c.trackingLinkId === l.id || (c as any).linkId === l.id))
+        .reduce((acc, c: any) => acc + Number(c.amount || c.commissionAmount || 0), 0);
 
       return {
         id: l.id,
@@ -628,12 +977,12 @@ export class AffiliatePortalController {
         destinationUrl: l.destinationUrl,
         trackingUrl: `https://${org?.slug || 'go'}.partneriq.in/r/${l.shortCode}`,
         customAlias: (l as any).customAlias || l.shortCode,
-        campaign: (l as any).campaign || '',
-        subId: (l as any).subId || '',
+        campaign: (l as any).campaign || (l as any).campaignId || '',
+        subId: l.subId || '',
         clicks,
         uniqueVisitors: Math.round(clicks * 0.82),
-        conversions,
-        revenue: conversions * 120,
+        conversions: linkConversions,
+        revenue: linkConversions * 120,
         commissionEarned,
         isArchived: l.status !== TrackingLinkStatus.ACTIVE,
         createdAt: l.createdAt,
@@ -651,21 +1000,37 @@ export class AffiliatePortalController {
     if (!orgId || !body.programId) {
       throw new BadRequestException('organizationId and programId are required.');
     }
-    let affiliate = dbStore.affiliates.find((a) => a.organizationId === orgId && a.email.toLowerCase() === email);
+
+    const { affiliates, programs, programAffiliates, trackingLinks, organizations } = await this.repositories();
+
+    const affiliate = await affiliates.findOne({
+      where: { organizationId: orgId, email: email.toLowerCase().trim() },
+    });
 
     if (!affiliate) {
       throw new BadRequestException('Join this organization as an affiliate before creating links.');
     }
 
-    const shortCode = body.slug || body.customAlias || SecurityUtils.generateRandomCode(8).toLowerCase();
-    const prog = dbStore.programs.find((p) => p.id === body.programId && p.organizationId === orgId);
+    const prog = await programs.findOne({
+      where: { id: body.programId, organizationId: orgId },
+    });
     if (!prog) throw new NotFoundException('Program not found');
-    const membership = dbStore.programAffiliates.find((item) => item.organizationId === orgId && item.programId === prog.id && item.affiliateId === affiliate.id && item.status === AffiliateStatus.ACTIVE);
+
+    const membership = await programAffiliates.findOne({
+      where: {
+        organizationId: orgId,
+        programId: prog.id,
+        affiliateId: affiliate.id,
+        status: AffiliateStatus.ACTIVE,
+      },
+    });
     if (!membership) {
       throw new BadRequestException('You must be an active member of this program before creating links.');
     }
 
-    const link = {
+    const shortCode = body.slug || body.customAlias || SecurityUtils.generateRandomCode(8).toLowerCase();
+
+    const link = trackingLinks.create({
       id: uuidv4(),
       organizationId: orgId,
       environment: EnvironmentType.LIVE,
@@ -674,36 +1039,38 @@ export class AffiliatePortalController {
       destinationUrl: body.destinationUrl || (prog as any)?.landingPageUrl || '',
       shortCode,
       status: TrackingLinkStatus.ACTIVE,
-      title: body.title || 'Custom Tracking Link',
-      customAlias: body.customAlias,
-      campaign: body.campaign,
       subId: body.subId,
-      clicks: 0,
-      createdAt: new Date(),
-    };
+      campaignId: body.campaign || body.campaignId,
+    });
+    (link as any).title = body.title || 'Custom Tracking Link';
+    (link as any).customAlias = body.customAlias;
 
-    dbStore.trackingLinks.unshift(link as any);
+    const saved = await trackingLinks.save(link);
 
-    const org = dbStore.organizations.find((o) => o.id === orgId);
+    if (dbStore.trackingLinks) {
+      dbStore.trackingLinks.unshift(saved as any);
+    }
+
+    const org = await organizations.findOne({ where: { id: orgId } });
     return {
-      id: link.id,
-      organizationId: link.organizationId,
-      programId: link.programId,
+      id: saved.id,
+      organizationId: saved.organizationId,
+      programId: saved.programId,
       programName: prog.name,
-      title: link.title,
-      slug: link.shortCode,
-      destinationUrl: link.destinationUrl,
-      trackingUrl: `https://${org?.slug || 'go'}.partneriq.in/r/${link.shortCode}`,
-      customAlias: link.customAlias,
-      campaign: link.campaign,
-      subId: link.subId,
+      title: (saved as any).title,
+      slug: saved.shortCode,
+      destinationUrl: saved.destinationUrl,
+      trackingUrl: `https://${org?.slug || 'go'}.partneriq.in/r/${saved.shortCode}`,
+      customAlias: (saved as any).customAlias,
+      campaign: (saved as any).campaign || saved.campaignId || '',
+      subId: saved.subId || '',
       clicks: 0,
       uniqueVisitors: 0,
       conversions: 0,
       revenue: 0,
       commissionEarned: 0,
       isArchived: false,
-      createdAt: link.createdAt,
+      createdAt: saved.createdAt,
     };
   }
 
@@ -713,10 +1080,18 @@ export class AffiliatePortalController {
   @ApiOperation({ summary: 'Archive/delete tracking link' })
   async deleteLink(@Req() req: any, @Param('linkId') linkId: string) {
     const email = this.resolveAffiliateEmail(req);
-    const affiliateIds = this.resolveAffiliatesForUser(email).map((affiliate) => affiliate.id);
-    const idx = dbStore.trackingLinks.findIndex((l) => l.id === linkId && affiliateIds.includes(l.affiliateId));
-    if (idx !== -1) {
-      dbStore.trackingLinks[idx].status = TrackingLinkStatus.INACTIVE;
+    const userId = req.user?.userId || req.user?.id || req.user?.sub;
+    const affiliates = await this.resolveAffiliatesForUser(email, userId);
+    const affiliateIds = affiliates.map((a) => a.id);
+
+    const { trackingLinks } = await this.repositories();
+    const link = await trackingLinks.findOne({ where: { id: linkId } });
+    if (link && affiliateIds.includes(link.affiliateId)) {
+      await trackingLinks.update({ id: linkId }, { status: TrackingLinkStatus.INACTIVE });
+      if (dbStore.trackingLinks) {
+        const storeLink = dbStore.trackingLinks.find((l) => l.id === linkId);
+        if (storeLink) storeLink.status = TrackingLinkStatus.INACTIVE;
+      }
     }
     return { success: true };
   }
@@ -730,26 +1105,40 @@ export class AffiliatePortalController {
   @ApiOperation({ summary: 'List coupons for current affiliate' })
   async getCoupons(@Req() req: any, @Query('organizationId') organizationId?: string) {
     const email = this.resolveAffiliateEmail(req);
-    const orgIds = this.resolveAffiliatesForUser(email).map((affiliate) => affiliate.organizationId);
-    let coupons = dbStore.billingCoupons.filter((coupon: any) => coupon.organizationId && orgIds.includes(coupon.organizationId));
-    if (organizationId) {
-      coupons = coupons.filter((c: any) => c.organizationId === organizationId);
-    }
+    const userId = req.user?.userId || req.user?.id || req.user?.sub;
+    const affiliates = await this.resolveAffiliatesForUser(email, userId);
+    const orgIds = affiliates.map((a) => a.organizationId);
+    if (orgIds.length === 0) return [];
 
-    return coupons.map((c: any) => ({
-      id: c.id,
-      organizationId: c.organizationId,
-      programId: c.programId || '',
-      code: c.code,
-      discountSummary: c.discountSummary || (c.type === 'PERCENTAGE' ? `${c.amountOrPercentage || 0}% off` : `$${(c.amountOrPercentage || 0) / 100} discount`),
-      discountType: c.type || 'PERCENTAGE',
-      discountValue: c.amountOrPercentage || 0,
-      uses: c.timesRedeemed || 0,
-      conversions: c.timesRedeemed || 0,
-      revenueGenerated: c.revenueGenerated || 0,
-      commissionEarned: c.commissionEarned || 0,
-      status: c.status || 'ACTIVE',
-    }));
+    const scopedOrgIds = organizationId ? orgIds.filter((id) => id === organizationId) : orgIds;
+    if (scopedOrgIds.length === 0) return [];
+
+    const { billingCoupons, billingCouponOrganizations } = await this.repositories();
+    const couponOrgs = await billingCouponOrganizations.find({
+      where: { organizationId: In(scopedOrgIds) },
+    });
+    const couponIds = [...new Set(couponOrgs.map((co) => co.couponId))];
+    const couponList = couponIds.length
+      ? await billingCoupons.find({ where: { id: In(couponIds) } })
+      : [];
+
+    return couponList.map((c: any) => {
+      const co = couponOrgs.find((item) => item.couponId === c.id);
+      return {
+        id: c.id,
+        organizationId: co?.organizationId || scopedOrgIds[0],
+        programId: c.programId || '',
+        code: c.code,
+        discountSummary: c.description || (c.discountType === 'PERCENTAGE' ? `${c.discountValue || 0}% off` : `$${(c.discountValue || 0) / 100} discount`),
+        discountType: c.discountType || 'PERCENTAGE',
+        discountValue: c.discountValue || 0,
+        uses: (c as any).timesRedeemed || 0,
+        conversions: (c as any).timesRedeemed || 0,
+        revenueGenerated: 0,
+        commissionEarned: 0,
+        status: c.status || 'ACTIVE',
+      };
+    });
   }
 
   // ----------------------------------------------------
@@ -761,24 +1150,31 @@ export class AffiliatePortalController {
   @ApiOperation({ summary: 'List marketing assets for current affiliate' })
   async getAssets(@Req() req: any, @Query('organizationId') organizationId?: string) {
     const email = this.resolveAffiliateEmail(req);
-    const orgIds = this.resolveAffiliatesForUser(email).map((affiliate) => affiliate.organizationId);
-    let assets = dbStore.assets.filter((asset) => orgIds.includes(asset.organizationId));
-    if (organizationId) {
-      assets = assets.filter((a) => a.organizationId === organizationId);
-    }
+    const userId = req.user?.userId || req.user?.id || req.user?.sub;
+    const affiliates = await this.resolveAffiliatesForUser(email, userId);
+    const orgIds = affiliates.map((a) => a.organizationId);
+    if (orgIds.length === 0) return [];
 
-    return assets.map((a: any) => ({
+    const scopedOrgIds = organizationId ? orgIds.filter((id) => id === organizationId) : orgIds;
+    if (scopedOrgIds.length === 0) return [];
+
+    const { assets } = await this.repositories();
+    const assetList = await assets.find({
+      where: { organizationId: In(scopedOrgIds) },
+    });
+
+    return assetList.map((a: any) => ({
       id: a.id,
       organizationId: a.organizationId,
       programId: a.programId,
-      title: a.title || 'Marketing Asset',
+      title: a.name || a.title || 'Marketing Asset',
       type: a.type || 'BANNER',
-      fileSize: a.fileSize,
-      dimensions: a.dimensions,
+      fileSize: (a as any).fileSize || (a as any).sizeBytes,
+      dimensions: (a as any).dimensions,
       previewUrl: a.previewUrl || a.fileUrl || '',
       downloadUrl: a.fileUrl || '',
-      copyContent: a.copyContent || a.bodyContent || null,
-      tags: a.tags || [],
+      copyContent: (a as any).copyContent || (a as any).bodyContent || null,
+      tags: (a as any).tags || [],
       createdAt: a.createdAt,
     }));
   }
@@ -792,18 +1188,33 @@ export class AffiliatePortalController {
   @ApiOperation({ summary: 'List conversions for current affiliate' })
   async getConversions(@Req() req: any, @Query('organizationId') organizationId?: string) {
     const email = this.resolveAffiliateEmail(req);
-    const affiliates = this.resolveAffiliatesForUser(email);
+    const userId = req.user?.userId || req.user?.id || req.user?.sub;
+    const affiliates = await this.resolveAffiliatesForUser(email, userId);
     const affiliateIds = affiliates.map((a) => a.id);
+    if (affiliateIds.length === 0) return [];
 
-    let conversions = dbStore.conversions.filter((c) => affiliateIds.includes(c.affiliateId));
-    if (organizationId) {
-      conversions = conversions.filter((c) => c.organizationId === organizationId);
-    }
+    const { conversions, programs, trackingLinks, commissions } = await this.repositories();
 
-    return conversions.map((c: any) => {
-      const prog = dbStore.programs.find((p) => p.id === c.programId);
-      const link = dbStore.trackingLinks.find((l) => l.id === c.trackingLinkId);
-      const comm = dbStore.commissions.find((cm) => cm.conversionId === c.id);
+    const convList = await conversions.find({
+      where: {
+        affiliateId: In(affiliateIds),
+        ...(organizationId ? { organizationId } : {}),
+      },
+      order: { createdAt: 'DESC' },
+    });
+
+    const progIds = [...new Set(convList.map((c) => c.programId).filter(Boolean))];
+    const linkIds = [...new Set(convList.map((c) => (c as any).trackingLinkId || c.metadata?.trackingLinkId).filter(Boolean))];
+    const progList = progIds.length ? await programs.find({ where: { id: In(progIds) } }) : [];
+    const linkList = linkIds.length ? await trackingLinks.find({ where: { id: In(linkIds) } }) : [];
+    const convIds = convList.map((c) => c.id);
+    const commList = convIds.length ? await commissions.find({ where: { conversionId: In(convIds) } }) : [];
+
+    return convList.map((c: any) => {
+      const prog = progList.find((p) => p.id === c.programId);
+      const linkId = c.trackingLinkId || c.metadata?.trackingLinkId;
+      const link = linkList.find((l) => l.id === linkId);
+      const comm = commList.find((cm) => cm.conversionId === c.id);
 
       return {
         id: c.id,
@@ -811,13 +1222,13 @@ export class AffiliatePortalController {
         programId: c.programId,
         programName: prog?.name || 'Partner Program',
         orderId: c.externalOrderId || c.externalId || `ORD-${c.id.slice(0, 6).toUpperCase()}`,
-        source: link?.shortCode || c.source || 'direct-referral',
-        customerMasked: c.customerMasked || (c.customerEmail ? `${c.customerEmail.slice(0, 2)}***@${c.customerEmail.split('@')[1] || 'domain.com'}` : 'Customer'),
+        source: link?.shortCode || (c as any).source || 'direct-referral',
+        customerMasked: (c as any).customerMasked || ((c as any).customerEmail ? `${(c as any).customerEmail.slice(0, 2)}***@${(c as any).customerEmail.split('@')[1] || 'domain.com'}` : 'Customer'),
         value: c.amount || 0,
         attributedValue: c.amount || 0,
         commissionAmount: (comm as any)?.amount || (comm as any)?.commissionAmount || 0,
         status: c.status,
-        clickTimestamp: c.clickTimestamp || new Date(new Date(c.createdAt).getTime() - 3600000).toISOString(),
+        clickTimestamp: (c as any).clickTimestamp || new Date(new Date(c.createdAt).getTime() - 3600000).toISOString(),
         convertedTimestamp: c.createdAt,
         expectedApprovalDate: new Date(new Date(c.createdAt).getTime() + 14 * 86400000).toISOString(),
       };
@@ -833,18 +1244,33 @@ export class AffiliatePortalController {
   @ApiOperation({ summary: 'List commissions for current affiliate' })
   async getCommissions(@Req() req: any, @Query('organizationId') organizationId?: string) {
     const email = this.resolveAffiliateEmail(req);
-    const affiliates = this.resolveAffiliatesForUser(email);
+    const userId = req.user?.userId || req.user?.id || req.user?.sub;
+    const affiliates = await this.resolveAffiliatesForUser(email, userId);
     const affiliateIds = affiliates.map((a) => a.id);
+    if (affiliateIds.length === 0) return [];
 
-    let commissions = dbStore.commissions.filter((c) => affiliateIds.includes(c.affiliateId));
-    if (organizationId) {
-      commissions = commissions.filter((c) => c.organizationId === organizationId);
-    }
+    const { commissions, organizations, programs, conversions } = await this.repositories();
 
-    return commissions.map((c: any) => {
-      const org = dbStore.organizations.find((o) => o.id === c.organizationId);
-      const prog = dbStore.programs.find((p) => p.id === c.programId);
-      const conv = dbStore.conversions.find((cv) => cv.id === c.conversionId);
+    const commList = await commissions.find({
+      where: {
+        affiliateId: In(affiliateIds),
+        ...(organizationId ? { organizationId } : {}),
+      },
+      order: { createdAt: 'DESC' },
+    });
+
+    const orgIds = [...new Set(commList.map((c) => c.organizationId).filter(Boolean))];
+    const progIds = [...new Set(commList.map((c) => c.programId).filter(Boolean))];
+    const convIds = [...new Set(commList.map((c) => c.conversionId).filter(Boolean))];
+
+    const orgList = orgIds.length ? await organizations.find({ where: { id: In(orgIds) } }) : [];
+    const progList = progIds.length ? await programs.find({ where: { id: In(progIds) } }) : [];
+    const convList = convIds.length ? await conversions.find({ where: { id: In(convIds) } }) : [];
+
+    return commList.map((c: any) => {
+      const org = orgList.find((o) => o.id === c.organizationId);
+      const prog = progList.find((p) => p.id === c.programId);
+      const conv = convList.find((cv) => cv.id === c.conversionId);
 
       return {
         id: c.id,
@@ -884,34 +1310,48 @@ export class AffiliatePortalController {
   @ApiOperation({ summary: 'List payouts for current affiliate' })
   async getPayouts(@Req() req: any, @Query('organizationId') organizationId?: string) {
     const email = this.resolveAffiliateEmail(req);
-    const affiliates = this.resolveAffiliatesForUser(email);
+    const userId = req.user?.userId || req.user?.id || req.user?.sub;
+    const affiliates = await this.resolveAffiliatesForUser(email, userId);
     const affiliateIds = affiliates.map((a) => a.id);
+    if (affiliateIds.length === 0) return [];
 
-    let payoutItems = dbStore.payoutItems.filter((pi) => affiliateIds.includes(pi.affiliateId));
-    if (organizationId) {
-      payoutItems = payoutItems.filter((pi: any) => {
-        const batch = dbStore.payoutBatches.find((b) => b.id === pi.payoutBatchId);
+    const { payoutItems, payoutBatches, organizations } = await this.repositories();
+
+    const poList = await payoutItems.find({
+      where: { affiliateId: In(affiliateIds) },
+      order: { createdAt: 'DESC' },
+    });
+
+    const batchIds = [...new Set(poList.map((pi) => pi.batchId).filter(Boolean))];
+    const batchList = batchIds.length ? await payoutBatches.find({ where: { id: In(batchIds) } }) : [];
+
+    const filteredPayouts = organizationId
+      ? poList.filter((pi) => {
+        const batch = batchList.find((b) => b.id === pi.batchId);
         return batch?.organizationId === organizationId;
-      });
-    }
+      })
+      : poList;
 
-    return payoutItems.map((pi: any) => {
-      const batch = dbStore.payoutBatches.find((b) => b.id === pi.payoutBatchId);
-      const org = dbStore.organizations.find((o) => o.id === (batch?.organizationId || organizationId));
-      const gross = pi.grossAmount || pi.amount || 0;
-      const taxWithheld = pi.taxWithheld || 0;
-      const net = pi.netAmount || (gross - taxWithheld);
+    const orgIds = [...new Set(batchList.map((b) => b.organizationId).filter(Boolean))];
+    const orgList = orgIds.length ? await organizations.find({ where: { id: In(orgIds) } }) : [];
+
+    return filteredPayouts.map((pi: any) => {
+      const batch = batchList.find((b) => b.id === pi.batchId);
+      const org = orgList.find((o) => o.id === (batch?.organizationId || organizationId));
+      const gross = Number(pi.amount || (pi as any).grossAmount || 0);
+      const taxWithheld = Number((pi as any).taxWithheld || 0);
+      const net = Number(pi.amount || (gross - taxWithheld));
 
       return {
         id: pi.id,
         organizationId: batch?.organizationId || organizationId || org?.id,
         organizationName: org?.name || 'Partner',
         amount: net,
-        currency: (batch as any)?.currency || (org as any)?.defaultCurrency || 'USD',
-        provider: pi.provider || '',
+        currency: batch?.currency || (org as any)?.defaultCurrency || 'USD',
+        provider: (pi as any).provider || '',
         providerReference: pi.providerReference || `po_${pi.id.slice(0, 8)}`,
-        payoutMethodMasked: pi.payoutMethodMasked || '',
-        payoutMethodType: pi.payoutMethodType || 'BANK_ACCOUNT',
+        payoutMethodMasked: (pi as any).payoutMethodMasked || '',
+        payoutMethodType: (pi as any).payoutMethodType || 'BANK_ACCOUNT',
         status: pi.status || 'PAID',
         scheduledDate: batch?.createdAt || pi.createdAt,
         completedDate: pi.createdAt,
@@ -919,7 +1359,7 @@ export class AffiliatePortalController {
         taxWithheld,
         feeDeduction: 0,
         netAmount: net,
-        commissionCount: pi.commissionCount || 0,
+        commissionCount: (pi as any).commissionCount || 0,
         timeline: [
           { status: 'PENDING', timestamp: batch?.createdAt || pi.createdAt, message: 'Batch initiated' },
           { status: 'PROCESSING', timestamp: pi.createdAt, message: 'Processed via payment provider' },
@@ -935,33 +1375,59 @@ export class AffiliatePortalController {
   @ApiOperation({ summary: 'Request instant settlement payout' })
   async requestInstantPayout(@Req() req: any, @Body('organizationId') organizationId: string) {
     const email = this.resolveAffiliateEmail(req);
-    const org = dbStore.organizations.find((item) => item.id === organizationId);
+    const { organizations, affiliates, commissions, payoutBatches, payoutItems } = await this.repositories();
+
+    const org = await organizations.findOne({ where: { id: organizationId } });
     if (!org) throw new NotFoundException('Organization not found');
-    const affiliate = dbStore.affiliates.find((item) => item.organizationId === org.id && item.email.toLowerCase() === email);
+
+    const affiliate = await affiliates.findOne({
+      where: { organizationId: org.id, email: email.toLowerCase().trim() },
+    });
     if (!affiliate) throw new BadRequestException('Join this organization before requesting a payout.');
 
-    const payableCommissions = dbStore.commissions.filter((commission: any) =>
-      commission.organizationId === org.id
-      && commission.affiliateId === affiliate.id
-      && (commission.status === 'PAYABLE' || commission.status === 'APPROVED'),
+    const payableCommissions = await commissions.find({
+      where: {
+        organizationId: org.id,
+        affiliateId: affiliate.id,
+        status: In(['PAYABLE', 'APPROVED']),
+      },
+    });
+
+    const grossAmount = payableCommissions.reduce(
+      (sum, commission: any) => sum + Number(commission.amount || commission.commissionAmount || 0),
+      0,
     );
-    const grossAmount = payableCommissions.reduce((sum, commission: any) => sum + (commission.amount || commission.commissionAmount || 0), 0);
     if (grossAmount <= 0) throw new BadRequestException('No payable balance is available.');
 
-    const newPayout = {
-      id: `pay_${uuidv4().slice(0, 8)}`,
-      payoutBatchId: `batch_${uuidv4().slice(0, 8)}`,
+    const batch = payoutBatches.create({
+      id: uuidv4(),
+      organizationId: org.id,
+      environment: EnvironmentType.LIVE,
+      totalAmount: grossAmount,
+      currency: (org as any).defaultCurrency || 'USD',
+      status: PayoutStatus.PROCESSING,
+      createdBy: affiliate.id,
+      createdAt: new Date(),
+    });
+    await payoutBatches.save(batch);
+
+    const newPayout = payoutItems.create({
+      id: uuidv4(),
+      batchId: batch.id,
+      organizationId: org.id,
+      environment: EnvironmentType.LIVE,
       affiliateId: affiliate.id,
       amount: grossAmount,
-      netAmount: grossAmount,
-      grossAmount,
-      taxWithheld: 0,
-      status: 'PENDING',
-      commissionCount: payableCommissions.length,
+      currency: (org as any).defaultCurrency || 'USD',
+      status: PayoutStatus.PROCESSING,
+      providerReference: `instant_${uuidv4().slice(0, 8)}`,
       createdAt: new Date(),
-    };
+    });
+    await payoutItems.save(newPayout);
 
-    dbStore.payoutItems.unshift(newPayout as any);
+    if (dbStore.payoutItems) {
+      dbStore.payoutItems.unshift(newPayout as any);
+    }
 
     return {
       id: newPayout.id,
@@ -970,7 +1436,7 @@ export class AffiliatePortalController {
       amount: grossAmount,
       currency: (org as any).defaultCurrency || (org as any).currency || 'USD',
       provider: '',
-      providerReference: `instant_${newPayout.id}`,
+      providerReference: newPayout.providerReference,
       payoutMethodMasked: '',
       payoutMethodType: 'BANK_ACCOUNT',
       status: 'PENDING',
@@ -983,6 +1449,7 @@ export class AffiliatePortalController {
       commissionCount: payableCommissions.length,
     };
   }
+
   // ----------------------------------------------------
   // Payout Methods CRUD
   // ----------------------------------------------------
@@ -1101,7 +1568,7 @@ export class AffiliatePortalController {
   @ApiOperation({ summary: 'List invitations for current affiliate' })
   async getInvitations(@Req() req: any) {
     const email = this.resolveAffiliateEmail(req);
-    return this.affiliatesService?.listInvitationsForEmail(email) || [];
+    return (await this.affiliatesService?.listInvitationsForEmail(email)) || [];
   }
 
   @Post('api/v1/affiliate/me/invitations/:invitationId/accept')
@@ -1132,8 +1599,28 @@ export class AffiliatePortalController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get active sessions for security' })
-  async getSessions() {
-    return [];
+  async getSessions(@Req() req: any) {
+    const { user } = await this.resolveAffiliateUser(req);
+    if (!user?.id) return [];
+
+    const { authSessions } = await this.repositories();
+    const sessions = await authSessions.find({
+      where: { userId: user.id, revokedAt: IsNull() },
+      order: { createdAt: 'DESC' },
+    });
+
+    const currentSessionId = req.user?.sessionId;
+
+    return sessions.map((s) => ({
+      id: s.id,
+      device: s.userAgent ? (s.userAgent.includes('Mobile') ? 'Mobile Browser' : 'Desktop Browser') : 'Unknown Device',
+      browser: s.userAgent || 'Web Browser',
+      ipAddress: s.ipAddress || 'Unknown IP',
+      location: 'Detected Session',
+      isCurrent: s.id === currentSessionId,
+      lastActiveAt: s.lastUsedAt ? s.lastUsedAt.toISOString() : (s.createdAt ? s.createdAt.toISOString() : new Date().toISOString()),
+      createdAt: s.createdAt ? s.createdAt.toISOString() : new Date().toISOString(),
+    }));
   }
 
   // ----------------------------------------------------
@@ -1149,39 +1636,73 @@ export class AffiliatePortalController {
     @Query('timeRange') timeRange = '7d',
   ) {
     const email = this.resolveAffiliateEmail(req);
+    const userId = req.user?.userId || req.user?.id || req.user?.sub;
+    const affiliates = await this.resolveAffiliatesForUser(email, userId);
+    const scopedAffiliates = organizationId ? affiliates.filter((a) => a.organizationId === organizationId) : affiliates;
+    const affiliateIds = scopedAffiliates.map((a) => a.id);
+
     const count = timeRange === '90d' ? 12 : (timeRange === '30d' ? 10 : 7);
-    const affiliates = this.resolveAffiliatesForUser(email);
-    const scopedAffiliates = organizationId ? affiliates.filter((affiliate) => affiliate.organizationId === organizationId) : affiliates;
-    const affiliateIds = scopedAffiliates.map((affiliate) => affiliate.id);
     const result = [];
     const now = new Date();
+
+    if (affiliateIds.length === 0) {
+      for (let i = count - 1; i >= 0; i--) {
+        const d = new Date(now.getTime() - i * 86400000);
+        const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        result.push({ date: dateStr, clicks: 0, conversions: 0, revenue: 0, commissions: 0 });
+      }
+      return result;
+    }
+
+    const { trackingLinks, conversions, commissions } = await this.repositories();
+
+    const startDate = new Date(now.getTime() - (count + 1) * 86400000);
+
+    const linksQuery = trackingLinks.createQueryBuilder('tl')
+      .where('tl.affiliateId IN (:...affiliateIds)', { affiliateIds })
+      .andWhere('tl.createdAt >= :startDate', { startDate });
+    if (organizationId) {
+      linksQuery.andWhere('tl.organizationId = :organizationId', { organizationId });
+    }
+    const links = await linksQuery.getMany();
+
+    const convQuery = conversions.createQueryBuilder('c')
+      .where('c.affiliateId IN (:...affiliateIds)', { affiliateIds })
+      .andWhere('c.createdAt >= :startDate', { startDate });
+    if (organizationId) {
+      convQuery.andWhere('c.organizationId = :organizationId', { organizationId });
+    }
+    const convList = await convQuery.getMany();
+
+    const commQuery = commissions.createQueryBuilder('comm')
+      .where('comm.affiliateId IN (:...affiliateIds)', { affiliateIds })
+      .andWhere('comm.createdAt >= :startDate', { startDate });
+    if (organizationId) {
+      commQuery.andWhere('comm.organizationId = :organizationId', { organizationId });
+    }
+    const commList = await commQuery.getMany();
 
     for (let i = count - 1; i >= 0; i--) {
       const d = new Date(now.getTime() - i * 86400000);
       const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       const dayKey = d.toISOString().slice(0, 10);
-      const dayLinks = dbStore.trackingLinks.filter((link: any) =>
-        affiliateIds.includes(link.affiliateId)
-        && (!organizationId || link.organizationId === organizationId)
-        && new Date(link.createdAt).toISOString().slice(0, 10) === dayKey,
+
+      const dayLinks = links.filter(
+        (link: any) => new Date(link.createdAt).toISOString().slice(0, 10) === dayKey,
       );
-      const dayConversions = dbStore.conversions.filter((conversion: any) =>
-        affiliateIds.includes(conversion.affiliateId)
-        && (!organizationId || conversion.organizationId === organizationId)
-        && new Date(conversion.createdAt).toISOString().slice(0, 10) === dayKey,
+      const dayConversions = convList.filter(
+        (conversion: any) => new Date(conversion.createdAt).toISOString().slice(0, 10) === dayKey,
       );
-      const dayCommissions = dbStore.commissions.filter((commission: any) =>
-        affiliateIds.includes(commission.affiliateId)
-        && (!organizationId || commission.organizationId === organizationId)
-        && new Date(commission.createdAt).toISOString().slice(0, 10) === dayKey,
+      const dayCommissions = commList.filter(
+        (commission: any) => new Date(commission.createdAt).toISOString().slice(0, 10) === dayKey,
       );
 
       result.push({
         date: dateStr,
-        clicks: dayLinks.reduce((sum, link: any) => sum + (link.clickCount || link.clicks || 0), 0),
+        clicks: dayLinks.reduce((sum, link: any) => sum + Number((link as any).clickCount || (link as any).clicks || 0), 0),
         conversions: dayConversions.length,
-        revenue: dayConversions.reduce((sum, conversion: any) => sum + (conversion.amount || conversion.value || 0), 0),
-        commissions: dayCommissions.reduce((sum, commission: any) => sum + (commission.amount || commission.commissionAmount || 0), 0),
+        revenue: dayConversions.reduce((sum, conversion: any) => sum + Number(conversion.amount || (conversion as any).value || 0), 0),
+        commissions: dayCommissions.reduce((sum, commission: any) => sum + Number(commission.amount || (commission as any).commissionAmount || 0), 0),
       });
     }
 
@@ -1207,8 +1728,8 @@ export class AffiliatePortalController {
   @ApiOperation({ summary: 'Submit support ticket' })
   async createSupportTicket(@Req() req: any, @Body() body: any) {
     const { user } = await this.resolveAffiliateUser(req);
-    const { affiliateSupportTickets } = await this.repositories();
-    const org = dbStore.organizations.find((o) => o.id === body.organizationId);
+    const { affiliateSupportTickets, organizations } = await this.repositories();
+    const org = body.organizationId ? await organizations.findOne({ where: { id: body.organizationId } }) : null;
 
     const ticket = affiliateSupportTickets.create({
       userId: user.id,

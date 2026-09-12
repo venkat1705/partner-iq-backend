@@ -26,6 +26,7 @@ import { AutomationsModule } from './modules/automations/automations.module';
 import { DemoBookingsModule } from './modules/demo-bookings/demo-bookings.module';
 import { EmailDesignModule } from './modules/email-design/email-design.module';
 import { InternalOpsModule } from './modules/internal-ops/internal-ops.module';
+import { BrandingModule } from './modules/branding/branding.module';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { InternalOpsModule } from './modules/internal-ops/internal-ops.module';
     DemoBookingsModule,
     EmailDesignModule,
     InternalOpsModule,
+    BrandingModule,
   ],
 })
 export class AppModule { }

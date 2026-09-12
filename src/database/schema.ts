@@ -193,7 +193,7 @@ export class Organization {
   @Column({ type: 'varchar', length: 50, nullable: true })
   companySize?: string;
 
-  @Column({ type: 'varchar', length: 10, default: 'US' })
+  @Column({ type: 'varchar', length: 200, default: 'US' })
   country!: string;
 
   @Column({ type: 'varchar', length: 10, default: 'USD' })
@@ -216,6 +216,136 @@ export class Organization {
 
   @Column({ type: 'timestamp', nullable: true })
   deletedAt?: Date;
+}
+
+@Entity('organization_brandings')
+export class OrganizationBranding {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationId!: string;
+
+  @Column({ type: 'mediumtext', nullable: true })
+  logoUrl?: string;
+
+  @Column({ type: 'mediumtext', nullable: true })
+  logoDarkUrl?: string;
+
+  @Column({ type: 'mediumtext', nullable: true })
+  faviconUrl?: string;
+
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  primaryColor?: string;
+
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  secondaryColor?: string;
+
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  backgroundColor?: string;
+
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  textColor?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  heroHeaderPill?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  heroTitle?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  heroHighlightText?: string;
+
+  @Column({ type: 'text', nullable: true })
+  heroDescription?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  heroCtaText?: string;
+
+  @Column({ type: 'mediumtext', nullable: true })
+  heroImageUrl?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  storyTitle?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  storyHeading?: string;
+
+  @Column({ type: 'text', nullable: true })
+  storyDescription?: string;
+
+  @Column({ type: 'text', nullable: true })
+  mission?: string;
+
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  foundedYear?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  location?: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  accreditations?: string[];
+
+  @Column({ type: 'simple-json', nullable: true })
+  trustMetrics?: Array<{ label: string; value: string }>;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  legalName?: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  metadata?: Record<string, any>;
+
+  @Column({ type: 'simple-json', nullable: true })
+  partnerBenefits?: Array<{ title: string; description?: string; icon?: string }>;
+
+  @Column({ type: 'simple-json', nullable: true })
+  howItWorks?: Array<{ title: string; description?: string }>;
+
+  @Column({ type: 'simple-json', nullable: true })
+  faq?: Array<{ question: string; answer: string; active?: boolean }>;
+
+  @Column({ type: 'text', nullable: true })
+  footerDescription?: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  footerLinks?: Array<{ label: string; url: string; newTab?: boolean }>;
+
+  @Column({ type: 'simple-json', nullable: true })
+  socialLinks?: Record<string, string>;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  privacyUrl?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  termsUrl?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  cookiePolicyUrl?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  partnerTermsUrl?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  seoTitle?: string;
+
+  @Column({ type: 'text', nullable: true })
+  seoDescription?: string;
+
+  @Column({ type: 'mediumtext', nullable: true })
+  seoImageUrl?: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  visibility?: { showPrograms?: boolean; showBenefits?: boolean; showHowItWorks?: boolean; showFaq?: boolean; showCompany?: boolean; showSocialLinks?: boolean };
+
+  @Column({ type: 'boolean', default: false, nullable: true })
+  highlightWebsite?: boolean;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
 }
 
 @Entity('organization_memberships')

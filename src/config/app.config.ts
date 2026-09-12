@@ -18,11 +18,65 @@ export interface AppConfig {
   googleStateTtlSeconds: number;
 }
 
+const DEFAULT_CORS_ORIGINS = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://localhost:3002',
+  'http://localhost:3004',
+  'http://localhost:3005',
+  'http://localhost:3006',
+  'http://*.localhost:3000',
+  'http://*.localhost:3001',
+  'http://*.localhost:3002',
+  'http://*.localhost:3004',
+  'http://*.localhost:3005',
+  'http://*.localhost:3006',
+  'https://*.partneriq.in',
+  'http://*.partneriq.in',
+];
+
+export const isAllowedCorsOrigin = (origin: string | undefined, allowedOrigins: string[] = DEFAULT_CORS_ORIGINS): boolean => {
+  if (!origin) return true;
+
+  const normalizedOrigin = origin.trim().replace(/\/$/, '');
+  const exactMatch = allowedOrigins.some((allowed) => allowed.trim().replace(/\/$/, '') === normalizedOrigin);
+  if (exactMatch) return true;
+
+  try {
+    const parsed = new URL(normalizedOrigin);
+    const hostname = parsed.hostname.toLowerCase();
+    const port = parsed.port || (parsed.protocol === 'https:' ? '443' : '80');
+
+    // Allow any localhost origin (any port, any subdomain like *.localhost:*)
+    if (hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '127.0.0.1') {
+      return true;
+    }
+
+    // Allow any partneriq domain/subdomain
+    if (hostname === 'partneriq.in' || hostname.endsWith('.partneriq.in')) {
+      return true;
+    }
+
+    const matchesWildcard = allowedOrigins.some((allowed) => {
+      if (!allowed.includes('*')) return false;
+      const pattern = allowed
+        .trim()
+        .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        .replace(/\\\*/g, '.*');
+      return new RegExp(`^${pattern}$`, 'i').test(normalizedOrigin);
+    });
+
+    return matchesWildcard;
+  } catch {
+    return false;
+  }
+};
+
 export const getAppConfig = (): AppConfig => {
   const isProduction = process.env.NODE_ENV === 'production';
   const origins = process.env.CORS_ORIGINS
-    ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim())
-    : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002', 'http://localhost:3004', 'http://localhost:3005'];
+    ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
+    : DEFAULT_CORS_ORIGINS;
   const appUrl = process.env.APP_URL || 'http://localhost:5000';
 
   return {

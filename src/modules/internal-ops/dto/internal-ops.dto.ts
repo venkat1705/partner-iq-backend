@@ -3,7 +3,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { UserStatus, DocumentType } from '../../../common/enums';
 
 export class CreateSuperAdminDto {
-  @ApiProperty({ example: 'superadmin@partneriq.io', description: 'Email address of the superadmin' })
+  @ApiProperty({ example: 'info@partneriq.in', description: 'Email address of the superadmin' })
   @IsEmail({}, { message: 'Please provide a valid email address' })
   @IsNotEmpty()
   email!: string;
