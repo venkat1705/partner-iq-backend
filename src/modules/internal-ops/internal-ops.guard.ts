@@ -5,15 +5,28 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
+import { timingSafeEqual, createHash } from 'crypto';
 import jwtPkg from 'jsonwebtoken';
 const jwt = (jwtPkg as any).default || jwtPkg;
 import { getJwtConfig } from '../../config/jwt.config';
 import { PlatformRole } from '../../common/enums';
 import { dbStore } from '../../database/store';
 
-export const DEFAULT_INTERNAL_OPS_KEY =
-  process.env.INTERNAL_OPS_KEY ||
-  'piq_ops_sec_99a8b7c6d5e4f3a2b1_partneriq_master_key';
+function getConfiguredOpsSecret(): string {
+  const secret = process.env.INTERNAL_OPS_KEY || process.env.PRIVATE_API_KEY;
+  if (!secret || secret.trim().length < 16) {
+    throw new Error(
+      'INTERNAL_OPS_KEY (or PRIVATE_API_KEY) must be set to a strong secret (>=16 chars). Refusing to start with a missing/weak internal ops secret.',
+    );
+  }
+  return secret.trim();
+}
+
+function timingSafeStringEqual(a: string, b: string): boolean {
+  const aHash = createHash('sha256').update(a).digest();
+  const bHash = createHash('sha256').update(b).digest();
+  return timingSafeEqual(aHash, bHash);
+}
 
 @Injectable()
 export class InternalOpsGuard implements CanActivate {
@@ -23,10 +36,7 @@ export class InternalOpsGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const headers = request.headers || {};
 
-    const configuredSecret =
-      process.env.INTERNAL_OPS_KEY ||
-      process.env.PRIVATE_API_KEY ||
-      DEFAULT_INTERNAL_OPS_KEY;
+    const configuredSecret = getConfiguredOpsSecret();
 
     // 1. Check custom internal secret headers
     const headerSecret =
@@ -36,7 +46,7 @@ export class InternalOpsGuard implements CanActivate {
       headers['x-api-key'];
 
     if (headerSecret && typeof headerSecret === 'string') {
-      if (headerSecret.trim() === configuredSecret.trim()) {
+      if (timingSafeStringEqual(headerSecret.trim(), configuredSecret)) {
         request.internalCaller = {
           type: 'INTERNAL_SECRET_HEADER',
           authorizedAt: new Date().toISOString(),
@@ -51,7 +61,7 @@ export class InternalOpsGuard implements CanActivate {
       const token = authHeader.substring(7).trim();
 
       // Case 2a: Bearer token is the secret key directly
-      if (token === configuredSecret.trim()) {
+      if (timingSafeStringEqual(token, configuredSecret)) {
         request.internalCaller = {
           type: 'INTERNAL_SECRET_BEARER',
           authorizedAt: new Date().toISOString(),

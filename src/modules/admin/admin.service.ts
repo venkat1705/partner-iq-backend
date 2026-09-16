@@ -325,8 +325,8 @@ export class AdminService {
   private getIntegrations() {
     const today = new Date().toISOString().slice(0, 10);
     return [...dbStore.integrations]
-      .filter((integration) => integration.code === 'HUBSPOT')
-      .sort((a, b) => a.displayOrder - b.displayOrder || a.name.localeCompare(b.name))
+      .filter((integration) => integration.status !== IntegrationStatus.DISABLED && (integration.status as any) !== 'DISABLED')
+      .sort((a, b) => (a.displayOrder || 100) - (b.displayOrder || 100) || a.name.localeCompare(b.name))
       .map((integration) => {
         const connections = dbStore.organizationIntegrations.filter((item) => item.integrationId === integration.id);
         const events = dbStore.integrationEvents.filter((item) => item.integrationId === integration.id);
@@ -344,6 +344,8 @@ export class AdminService {
           category: integration.category,
           provider: integration.provider,
           status: integration.status,
+          logo: integration.logo || `/integrations/${integration.slug}.svg`,
+          capabilities: integration.capabilities || [],
           connectionTypes: integration.connectionTypes || [],
           supportsOAuth: integration.supportsOAuth,
           supportsWebhooks: integration.supportsWebhooks,

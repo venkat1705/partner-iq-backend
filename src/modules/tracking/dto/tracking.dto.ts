@@ -1,4 +1,4 @@
-import { IsString, IsUrl, IsOptional } from 'class-validator';
+import { IsString, IsUrl, IsOptional, MaxLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateTrackingLinkDto {
@@ -11,7 +11,10 @@ export class CreateTrackingLinkDto {
   affiliateId!: string;
 
   @ApiProperty({ example: 'https://acme.com/pricing' })
-  @IsUrl()
+  @IsUrl(
+    { protocols: ['http', 'https'], require_protocol: true, require_tld: false },
+    { message: 'destinationUrl must be a valid http:// or https:// URL' },
+  )
   destinationUrl!: string;
 
   @ApiPropertyOptional({ example: 'summer2026' })
@@ -38,6 +41,42 @@ export class BrowserClickDto {
   @IsOptional()
   @IsString()
   anonymousId?: string;
+
+  @ApiPropertyOptional({ example: 'https://acme.com/pricing?utm_source=newsletter' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  landingUrl?: string;
+
+  @ApiPropertyOptional({ example: 'newsletter' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  utmSource?: string;
+
+  @ApiPropertyOptional({ example: 'email' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  utmMedium?: string;
+
+  @ApiPropertyOptional({ example: 'summer_sale' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  utmCampaign?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  utmTerm?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  utmContent?: string;
 }
 
 export class IdentifyCustomerDto {

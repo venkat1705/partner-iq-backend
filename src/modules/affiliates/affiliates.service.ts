@@ -1,11 +1,15 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { dbStore, AffiliateEntity, ProgramAffiliateEntity, AffiliateApplicationEntity, TrackingLinkEntity } from '../../database/store';
-import { AffiliateStatus, AffiliateInvitationStatus, ApplicationStatus, AuditAction, ProgramStatus, TrackingLinkStatus, AutomationTriggerType, TierTransitionType, EnvironmentType, PlatformRole } from '../../common/enums';
+import { AffiliateStatus, AffiliateInvitationStatus, AFFILIATE_INVITATION_COMPLETED_STATUSES, AFFILIATE_INVITATION_OPEN_STATUSES, ApplicationStatus, AuditAction, OrganizationStatus, ProgramStatus, TrackingLinkStatus, AutomationTriggerType, TierTransitionType, EnvironmentType, PlatformRole, WebhookEvent } from '../../common/enums';
+import { PLATFORM_CURRENCY } from '../../common/constants/currency';
 import { SecurityUtils } from '../../common/utils/security.utils';
 import { EnvironmentUtils } from '../../common/utils/environment.utils';
 import { getAppConfig } from '../../config/app.config';
@@ -14,6 +18,7 @@ import { AcceptAffiliateInvitationDto, BulkUploadAffiliateInvitationsDto, Create
 import { BrevoEmailService } from '../memberships/brevo-email.service';
 import { TierService } from '../gamification/tiers/tier.service';
 import { AutomationEngineService } from '../automations/engine/automation-engine.service';
+import { WebhooksService } from '../webhooks/webhooks.service';
 import { initializeDataSource } from '../../database/data-source';
 import {
   Affiliate,
@@ -33,16 +38,196 @@ import {
 } from '../../database/schema';
 import { IsNull, In } from 'typeorm';
 import { assertUserEligibleForAffiliate } from './affiliate-eligibility.policy';
+import { SystemEmailDispatchService } from '../email-design/services/system-email-dispatch.service';
+import { SystemTemplateKey } from '../email-design/constants/email-template-keys';
+import { NotificationsService } from '../notifications/notifications.service';
+import { SubscriptionLimitService } from '../billing/services/subscription-limit.service';
+import { BillingResourceType } from '../billing/enums/billing.enums';
 
 @Injectable()
 export class AffiliatesService {
+  private readonly logger = new Logger(AffiliatesService.name);
+
   constructor(
     private readonly brevoEmail: BrevoEmailService,
     private readonly tierService: TierService,
     private readonly automationEngineService: AutomationEngineService,
+    private readonly webhooksService?: WebhooksService,
+    private readonly emailDispatch?: SystemEmailDispatchService,
+    private readonly notificationsService?: NotificationsService,
+    private readonly subscriptionLimits?: SubscriptionLimitService,
   ) { }
 
+  private formatProgramCommissionRate(program?: { commissionType?: string; defaultCommissionValue?: number }): string {
+    if (!program?.defaultCommissionValue) return 'Program default rate';
+    const value = program.defaultCommissionValue / 100;
+    if (program.commissionType === 'FIXED_AMOUNT') return `${value.toFixed(2)} per Conversion`;
+    const isRecurring = String(program.commissionType || '').toUpperCase().includes('RECURRING');
+    return `${value.toFixed(1)}%${isRecurring ? ' Recurring' : ''}`;
+  }
+
+  private async notifyApplicant(
+    templateKey: SystemTemplateKey,
+    organizationId: string,
+    applicantEmail: string,
+    applicantName: string,
+    programId?: string,
+    extra: Record<string, any> = {},
+  ) {
+    const organization = dbStore.organizations.find((item) => item.id === organizationId);
+    const program = programId ? dbStore.programs.find((item) => item.id === programId) : undefined;
+    const dashboardUrl = `${getAppConfig().affiliateFrontendUrl.replace(/\/$/, '')}/dashboard`;
+    await this.emailDispatch?.send(
+      templateKey,
+      applicantEmail,
+      {
+        affiliate: { firstName: (applicantName || '').split(' ')[0] || applicantName },
+        organization: { name: organization?.name || 'PartnerIQ' },
+        links: { dashboardUrl },
+        // Flat fields — these match the email-design templates' own variables
+        // (programName/commissionRate/referralLink/portalUrl/supportUrl), since the
+        // resolver renders the actual seeded email-design template for these keys.
+        programName: program?.name || 'the partner program',
+        commissionRate: this.formatProgramCommissionRate(program),
+        portalUrl: dashboardUrl,
+        supportUrl: 'https://partneriq.in/marketplace',
+        ...extra,
+      },
+      { organizationId },
+    );
+
+    // In-app notification only if the applicant already has an account (public applications
+    // may come from an email with no User record yet).
+    const applicantUser = dbStore.users.find((u) => u.email?.toLowerCase() === applicantEmail.toLowerCase());
+    if (!applicantUser) return;
+
+    const { title, body } = this.applicationNotificationCopy(templateKey, organization?.name || 'PartnerIQ');
+    this.notificationsService?.createNotification({
+      userId: applicantUser.id,
+      organizationId,
+      type: 'program',
+      title,
+      body,
+      channel: 'in_app',
+      priority: 'normal',
+      actionUrl: '/dashboard',
+    }).catch(() => undefined);
+  }
+
+  private applicationNotificationCopy(templateKey: SystemTemplateKey, organizationName: string): { title: string; body: string } {
+    switch (templateKey) {
+      case SystemTemplateKey.AFFILIATE_APPLICATION_APPROVED:
+        return { title: 'Application approved', body: `Your application to ${organizationName} was approved. Start promoting!` };
+      case SystemTemplateKey.AFFILIATE_APPLICATION_REJECTED:
+        return { title: 'Application update', body: `Your application to ${organizationName} was not approved this time.` };
+      default:
+        return { title: 'Application received', body: `Your application to ${organizationName} is under review.` };
+    }
+  }
+
+  private async notifyOrgOfAcceptedInvitation(organizationId: string, affiliateName: string) {
+    const organization = dbStore.organizations.find((item) => item.id === organizationId);
+    const owners = dbStore.organizationMemberships.filter(
+      (m) => m.organizationId === organizationId && (m.role === 'OWNER' || m.role === 'ADMIN'),
+    );
+    const dashboardUrl = `${getAppConfig().frontendUrl.replace(/\/$/, '')}/organizations/${organizationId}/affiliates`;
+
+    for (const membership of owners) {
+      const admin = dbStore.users.find((u) => u.id === membership.userId) as User | undefined;
+      if (!admin?.email) continue;
+      await this.emailDispatch?.send(
+        SystemTemplateKey.AFFILIATE_INVITATION_ACCEPTED,
+        admin.email,
+        {
+          affiliate: { firstName: affiliateName },
+          organization: { name: organization?.name || 'Your organization' },
+          links: { dashboardUrl },
+        },
+        { organizationId },
+      );
+
+      this.notificationsService?.createNotification({
+        userId: admin.id,
+        organizationId,
+        type: 'program',
+        title: 'Affiliate invitation accepted',
+        body: `${affiliateName} accepted your invitation and joined the program.`,
+        channel: 'in_app',
+        priority: 'normal',
+        actionUrl: `/organizations/${organizationId}/affiliates`,
+      }).catch(() => undefined);
+    }
+  }
+
+  private emitWebhook(organizationId: string, event: WebhookEvent, payload: any) {
+    this.webhooksService?.triggerEvent(organizationId, event, payload).catch((error) => {
+      this.logger.error(`Webhook delivery failed for ${event}: ${error?.message || error}`);
+    });
+  }
+
+  /**
+   * Creates an affiliate and joins them to a program.
+   *
+   * Capacity is only consumed when a genuinely new affiliate record is created.
+   * Adding an affiliate who already exists in this organization to a second
+   * program writes a `program_affiliates` row and nothing else, so a partner in
+   * five programs still counts as one affiliate against the account limit.
+   *
+   * That conditional makes `reserve` unsuitable here — the existence check and
+   * the limit check must happen together inside the lock, which is what
+   * `runExclusiveForOrganization` provides.
+   */
   async create(organizationId: string, dto: CreateAffiliateDto, actorId?: string, skipAudit = false, environment: EnvironmentType = EnvironmentType.LIVE) {
+    if (!this.subscriptionLimits) {
+      return this.createAffiliateRecord(organizationId, dto, actorId, skipAudit, environment);
+    }
+    return this.subscriptionLimits.runExclusiveForOrganization(
+      organizationId,
+      BillingResourceType.AFFILIATE,
+      async (accountId) => {
+        const email = dto.email.toLowerCase().trim();
+        if (!(await this.affiliateSlotAlreadyReserved(organizationId, email))) {
+          await this.subscriptionLimits!.assertCanCreate(accountId, BillingResourceType.AFFILIATE);
+        }
+        return this.createAffiliateRecord(organizationId, dto, actorId, skipAudit, environment);
+      },
+    );
+  }
+
+  /**
+   * Whether this email already holds an affiliate slot in the organization —
+   * either as an affiliate record, or as a live invitation that reserved the
+   * slot when it was sent. Both mean creating the record consumes no new
+   * capacity, so an invited partner is never blocked while accepting.
+   */
+  private async affiliateSlotAlreadyReserved(organizationId: string, email: string) {
+    if (dbStore.affiliates.some((a) => a.organizationId === organizationId && a.email === email)) {
+      return true;
+    }
+
+    const hasLiveInvitation = dbStore.affiliateInvitations.some(
+      (invite) =>
+        invite.organizationId === organizationId &&
+        invite.email?.toLowerCase().trim() === email &&
+        invite.status === 'PENDING' &&
+        !invite.revokedAt &&
+        !invite.acceptedAt &&
+        new Date(invite.expiresAt).getTime() > Date.now(),
+    );
+    if (hasLiveInvitation) return true;
+
+    try {
+      const dataSource = await initializeDataSource();
+      const found = await dataSource.getRepository(Affiliate).findOne({
+        where: { organizationId, email },
+      });
+      return Boolean(found);
+    } catch {
+      return false;
+    }
+  }
+
+  private async createAffiliateRecord(organizationId: string, dto: CreateAffiliateDto, actorId?: string, skipAudit = false, environment: EnvironmentType = EnvironmentType.LIVE) {
     const email = dto.email.toLowerCase().trim();
     assertUserEligibleForAffiliate(email);
 
@@ -64,6 +249,8 @@ export class AffiliatesService {
         }
       } catch { }
     }
+
+    const isNewAffiliateRecord = !affiliate;
 
     if (!affiliate) {
       affiliate = {
@@ -207,10 +394,37 @@ export class AffiliatesService {
       });
     }
 
+    if (isNewAffiliateRecord) {
+      this.emitWebhook(organizationId, WebhookEvent.AFFILIATE_CREATED, {
+        affiliateId: affiliate.id,
+        programId: dto.programId,
+        status: affiliate.status,
+      });
+    }
+
     return { affiliate, programAffiliate: progAffiliate, trackingLink };
   }
 
+  /**
+   * Sends an affiliate invitation.
+   *
+   * A live invitation reserves a slot so an admin cannot invite fifty partners
+   * on a fifty-affiliate plan and only discover the problem when they accept.
+   * Expired and revoked invitations release the slot automatically — see
+   * `SubscriptionUsageService`.
+   */
   async inviteAffiliate(organizationId: string, dto: CreateAffiliateInvitationDto, actorId: string, environment: EnvironmentType = EnvironmentType.LIVE) {
+    if (!this.subscriptionLimits) {
+      return this.createAffiliateInvitation(organizationId, dto, actorId, environment);
+    }
+    return this.subscriptionLimits.reserveForOrganization(
+      organizationId,
+      BillingResourceType.AFFILIATE,
+      () => this.createAffiliateInvitation(organizationId, dto, actorId, environment),
+    );
+  }
+
+  private async createAffiliateInvitation(organizationId: string, dto: CreateAffiliateInvitationDto, actorId: string, environment: EnvironmentType = EnvironmentType.LIVE) {
     const email = dto.email.toLowerCase().trim();
     assertUserEligibleForAffiliate(email);
     const partnerName = dto.partnerName.trim();
@@ -239,11 +453,19 @@ export class AffiliatesService {
     }
 
     const affiliate = dbStore.affiliates.find((item) => item.organizationId === organizationId && item.email === email);
-    const activeMembership = affiliate && dbStore.programAffiliates.find(
-      (item) => item.organizationId === organizationId && item.programId === program.id && item.affiliateId === affiliate.id && item.status === AffiliateStatus.ACTIVE,
+    // Block at the ORGANIZATION level, not just per-program: once a partner is already an
+    // active affiliate anywhere in this org, they should be managed/added to programs
+    // directly rather than re-invited by email, which would just create a confusing duplicate flow.
+    const activeOrgMembership = affiliate && dbStore.programAffiliates.find(
+      (item) => item.organizationId === organizationId && item.affiliateId === affiliate.id && item.status === AffiliateStatus.ACTIVE,
     );
-    if (activeMembership) {
-      throw new BadRequestException('This partner is already a member of this program.');
+    if (activeOrgMembership) {
+      const alreadyInThisProgram = activeOrgMembership.programId === program.id;
+      throw new BadRequestException(
+        alreadyInThisProgram
+          ? 'This partner is already a member of this program.'
+          : 'This partner is already an active affiliate in your organization. Add them to this program directly instead of sending a new invite.',
+      );
     }
 
     const existingInvitation = dbStore.affiliateInvitations.find(
@@ -305,7 +527,7 @@ export class AffiliatesService {
       });
     }
 
-    const inviteUrl = `${getAppConfig().frontendUrl.replace(/\/$/, '')}/invitations/affiliate/${token}`;
+    const inviteUrl = this.buildInvitationUrl(token);
     await this.sendAffiliateInvitationEmail(inviteUrl, invitation, program);
 
     return {
@@ -538,27 +760,32 @@ export class AffiliatesService {
       }
       seenInBatch.add(dedupeKey);
 
-      // 6. Check Active Program Membership
+      // 6. Check Active Organization Membership — org-wide (any program), matching the
+      // same rule the single-invite flow enforces: once a partner is already an active
+      // affiliate anywhere in this org, they should be added to programs directly rather
+      // than re-invited by email.
       const existingAffiliate = dbStore.affiliates.find(
         (item) => item.organizationId === organizationId && item.email === email,
       );
-      const activeMembership =
+      const activeOrgMembership =
         existingAffiliate &&
         dbStore.programAffiliates.find(
           (item) =>
             item.organizationId === organizationId &&
-            item.programId === program.id &&
             item.affiliateId === existingAffiliate.id &&
             item.status === AffiliateStatus.ACTIVE,
         );
 
-      if (activeMembership) {
+      if (activeOrgMembership) {
+        const alreadyInThisProgram = activeOrgMembership.programId === program.id;
         failed.push({
           rowNumber,
           partnerName,
           email,
           program: program.name,
-          reason: 'This partner is already an active enrolled member of this program.',
+          reason: alreadyInThisProgram
+            ? 'This partner is already an active enrolled member of this program.'
+            : 'This partner is already an active affiliate in your organization. Add them to this program directly instead of re-inviting.',
           originalRow: row,
         });
         continue;
@@ -657,7 +884,7 @@ export class AffiliatesService {
       });
 
       // 10. Send Invitation Email
-      const inviteUrl = `${getAppConfig().frontendUrl.replace(/\/$/, '')}/invitations/affiliate/${token}`;
+      const inviteUrl = this.buildInvitationUrl(token);
       try {
         await this.sendAffiliateInvitationEmail(inviteUrl, invitation, program);
       } catch (emailErr) {
@@ -722,8 +949,14 @@ export class AffiliatesService {
 
   async resendInvitation(organizationId: string, invitationId: string, actorId: string) {
     const invitation = await this.findInvitation(organizationId, invitationId);
-    if (invitation.status !== AffiliateInvitationStatus.PENDING || invitation.revokedAt) {
-      throw new BadRequestException('Only pending invitations can be resent.');
+    // Resending exists precisely for invitations that expired or where the
+    // partner never finished registering, so those states must be resendable.
+    // Only a completed or revoked invitation is off limits.
+    if (AFFILIATE_INVITATION_COMPLETED_STATUSES.includes(invitation.status as AffiliateInvitationStatus)) {
+      throw new BadRequestException('This partner has already joined the program.');
+    }
+    if (invitation.status === AffiliateInvitationStatus.REVOKED || invitation.revokedAt) {
+      throw new BadRequestException('This invitation was revoked. Send a new invitation instead.');
     }
     let program = dbStore.programs.find((item) => item.id === invitation.programId && item.organizationId === organizationId);
     if (!program) {
@@ -735,15 +968,25 @@ export class AffiliatesService {
     }
     if (!program) throw new NotFoundException('Program not found');
 
+    // A resend replaces the token outright, so any link from the previous email
+    // stops working — the old hash is gone and nothing can match it. The same
+    // invitation row is reused, which keeps the invited email fixed and avoids
+    // creating a second invitation for the same partner.
     const token = `${uuidv4()}${uuidv4()}`.replace(/-/g, '');
     invitation.tokenHash = SecurityUtils.hashToken(token);
     invitation.expiresAt = new Date(Date.now() + 7 * 24 * 3600 * 1000);
+    // Reopen an invitation that had expired, and clear any half-finished terms
+    // acceptance so the partner sees the current terms on the new link.
+    invitation.status = AffiliateInvitationStatus.PENDING;
+    invitation.termsAcceptedAt = undefined;
+    invitation.termsVersionAccepted = undefined;
+    invitation.revokedAt = undefined;
     invitation.updatedAt = new Date();
     try {
       const dataSource = await initializeDataSource();
       await dataSource.getRepository(AffiliateInvitation).save(invitation);
     } catch { }
-    const inviteUrl = `${getAppConfig().frontendUrl.replace(/\/$/, '')}/invitations/affiliate/${token}`;
+    const inviteUrl = this.buildInvitationUrl(token);
     this.audit(organizationId, actorId, 'AFFILIATE_INVITATION_RESENT', 'affiliate_invitation', invitation.id, {
       programId: invitation.programId,
       email: invitation.email,
@@ -754,8 +997,11 @@ export class AffiliatesService {
 
   async revokeInvitation(organizationId: string, invitationId: string, actorId: string) {
     const invitation = await this.findInvitation(organizationId, invitationId);
-    if (invitation.status !== AffiliateInvitationStatus.PENDING) {
-      throw new BadRequestException('Only pending invitations can be revoked.');
+    // An invitation can be pulled back at any point before the partner has
+    // actually joined — including after they accepted the terms but never
+    // finished registering.
+    if (!AFFILIATE_INVITATION_OPEN_STATUSES.includes(invitation.status as AffiliateInvitationStatus)) {
+      throw new BadRequestException('Only invitations that have not been completed can be revoked.');
     }
     invitation.status = AffiliateInvitationStatus.REVOKED;
     invitation.revokedAt = new Date();
@@ -817,12 +1063,387 @@ export class AffiliatesService {
     };
   }
 
-  async acceptAffiliateInvitation(token: string, dto: AcceptAffiliateInvitationDto, userId?: string) {
+  /**
+   * Phase one of the invitation flow: the invited partner reviews and accepts
+   * the program terms.
+   *
+   * This deliberately creates **no** affiliate and **no** membership. An
+   * invitation token proves only that an email address was invited — it is not
+   * authentication, and treating it as such would let anyone holding the link
+   * join a program as someone else. The invitation is parked in TERMS_ACCEPTED
+   * and the caller is told where to authenticate.
+   *
+   * {@link completeAffiliateInvitation} is the only path that creates a
+   * membership, and it requires an authenticated Affiliate Portal session.
+   */
+  async acceptAffiliateInvitationTerms(token: string, dto: AcceptAffiliateInvitationDto) {
     if (!dto.acceptedTerms) {
       throw new BadRequestException('Program terms must be accepted.');
     }
+
     const invitation = await this.findValidInvitationByToken(token);
-    return this.acceptInvitationRecord(invitation, dto, userId);
+    const { program, organization } = await this.loadInvitationContext(invitation);
+    this.assertInvitationTargetsAreActive(program, organization);
+
+    const now = new Date();
+    if (!invitation.termsAcceptedAt) {
+      invitation.termsAcceptedAt = now;
+    }
+    invitation.termsVersionAccepted = dto.termsVersionAccepted || 1;
+    if (invitation.status === AffiliateInvitationStatus.PENDING) {
+      invitation.status = AffiliateInvitationStatus.TERMS_ACCEPTED;
+    }
+    invitation.updatedAt = now;
+    await this.persistInvitation(invitation);
+
+    // Whether this partner already has a portal account decides which screen
+    // they are sent to. Resolved on the server so the client cannot be steered
+    // down the wrong branch.
+    const hasPortalAccount = await this.affiliatePortalAccountExists(invitation.email);
+
+    this.audit(
+      invitation.organizationId,
+      invitation.invitedBy,
+      'AFFILIATE_INVITATION_TERMS_ACCEPTED',
+      'affiliate_invitation',
+      invitation.id,
+      { email: invitation.email, programId: invitation.programId, hasPortalAccount },
+    );
+
+    const portalUrl = getAppConfig().affiliateFrontendUrl.replace(/\/$/, '');
+    const nextStep = hasPortalAccount ? 'LOGIN' : 'REGISTER';
+
+    return {
+      invitationId: invitation.id,
+      status: invitation.status,
+      // The invited address is authoritative. The portal pre-fills and locks it,
+      // and the backend re-checks it at completion time.
+      email: invitation.email,
+      partnerName: invitation.partnerName,
+      organizationName: organization.name,
+      programName: program.name,
+      hasPortalAccount,
+      nextStep,
+      // The token travels on so the portal can complete the invitation once the
+      // partner is authenticated. It grants no access on its own.
+      redirectUrl: `${portalUrl}/${nextStep === 'LOGIN' ? 'login' : 'signup'}?invitationToken=${encodeURIComponent(token)}`,
+      message: hasPortalAccount
+        ? 'Sign in to your PartnerIQ affiliate account to finish joining this program.'
+        : 'Create your PartnerIQ affiliate account to finish joining this program.',
+    };
+  }
+
+  /**
+   * Phase two: the authenticated affiliate is joined to the invited program.
+   *
+   * Requires a real Affiliate Portal session. The authenticated user's email
+   * must match the invited address — the invitation cannot be redeemed by
+   * anyone else, no matter who holds the link.
+   *
+   * Idempotent: completing an already-joined invitation returns the existing
+   * membership rather than creating a second one.
+   */
+  async completeAffiliateInvitation(token: string, authenticatedUserId: string) {
+    const invitation = await this.findInvitationByTokenHash(SecurityUtils.hashToken(token));
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found');
+    }
+
+    const user = await this.loadUserById(authenticatedUserId);
+    if (!user) {
+      throw new UnauthorizedException('Sign in to your affiliate account to continue.');
+    }
+
+    const invitedEmail = invitation.email.toLowerCase().trim();
+    const authenticatedEmail = (user.email || '').toLowerCase().trim();
+
+    // The security rule this whole flow exists to enforce.
+    if (invitedEmail !== authenticatedEmail) {
+      this.audit(
+        invitation.organizationId,
+        authenticatedUserId,
+        'AFFILIATE_INVITATION_EMAIL_MISMATCH',
+        'affiliate_invitation',
+        invitation.id,
+        { invitedEmail, authenticatedEmail },
+      );
+      throw new ForbiddenException({
+        code: 'INVITATION_EMAIL_MISMATCH',
+        message: `This invitation was sent to ${invitedEmail}. Please use the email address that received this invitation.`,
+        details: { invitedEmail },
+      });
+    }
+
+    // Already completed — return what exists instead of creating a duplicate.
+    if (AFFILIATE_INVITATION_COMPLETED_STATUSES.includes(invitation.status as AffiliateInvitationStatus)) {
+      const existing = await this.describeCompletedInvitation(invitation);
+      if (existing) return existing;
+    }
+
+    this.assertInvitationCanBeAccepted(invitation);
+    const { program, organization } = await this.loadInvitationContext(invitation);
+    this.assertInvitationTargetsAreActive(program, organization);
+
+    const created = await this.create(
+      invitation.organizationId,
+      {
+        displayName: invitation.partnerName,
+        email: invitation.email,
+        programId: invitation.programId,
+      } as CreateAffiliateDto,
+      invitation.invitedBy,
+      true,
+      (invitation.environment as EnvironmentType) || EnvironmentType.LIVE,
+    );
+
+    created.programAffiliate.source = 'INVITATION';
+    created.programAffiliate.primaryChannel = invitation.primaryChannel;
+    created.programAffiliate.commissionOverrideType = invitation.commissionOverrideType;
+    created.programAffiliate.commissionOverride = invitation.commissionOverrideValue;
+    created.programAffiliate.termsVersionAccepted = invitation.termsVersionAccepted || 1;
+    created.programAffiliate.termsAcceptedAt = invitation.termsAcceptedAt || new Date();
+    created.programAffiliate.invitedBy = invitation.invitedBy;
+
+    // Link the portal account to the affiliate record so the partner's programs
+    // resolve on sign-in.
+    if (created.affiliate && !created.affiliate.userId) {
+      created.affiliate.userId = authenticatedUserId;
+      created.affiliate.updatedAt = new Date();
+      try {
+        const dataSource = await initializeDataSource();
+        await dataSource
+          .getRepository(Affiliate)
+          .update({ id: created.affiliate.id }, { userId: authenticatedUserId });
+      } catch { }
+    }
+
+    const now = new Date();
+    invitation.status = AffiliateInvitationStatus.JOINED;
+    invitation.acceptedAt = invitation.acceptedAt || now;
+    invitation.acceptedBy = authenticatedUserId;
+    invitation.joinedAt = now;
+    invitation.affiliateId = created.affiliate?.id;
+    invitation.termsAcceptedAt = invitation.termsAcceptedAt || now;
+    invitation.updatedAt = now;
+    await this.persistInvitation(invitation);
+
+    this.audit(
+      invitation.organizationId,
+      authenticatedUserId,
+      'AFFILIATE_INVITATION_COMPLETED',
+      'affiliate_invitation',
+      invitation.id,
+      { email: invitedEmail, programId: invitation.programId, affiliateId: created.affiliate?.id },
+    );
+
+    this.notifyOrgOfAcceptedInvitation(invitation.organizationId, invitation.partnerName).catch(
+      () => undefined,
+    );
+
+    return {
+      joined: true,
+      alreadyMember: false,
+      invitationId: invitation.id,
+      status: invitation.status,
+      affiliate: created.affiliate,
+      programAffiliate: created.programAffiliate,
+      trackingLink: (created as any).trackingLink,
+      organizationId: invitation.organizationId,
+      organizationName: organization.name,
+      programId: program.id,
+      programName: program.name,
+      message: `Welcome to ${organization.name}! You have successfully joined the ${program.name} partner program.`,
+    };
+  }
+
+  /**
+   * Completes an invitation immediately after registration or sign-in, so the
+   * partner lands straight on their dashboard already joined.
+   *
+   * Never throws: a problem completing the invitation must not fail the
+   * authentication that just succeeded. The caller reports what happened and
+   * the partner can retry from their invitations list.
+   */
+  async completeInvitationAfterAuth(token: string | undefined, userId: string) {
+    if (!token) return null;
+    try {
+      return await this.completeAffiliateInvitation(token, userId);
+    } catch (error) {
+      this.logger.warn(
+        `Could not complete affiliate invitation after authentication: ${(error as Error).message}`,
+      );
+      return { joined: false, error: (error as Error).message };
+    }
+  }
+
+  /** Whether an Affiliate Portal account already exists for this address. */
+  async affiliatePortalAccountExists(email: string) {
+    const normalized = email.toLowerCase().trim();
+    const cached = dbStore.users.find(
+      (item) => item.email?.toLowerCase().trim() === normalized && !item.deletedAt,
+    );
+    if (cached) return cached.platformRole === PlatformRole.AFFILIATE;
+    try {
+      const dataSource = await initializeDataSource();
+      const found = await dataSource
+        .getRepository(User)
+        .findOne({ where: { email: normalized, deletedAt: IsNull() } });
+      return Boolean(found && found.platformRole === PlatformRole.AFFILIATE);
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Resolves the invitation behind an in-flight registration or sign-in, so the
+   * portal can pre-fill and lock the invited email. Throws if the token is
+   * unknown; validity is re-checked at completion time.
+   */
+  async peekInvitationByToken(token: string) {
+    const invitation = await this.findInvitationByTokenHash(SecurityUtils.hashToken(token));
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found');
+    }
+    return invitation;
+  }
+
+  private async findInvitationByTokenHash(tokenHash: string) {
+    this.expireOldInvitations();
+    let invitation = dbStore.affiliateInvitations.find((item) => item.tokenHash === tokenHash);
+    if (!invitation) {
+      try {
+        const dataSource = await initializeDataSource();
+        const dbInv = await dataSource
+          .getRepository(AffiliateInvitation)
+          .findOne({ where: { tokenHash } });
+        if (dbInv) {
+          invitation = dbInv as any;
+          if (!dbStore.affiliateInvitations.some((item) => item.id === dbInv.id)) {
+            dbStore.affiliateInvitations.push(dbInv as any);
+          }
+        }
+      } catch { }
+    }
+    return invitation;
+  }
+
+  private async loadUserById(userId: string) {
+    const cached = dbStore.users.find((item) => item.id === userId && !item.deletedAt);
+    if (cached) return cached;
+    try {
+      const dataSource = await initializeDataSource();
+      return (
+        (await dataSource
+          .getRepository(User)
+          .findOne({ where: { id: userId, deletedAt: IsNull() } })) || undefined
+      );
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async loadInvitationContext(invitation: any) {
+    let program = dbStore.programs.find(
+      (item) =>
+        item.id === invitation.programId &&
+        item.organizationId === invitation.organizationId &&
+        !item.deletedAt,
+    );
+    let organization = dbStore.organizations.find(
+      (item) => item.id === invitation.organizationId && !item.deletedAt,
+    );
+
+    if (!program || !organization) {
+      try {
+        const dataSource = await initializeDataSource();
+        if (!program) {
+          const dbProg = await dataSource.getRepository(Program).findOne({
+            where: {
+              id: invitation.programId,
+              organizationId: invitation.organizationId,
+              deletedAt: IsNull(),
+            },
+          });
+          if (dbProg) program = dbProg as any;
+        }
+        if (!organization) {
+          const dbOrg = await dataSource.getRepository(Organization).findOne({
+            where: { id: invitation.organizationId, deletedAt: IsNull() },
+          });
+          if (dbOrg) organization = dbOrg as any;
+        }
+      } catch { }
+    }
+
+    if (!program || !organization) {
+      throw new NotFoundException('Invitation not found');
+    }
+    return { program, organization };
+  }
+
+  private assertInvitationTargetsAreActive(program: any, organization: any) {
+    if (organization.status && organization.status !== OrganizationStatus.ACTIVE) {
+      throw new BadRequestException('This organization is not currently accepting partners.');
+    }
+    if (program.status === ProgramStatus.PAUSED || program.status === ProgramStatus.ARCHIVED) {
+      throw new BadRequestException('This program is currently unavailable.');
+    }
+  }
+
+  /** Describes an invitation that has already produced a membership. */
+  private async describeCompletedInvitation(invitation: any) {
+    const { program, organization } = await this.loadInvitationContext(invitation);
+    const affiliate =
+      (invitation.affiliateId &&
+        dbStore.affiliates.find((item) => item.id === invitation.affiliateId)) ||
+      dbStore.affiliates.find(
+        (item) =>
+          item.organizationId === invitation.organizationId &&
+          item.email?.toLowerCase().trim() === invitation.email.toLowerCase().trim(),
+      );
+    if (!affiliate) return null;
+
+    const programAffiliate = dbStore.programAffiliates.find(
+      (item) => item.programId === invitation.programId && item.affiliateId === affiliate.id,
+    );
+
+    return {
+      joined: true,
+      alreadyMember: true,
+      invitationId: invitation.id,
+      status: invitation.status,
+      affiliate,
+      programAffiliate,
+      organizationId: invitation.organizationId,
+      organizationName: organization.name,
+      programId: program.id,
+      programName: program.name,
+      message: `You are already part of the ${program.name} partner program at ${organization.name}.`,
+    };
+  }
+
+  /**
+   * The link that goes in the invitation email.
+   *
+   * Points at the Affiliate Portal, not the organization admin app: partners
+   * register and authenticate in their own application, with their own
+   * accounts. Sending them into the admin app would mix the two user
+   * experiences and leave them unable to complete the flow.
+   */
+  private buildInvitationUrl(token: string) {
+    const portalUrl = getAppConfig().affiliateFrontendUrl.replace(/\/$/, '');
+    return `${portalUrl}/invitations/${token}`;
+  }
+
+  private async persistInvitation(invitation: any) {
+    try {
+      const dataSource = await initializeDataSource();
+      await dataSource.getRepository(AffiliateInvitation).save(invitation);
+    } catch (error) {
+      this.logger.warn(
+        `Failed to persist affiliate invitation ${invitation.id}: ${(error as Error).message}`,
+      );
+    }
   }
 
   async listInvitationsForEmail(email: string, environment: EnvironmentType = EnvironmentType.LIVE) {
@@ -894,8 +1515,8 @@ export class AffiliatesService {
 
   async declineInvitationForEmail(invitationId: string, email: string, userId?: string) {
     const invitation = await this.findInvitationForEmail(invitationId, email);
-    if (invitation.status !== AffiliateInvitationStatus.PENDING) {
-      throw new BadRequestException('Only pending invitations can be declined.');
+    if (!AFFILIATE_INVITATION_OPEN_STATUSES.includes(invitation.status as AffiliateInvitationStatus)) {
+      throw new BadRequestException('Only invitations that have not been completed can be declined.');
     }
     invitation.status = AffiliateInvitationStatus.DECLINED;
     invitation.updatedAt = new Date();
@@ -966,8 +1587,10 @@ export class AffiliatesService {
     }
 
     if (existingMembership) {
-      invitation.status = AffiliateInvitationStatus.ACCEPTED;
-      invitation.acceptedAt = new Date();
+      invitation.status = AffiliateInvitationStatus.JOINED;
+      invitation.acceptedAt = invitation.acceptedAt || new Date();
+      invitation.joinedAt = invitation.joinedAt || new Date();
+      invitation.affiliateId = existingAffiliate?.id;
       invitation.acceptedBy = userId;
       try {
         const dataSource = await initializeDataSource();
@@ -990,9 +1613,12 @@ export class AffiliatesService {
     created.programAffiliate.termsAcceptedAt = new Date();
     created.programAffiliate.invitedBy = invitation.invitedBy;
 
-    invitation.status = AffiliateInvitationStatus.ACCEPTED;
-    invitation.acceptedAt = new Date();
+    invitation.status = AffiliateInvitationStatus.JOINED;
+    invitation.acceptedAt = invitation.acceptedAt || new Date();
+    invitation.joinedAt = new Date();
+    invitation.affiliateId = created.affiliate?.id;
     invitation.acceptedBy = userId;
+    invitation.termsAcceptedAt = invitation.termsAcceptedAt || new Date();
     invitation.updatedAt = new Date();
 
     try {
@@ -1011,6 +1637,8 @@ export class AffiliatesService {
       source: 'INVITATION',
       termsVersionAccepted: created.programAffiliate.termsVersionAccepted,
     });
+
+    this.notifyOrgOfAcceptedInvitation(invitation.organizationId, invitation.partnerName || invitation.email).catch(() => undefined);
 
     return {
       affiliate: created.affiliate,
@@ -1248,6 +1876,18 @@ export class AffiliatesService {
         programId: app.programId,
       }, 'system-auto-approval', true);
 
+      const autoApprovalOrg = dbStore.organizations.find((o) => o.id === dto.organizationId);
+      this.notifyApplicant(
+        SystemTemplateKey.AFFILIATE_APPLICATION_APPROVED,
+        dto.organizationId,
+        app.email,
+        app.name,
+        app.programId,
+        created.trackingLink
+          ? { referralLink: `https://${autoApprovalOrg?.slug || 'go'}.partneriq.in/r/${created.trackingLink.shortCode}` }
+          : {},
+      ).catch(() => undefined);
+
       return {
         success: true,
         autoApproved: true,
@@ -1257,6 +1897,8 @@ export class AffiliatesService {
         ...created,
       };
     }
+
+    this.notifyApplicant(SystemTemplateKey.AFFILIATE_APPLICATION_RECEIVED, dto.organizationId, app.email, app.name, app.programId).catch(() => undefined);
 
     return {
       success: true,
@@ -1464,6 +2106,24 @@ export class AffiliatesService {
       createdAt: new Date(),
     });
 
+    this.emitWebhook(organizationId, WebhookEvent.AFFILIATE_APPROVED, {
+      affiliateId: created.affiliate.id,
+      programId: app.programId,
+      status: created.affiliate.status,
+    });
+
+    const approvalOrg = dbStore.organizations.find((o) => o.id === organizationId);
+    this.notifyApplicant(
+      SystemTemplateKey.AFFILIATE_APPLICATION_APPROVED,
+      organizationId,
+      app.email,
+      app.name,
+      app.programId,
+      created.trackingLink
+        ? { referralLink: `https://${approvalOrg?.slug || 'go'}.partneriq.in/r/${created.trackingLink.shortCode}` }
+        : {},
+    ).catch(() => undefined);
+
     return { application: app, ...created };
   }
 
@@ -1506,6 +2166,8 @@ export class AffiliatesService {
       resourceId: app.id,
       createdAt: new Date(),
     });
+
+    this.notifyApplicant(SystemTemplateKey.AFFILIATE_APPLICATION_REJECTED, organizationId, app.email, app.name, app.programId).catch(() => undefined);
 
     return { success: true, application: app };
   }
@@ -1585,19 +2247,50 @@ export class AffiliatesService {
 
   private assertInvitationCanBeAccepted(invitation: any) {
     this.expireOldInvitations();
-    if (invitation.status === AffiliateInvitationStatus.REVOKED || invitation.revokedAt) throw new BadRequestException('This invitation is no longer valid.');
-    if (invitation.status === AffiliateInvitationStatus.ACCEPTED || invitation.acceptedAt) throw new BadRequestException("You've already joined this program.");
-    if (invitation.status === AffiliateInvitationStatus.DECLINED) throw new BadRequestException('This invitation was declined.');
+    if (invitation.status === AffiliateInvitationStatus.REVOKED || invitation.revokedAt) {
+      throw new BadRequestException({
+        code: 'INVITATION_REVOKED',
+        message: 'This invitation is no longer valid. Ask the organization to send a new one.',
+      });
+    }
+    if (invitation.status === AffiliateInvitationStatus.CANCELLED) {
+      throw new BadRequestException({
+        code: 'INVITATION_CANCELLED',
+        message: 'This invitation was cancelled. Ask the organization to send a new one.',
+      });
+    }
+    if (AFFILIATE_INVITATION_COMPLETED_STATUSES.includes(invitation.status as AffiliateInvitationStatus)) {
+      throw new BadRequestException({
+        code: 'INVITATION_ALREADY_COMPLETED',
+        message: "You've already joined this program.",
+      });
+    }
+    if (invitation.status === AffiliateInvitationStatus.DECLINED) {
+      throw new BadRequestException({
+        code: 'INVITATION_DECLINED',
+        message: 'This invitation was declined.',
+      });
+    }
+    // TERMS_ACCEPTED is deliberately allowed through: the partner accepted the
+    // terms and is now coming back to register or sign in, which is exactly the
+    // state this flow parks them in.
     if (new Date(invitation.expiresAt) <= new Date()) {
       invitation.status = AffiliateInvitationStatus.EXPIRED;
-      throw new BadRequestException('This invitation has expired.');
+      throw new BadRequestException({
+        code: 'INVITATION_EXPIRED',
+        message: 'This invitation has expired. Ask the organization to resend it.',
+        details: { canRequestResend: true },
+      });
     }
   }
 
   private expireOldInvitations() {
     const now = new Date();
     dbStore.affiliateInvitations.forEach((item) => {
-      if (item.status === AffiliateInvitationStatus.PENDING && !item.revokedAt && new Date(item.expiresAt) <= now) {
+      // TERMS_ACCEPTED expires too: a partner who accepted the terms but never
+      // came back to register should not be able to redeem a stale link later.
+      const isOpen = AFFILIATE_INVITATION_OPEN_STATUSES.includes(item.status as AffiliateInvitationStatus);
+      if (isOpen && !item.revokedAt && new Date(item.expiresAt) <= now) {
         item.status = AffiliateInvitationStatus.EXPIRED;
         item.updatedAt = now;
       }
@@ -1637,7 +2330,7 @@ export class AffiliatesService {
     const commissionType = invitation.commissionOverrideType ?? program?.commissionType;
     const commissionSummary = commissionType === InvitationCommissionType.PERCENTAGE
       ? `${commissionValue / 100}% Recurring`
-      : `${program?.currency || 'USD'} ${(commissionValue / 100).toFixed(2)} per conversion`;
+      : `${program?.currency || PLATFORM_CURRENCY} ${(commissionValue / 100).toFixed(2)} per conversion`;
 
     return {
       ...serialized,
@@ -1686,12 +2379,12 @@ export class AffiliatesService {
       return `${Number(invitation.commissionOverrideValue)}%`;
     }
     if (invitation.commissionOverrideType === InvitationCommissionType.FIXED) {
-      return `${program.currency || 'USD'} ${Number(invitation.commissionOverrideValue).toLocaleString()}`;
+      return `${program.currency || PLATFORM_CURRENCY} ${Number(invitation.commissionOverrideValue).toLocaleString()}`;
     }
     if (program.commissionType === 'PERCENTAGE') {
       return `${Number(program.defaultCommissionValue) / 100}%`;
     }
-    return `${program.currency || 'USD'} ${(Number(program.defaultCommissionValue) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `${program.currency || PLATFORM_CURRENCY} ${(Number(program.defaultCommissionValue) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
 
   private formatPayoutSchedule(value: string) {
@@ -1737,6 +2430,7 @@ export class AffiliatesService {
     let dbClicks: Click[] = [];
     let dbMemberships: OrganizationMembership[] = [];
     let dbAllUsers: User[] = [];
+    let allOrganizations: Organization[] = [];
 
     if (dataSource) {
       try {
@@ -1753,6 +2447,7 @@ export class AffiliatesService {
           clicks,
           memberships,
           allUsers,
+          orgs,
         ] = await Promise.all([
           dataSource.getRepository(Affiliate).find(),
           dataSource.getRepository(User).find({ where: { platformRole: PlatformRole.AFFILIATE } }),
@@ -1766,6 +2461,7 @@ export class AffiliatesService {
           dataSource.getRepository(Click).find(),
           dataSource.getRepository(OrganizationMembership).find({ where: { organizationId, status: 'ACTIVE' } }),
           dataSource.getRepository(User).find(),
+          dataSource.getRepository(Organization).find(),
         ]);
 
         dbAffiliates = affs || [];
@@ -1780,6 +2476,7 @@ export class AffiliatesService {
         dbClicks = clicks || [];
         dbMemberships = memberships || [];
         dbAllUsers = allUsers || [];
+        allOrganizations = orgs || [];
       } catch (err) {
         console.warn('Error reading from database for partner suggestions:', err);
       }
@@ -1798,6 +2495,7 @@ export class AffiliatesService {
       dbClicks = dbStore.clicks as any;
       dbMemberships = dbStore.organizationMemberships.filter((m) => m.organizationId === organizationId) as any;
       dbAllUsers = dbStore.users as any;
+      allOrganizations = dbStore.organizations as any;
     }
 
     const orgProgramMap = new Map(dbPrograms.map((p) => [p.id, p.name]));
@@ -1924,7 +2622,13 @@ export class AffiliatesService {
       const directClicks = dbClicks.filter((cl) => linkIds.has(cl.trackingLinkId)).length;
       const totalClicks = links.reduce((sum, l: any) => sum + (Number(l.clicks) || 0), 0) + directClicks;
 
-      // Tier strictly based on real DB stats
+      // NOTE: this is a deliberately separate "reputation" tier, not the real
+      // per-organization PartnerTier/AffiliateTier system (see tier-evaluator.service.ts).
+      // Partner Directory candidates are platform-wide — most have no AffiliateTier row
+      // in THIS org at all (some have none anywhere yet) — so there's no single real tier
+      // to show here. This is a global track-record signal computed from raw conversion
+      // volume across every org, used only for discovery/ranking, never for commission
+      // rates or org-specific tier logic.
       let tier = { code: 'STARTER', name: 'Starter Partner', colorToken: 'starter', badge: '🌱 Starter' };
       if (conversionsCount >= 50) {
         tier = { code: 'PLATINUM', name: 'Platinum Partner', colorToken: 'platinum', badge: '🏅 Platinum' };
@@ -1935,6 +2639,16 @@ export class AffiliatesService {
       } else if (conversionsCount >= 1) {
         tier = { code: 'BRONZE', name: 'Bronze Partner', colorToken: 'bronze', badge: '🥉 Bronze' };
       }
+
+      // Cross-organization presence — used to show "this partner also works with N other
+      // organizations" as social proof. Only id/name are exposed, never financial data.
+      const otherOrgIds = new Set(
+        matchingAffs.map((a) => a.organizationId).filter((id) => id && id !== organizationId),
+      );
+      const otherOrganizations = Array.from(otherOrgIds)
+        .map((id) => allOrganizations.find((o) => o.id === id))
+        .filter((o): o is Organization => Boolean(o))
+        .map((o) => ({ id: o.id, name: o.name }));
 
       // Relationship with current organization
       const matchingProgAffs = orgProgramAffiliates.filter((pa) => affiliateIds.has(pa.affiliateId));
@@ -1971,7 +2685,7 @@ export class AffiliatesService {
           totalCommissionsEarned: totalCommissions,
           totalRevenueGenerated: totalRevenue,
           totalClicks,
-          currency: 'USD',
+          currency: PLATFORM_CURRENCY,
         },
         relationship: {
           isAlreadyEnrolledInOrg,
@@ -1979,6 +2693,10 @@ export class AffiliatesService {
           isEnrolledInProgram,
           hasPendingInvitation,
           pendingInvitationProgramName,
+        },
+        crossOrgPresence: {
+          organizationCount: otherOrganizations.length,
+          organizations: otherOrganizations.slice(0, 6),
         },
       });
     }

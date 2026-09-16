@@ -65,6 +65,7 @@ import {
   PageSize,
   PageOrientation,
 } from '../common/enums';
+import { PLATFORM_CURRENCY } from '../common/constants/currency';
 import {
   RoleType,
   MembershipStatus,
@@ -177,6 +178,15 @@ export class Organization {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
+  /**
+   * Customer account this organization belongs to. Nullable for rows created
+   * before account-level billing existed — BillingAccountService backfills it
+   * on first access from `createdBy`.
+   */
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  accountId?: string;
+
   @Column({ type: 'varchar', length: 255 })
   name!: string;
 
@@ -196,7 +206,7 @@ export class Organization {
   @Column({ type: 'varchar', length: 200, default: 'US' })
   country!: string;
 
-  @Column({ type: 'varchar', length: 10, default: 'USD' })
+  @Column({ type: 'varchar', length: 10, default: PLATFORM_CURRENCY })
   defaultCurrency!: string;
 
   @Column({ type: 'varchar', length: 50, default: OrganizationStatus.ACTIVE })
@@ -817,7 +827,7 @@ export class Program {
   @Column({ type: 'varchar', length: 50, default: ProgramStatus.ACTIVE })
   status!: ProgramStatus;
 
-  @Column({ type: 'varchar', length: 10, default: 'USD' })
+  @Column({ type: 'varchar', length: 10, default: PLATFORM_CURRENCY })
   currency!: string;
 
   @Column({ type: 'varchar', length: 50, default: CommissionType.PERCENTAGE })
@@ -1107,6 +1117,10 @@ export class AffiliateSupportTicket {
 
 @Entity('program_affiliates')
 @Index(['organizationId', 'environment'])
+// One membership per affiliate per program. Enforced in the database so a
+// double-submitted invitation or a race between two accept calls cannot
+// produce two rows for the same partner in the same program.
+@Unique(['programId', 'affiliateId'])
 export class ProgramAffiliate {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -1218,6 +1232,25 @@ export class AffiliateInvitation {
   @Column({ type: 'timestamp', nullable: true })
   acceptedAt?: Date;
 
+  /**
+   * When the invited partner accepted the program terms on the invitation page.
+   * Set before they have an account — acceptance of terms is not membership.
+   */
+  @Column({ type: 'timestamp', nullable: true })
+  termsAcceptedAt?: Date;
+
+  @Column({ type: 'int', nullable: true })
+  termsVersionAccepted?: number;
+
+  /** When the membership was actually created, after portal authentication. */
+  @Column({ type: 'timestamp', nullable: true })
+  joinedAt?: Date;
+
+  /** The affiliate record this invitation ultimately produced or linked to. */
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  affiliateId?: string;
+
   @Column({ type: 'timestamp', nullable: true })
   revokedAt?: Date;
 
@@ -1279,6 +1312,7 @@ export class AffiliateApplication {
 
 @Entity('tracking_links')
 @Index(['organizationId', 'environment'])
+@Unique(['organizationId', 'environment', 'shortCode'])
 export class TrackingLink {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -1305,7 +1339,7 @@ export class TrackingLink {
   @Column({ type: 'varchar', length: 2000 })
   destinationUrl!: string;
 
-  @Index({ unique: true })
+  @Index()
   @Column({ type: 'varchar', length: 255 })
   shortCode!: string;
 
@@ -1730,6 +1764,24 @@ export class Click {
   @Column({ type: 'varchar', length: 1000, nullable: true })
   referrer?: string;
 
+  @Column({ type: 'varchar', length: 2000, nullable: true })
+  landingUrl?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  utmSource?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  utmMedium?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  utmCampaign?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  utmTerm?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  utmContent?: string;
+
   @Column({ type: 'varchar', length: 100, nullable: true })
   country?: string;
 
@@ -1790,6 +1842,7 @@ export class Attribution {
   @Column({ type: 'simple-json', nullable: true })
   breakdown?: Array<Record<string, unknown>>;
 
+  @Index()
   @Column({ type: 'timestamp' })
   expiresAt!: Date;
 
@@ -1905,6 +1958,14 @@ export class Conversion {
   @Column({ type: 'uuid', nullable: true })
   affiliateId?: string;
 
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  clickId?: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  resolvedAttributionId?: string;
+
   @Column({ type: 'varchar', length: 255 })
   externalId!: string;
 
@@ -1913,6 +1974,12 @@ export class Conversion {
 
   @Column({ type: 'int' })
   amount!: number;
+
+  @Column({ type: 'int', default: 0 })
+  refundedAmount!: number;
+
+  @Column({ type: 'simple-json', nullable: true })
+  refundHistory?: Array<{ refundExternalId?: string; amount: number; reason?: string; createdAt: string }>;
 
   @Column({ type: 'varchar', length: 10 })
   currency!: string;
@@ -2039,6 +2106,9 @@ export class Commission {
   @Column({ type: 'int' })
   commissionAmount!: number;
 
+  @Column({ type: 'int', default: 0 })
+  reversedAmount!: number;
+
   @Column({ type: 'varchar', length: 50 })
   calculationVersion!: string;
 
@@ -2073,7 +2143,7 @@ export class LedgerAccount {
   @Column({ type: 'int', default: 0 })
   balance!: number;
 
-  @Column({ type: 'varchar', length: 10, default: 'USD' })
+  @Column({ type: 'varchar', length: 10, default: PLATFORM_CURRENCY })
   currency!: string;
 
   @CreateDateColumn()
@@ -2446,8 +2516,11 @@ export class PayoutBatch {
   @Column({ type: 'int' })
   totalAmount!: number;
 
-  @Column({ type: 'varchar', length: 10, default: 'USD' })
+  @Column({ type: 'varchar', length: 10, default: PLATFORM_CURRENCY })
   currency!: string;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  gateway?: string;
 
   @Column({ type: 'uuid' })
   createdBy!: string;
@@ -2484,11 +2557,17 @@ export class PayoutItem {
   @Column({ type: 'int' })
   amount!: number;
 
-  @Column({ type: 'varchar', length: 10, default: 'USD' })
+  @Column({ type: 'varchar', length: 10, default: PLATFORM_CURRENCY })
   currency!: string;
 
   @Column({ type: 'varchar', length: 50 })
   status!: PayoutStatus;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  gateway?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  disbursementAccount?: string;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   providerReference?: string;
@@ -2748,6 +2827,12 @@ export class Integration {
   @Column({ type: 'varchar', length: 80, nullable: true })
   iconKey?: string;
 
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  logo?: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  capabilities?: string[];
+
   @Column({ type: 'int', default: 1000 })
   displayOrder!: number;
 
@@ -2787,6 +2872,12 @@ export class OrganizationIntegration {
 
   @Column({ type: 'timestamp', nullable: true })
   connectedAt?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  lastConnectedAt?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  lastCheckedAt?: Date;
 
   @Column({ type: 'timestamp', nullable: true })
   lastSyncAt?: Date;
@@ -3191,7 +3282,7 @@ export class PartnerDeal {
   @Column({ type: 'bigint', nullable: true })
   actualValue?: number;
 
-  @Column({ type: 'varchar', length: 10, default: 'USD' })
+  @Column({ type: 'varchar', length: 10, default: PLATFORM_CURRENCY })
   currency!: string;
 
   @Column({ type: 'timestamp', nullable: true })
@@ -3682,6 +3773,112 @@ export class BillingSubscriptionDiscount {
   modifiedDate!: Date;
 }
 
+// ─────────────────────────────────────────────────────────
+// Organization product coupons — discount codes an org creates for its OWN
+// product and assigns to specific affiliates to share with their audience.
+// Distinct from BillingCoupon above (PartnerIQ's own SaaS subscription discounts).
+// ─────────────────────────────────────────────────────────
+
+@Entity('organization_coupons')
+@Unique(['organizationId', 'normalizedCode'])
+@Index(['organizationId', 'status'])
+export class OrganizationCoupon {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationId!: string;
+
+  @Column({ type: 'varchar', length: 60 })
+  code!: string;
+
+  @Column({ type: 'varchar', length: 60 })
+  normalizedCode!: string;
+
+  @Column({ type: 'varchar', length: 160 })
+  name!: string;
+
+  @Column({ type: 'text', nullable: true })
+  description?: string;
+
+  @Column({ type: 'varchar', length: 30, default: 'PERCENTAGE' })
+  discountType!: string;
+
+  @Column({ type: 'int' })
+  discountValue!: number;
+
+  @Column({ type: 'varchar', length: 30, default: 'ACTIVE' })
+  status!: string;
+
+  @Column({ type: 'int', nullable: true })
+  maxRedemptions?: number;
+
+  @Column({ type: 'timestamp', nullable: true })
+  validFrom?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  validUntil?: Date;
+
+  @Column({ type: 'uuid' })
+  createdBy!: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
+@Entity('organization_coupon_assignments')
+@Unique(['couponId', 'affiliateId'])
+export class OrganizationCouponAssignment {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  couponId!: string;
+
+  // Denormalized for fast ownership checks and to guarantee an assignment can
+  // never straddle organizations even if couponId/affiliateId were tampered with.
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationId!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  affiliateId!: string;
+
+  @Column({ type: 'uuid' })
+  assignedBy!: string;
+
+  @CreateDateColumn()
+  assignedAt!: Date;
+}
+
+@Entity('organization_coupon_settings')
+@Unique(['organizationId'])
+export class OrganizationCouponSettings {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column({ type: 'uuid' })
+  organizationId!: string;
+
+  @Column({ type: 'boolean', default: true })
+  couponsEnabled!: boolean;
+
+  @Column({ type: 'uuid', nullable: true })
+  updatedBy?: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
 @Entity('organization_trials')
 export class OrganizationTrial {
   @PrimaryGeneratedColumn('uuid')
@@ -3721,6 +3918,14 @@ export class OrganizationTrial {
 export class BillingSubscription {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
+
+  /**
+   * Account this subscription bills. Nullable for legacy org-level rows, which
+   * are still resolved through their organization's account.
+   */
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  accountId?: string;
 
   @Index()
   @Column({ type: 'uuid' })
@@ -5124,4 +5329,258 @@ export class PlatformSetting {
 
   @UpdateDateColumn()
   updatedAt!: Date;
+}
+
+// ---------------------------------------------------------------------------
+// Subscription accounts, plan limits, add-ons and add-on purchases
+//
+// PartnerIQ bills a *customer account*, not an individual organization: one
+// paid subscription covers every organization the customer creates, and the
+// plan's organization/program/affiliate/member allowances are consumed across
+// all of them together. `organizations.accountId` and
+// `billing_subscriptions.accountId` are nullable so pre-existing rows keep
+// working and get backfilled lazily by BillingAccountService.
+// ---------------------------------------------------------------------------
+
+@Entity('billing_accounts')
+export class BillingAccount {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  name!: string;
+
+  @Index({ unique: true })
+  @Column({ type: 'uuid' })
+  ownerUserId!: string;
+
+  @Column({ type: 'varchar', length: 10, default: PLATFORM_CURRENCY })
+  currency!: string;
+
+  @Column({ type: 'varchar', length: 20, default: 'ACTIVE' })
+  status!: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  deletedAt?: Date;
+}
+
+/**
+ * Included allowance for one resource on one plan.
+ *
+ * `includedLimit === null` means UNLIMITED. NULL is used rather than a sentinel
+ * number (and never JavaScript `Infinity`, which has no SQL representation) so
+ * that "unlimited" is unambiguous at the database level.
+ */
+@Entity('billing_plan_limits')
+@Unique(['planId', 'resourceType'])
+export class BillingPlanLimit {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  planId!: string;
+
+  @Column({ type: 'varchar', length: 30 })
+  resourceType!: string;
+
+  @Column({ type: 'int', nullable: true })
+  includedLimit?: number | null;
+
+  @Column({ type: 'boolean', default: true })
+  addonPurchasable!: boolean;
+
+  @CreateDateColumn()
+  createdDate!: Date;
+
+  @UpdateDateColumn()
+  modifiedDate!: Date;
+}
+
+@Entity('billing_addons')
+@Unique(['code', 'billingInterval', 'currency'])
+export class BillingAddon {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column({ type: 'varchar', length: 50 })
+  code!: string;
+
+  @Column({ type: 'varchar', length: 120 })
+  name!: string;
+
+  @Column({ type: 'text', nullable: true })
+  description?: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 30 })
+  resourceType!: string;
+
+  /** Price of a single unit, in the currency's minor unit (paise for INR). */
+  @Column({ type: 'int', default: 0 })
+  unitPrice!: number;
+
+  @Column({ type: 'varchar', length: 10, default: PLATFORM_CURRENCY })
+  currency!: string;
+
+  @Column({ type: 'varchar', length: 20, default: 'MONTHLY' })
+  billingInterval!: string;
+
+  /** Units of capacity granted per purchased quantity (e.g. 1 affiliate per unit). */
+  @Column({ type: 'int', default: 1 })
+  unitsPerQuantity!: number;
+
+  @Column({ type: 'int', default: 1 })
+  minQuantity!: number;
+
+  @Column({ type: 'int', nullable: true })
+  maxQuantity?: number | null;
+
+  @Column({ type: 'boolean', default: true })
+  isActive!: boolean;
+
+  @Column({ type: 'int', default: 0 })
+  sortOrder!: number;
+
+  @Column({ type: 'uuid', nullable: true })
+  createdBy?: string;
+
+  @CreateDateColumn()
+  createdDate!: Date;
+
+  @UpdateDateColumn()
+  modifiedDate!: Date;
+
+  @Column({ type: 'uuid', nullable: true })
+  modifiedBy?: string;
+
+  @Column({ type: 'varchar', length: 20, default: 'ACTIVE' })
+  rowStatus!: string;
+}
+
+@Entity('billing_addon_purchases')
+export class BillingAddonPurchase {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  accountId!: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  subscriptionId?: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  addonId!: string;
+
+  /** Denormalised so usage math never has to join through the catalog. */
+  @Index()
+  @Column({ type: 'varchar', length: 30 })
+  resourceType!: string;
+
+  @Column({ type: 'int', default: 0 })
+  quantity!: number;
+
+  /** Unit price at purchase time — the catalog price may change later. */
+  @Column({ type: 'int', default: 0 })
+  unitPriceSnapshot!: number;
+
+  @Column({ type: 'varchar', length: 10, default: PLATFORM_CURRENCY })
+  currency!: string;
+
+  @Column({ type: 'varchar', length: 20, default: 'MONTHLY' })
+  billingInterval!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 30, default: 'PENDING' })
+  status!: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  startDate?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  endDate?: Date;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  providerPaymentId?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  providerOrderId?: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  idempotencyKey?: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  metadata?: any;
+
+  @Column({ type: 'uuid', nullable: true })
+  createdBy?: string;
+
+  @CreateDateColumn()
+  createdDate!: Date;
+
+  @UpdateDateColumn()
+  modifiedDate!: Date;
+
+  @Column({ type: 'uuid', nullable: true })
+  modifiedBy?: string;
+
+  @Column({ type: 'varchar', length: 20, default: 'ACTIVE' })
+  rowStatus!: string;
+}
+
+// ---------------------------------------------------------------------------
+// Legal document acceptance
+//
+// Evidence that a specific user accepted a specific version of a specific
+// document, at a specific time, from a specific address. Kept as an append-only
+// audit trail rather than a boolean on `users`, because consent has to survive
+// document revisions: when a policy version changes, the old acceptance stays
+// on record and the absence of a row for the new version is what makes
+// re-acceptance detectable.
+// ---------------------------------------------------------------------------
+
+@Entity('user_legal_acceptances')
+@Index(['userId', 'documentType'])
+export class UserLegalAcceptance {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  userId!: string;
+
+  /** e.g. 'terms', 'privacy', 'anti-fraud' — mirrors the landing legal docs. */
+  @Column({ type: 'varchar', length: 40 })
+  documentType!: string;
+
+  /** Version string in force when the user accepted, e.g. 'draft-1.0'. */
+  @Column({ type: 'varchar', length: 40 })
+  documentVersion!: string;
+
+  @Column({ type: 'timestamp' })
+  acceptedAt!: Date;
+
+  /** How the acceptance was given — the signup form, OAuth signup, re-consent. */
+  @Column({ type: 'varchar', length: 40, default: 'SIGNUP' })
+  acceptanceContext!: string;
+
+  /** Retained as evidence of where the acceptance came from. */
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  ipAddress?: string;
+
+  @Column({ type: 'varchar', length: 512, nullable: true })
+  userAgent?: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
 }

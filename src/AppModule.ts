@@ -1,4 +1,7 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { ApiThrottlerGuard } from './common/guards/api-throttler.guard';
 import { AuthModule } from './modules/auth/auth.module';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
 import { MembershipsModule } from './modules/memberships/memberships.module';
@@ -27,9 +30,18 @@ import { DemoBookingsModule } from './modules/demo-bookings/demo-bookings.module
 import { EmailDesignModule } from './modules/email-design/email-design.module';
 import { InternalOpsModule } from './modules/internal-ops/internal-ops.module';
 import { BrandingModule } from './modules/branding/branding.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { CouponsModule } from './modules/coupons/coupons.module';
 
 @Module({
   imports: [
+    ThrottlerModule.forRoot([
+      {
+        name: 'default',
+        ttl: 60_000,
+        limit: 120,
+      },
+    ]),
     AuthModule,
     OrganizationsModule,
     MembershipsModule,
@@ -53,11 +65,19 @@ import { BrandingModule } from './modules/branding/branding.module';
     AssetManagementModule,
     PartnerDealsModule,
     GamificationModule,
+    CouponsModule,
     AutomationsModule,
     DemoBookingsModule,
     EmailDesignModule,
     InternalOpsModule,
     BrandingModule,
+    AnalyticsModule,
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ApiThrottlerGuard,
+    },
   ],
 })
 export class AppModule { }

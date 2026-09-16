@@ -8,9 +8,15 @@ import { MembershipsModule } from '../memberships/memberships.module';
 import { GamificationModule } from '../gamification/gamification.module';
 import { AutomationsModule } from '../automations/automations.module';
 import { AuthModule } from '../auth/auth.module';
+import { WebhooksModule } from '../webhooks/webhooks.module';
+import { EmailDesignModule } from '../email-design/email-design.module';
+import { NotificationsModule } from '../notifications/notifications.module';
+import { BillingModule } from '../billing/billing.module';
 
 @Module({
-  imports: [MembershipsModule, GamificationModule, AutomationsModule, forwardRef(() => AuthModule)],
+  // BillingModule provides SubscriptionLimitService, which gates affiliate
+  // creation and invitation on the account-wide affiliate allowance.
+  imports: [MembershipsModule, GamificationModule, AutomationsModule, forwardRef(() => AuthModule), WebhooksModule, EmailDesignModule, NotificationsModule, BillingModule],
   controllers: [AffiliatesController, AffiliatePortalController, AffiliateAuthController],
   providers: [AffiliatesService, AffiliateAuthService],
   exports: [AffiliatesService],

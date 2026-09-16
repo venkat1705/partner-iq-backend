@@ -11,6 +11,7 @@ import { EmailProviderFactory } from './providers/email-provider.factory';
 import { EmailQueueProducer } from './queue/email-queue.producer';
 import { EmailQueueWorker } from './queue/email-queue.worker';
 import { DomainEventEmailListener } from './listeners/domain-event-email.listener';
+import { SystemEmailDispatchService } from './services/system-email-dispatch.service';
 
 import { DocumentRendererService } from './services/document-renderer.service';
 import { PdfGeneratorService } from './services/pdf-generator.service';
@@ -31,6 +32,7 @@ import { PdfGeneratorService } from './services/pdf-generator.service';
     EmailQueueProducer,
     EmailQueueWorker,
     DomainEventEmailListener,
+    SystemEmailDispatchService,
   ],
   exports: [
     EmailDesignService,
@@ -42,6 +44,7 @@ import { PdfGeneratorService } from './services/pdf-generator.service';
     EmailQueueProducer,
     EmailQueueWorker,
     DomainEventEmailListener,
+    SystemEmailDispatchService,
   ],
 })
 export class EmailDesignModule { }

@@ -1,5 +1,6 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
+import { lookup as dnsLookup } from 'dns/promises';
 import { dbStore, WebhookEndpointEntity, WebhookDeliveryEntity } from '../../database/store';
 import { SecurityUtils } from '../../common/utils/security.utils';
 import { AuditAction, WebhookEvent } from '../../common/enums';
@@ -7,6 +8,8 @@ import { CreateWebhookEndpointDto, UpdateWebhookEndpointDto } from './dto/webhoo
 
 @Injectable()
 export class WebhooksService {
+  private readonly logger = new Logger(WebhooksService.name);
+
   async createEndpoint(organizationId: string, createdByUserId: string, dto: CreateWebhookEndpointDto) {
     this.validateWebhookUrl(dto.url);
     const { secret, hash } = SecurityUtils.generateWebhookSecret();
@@ -62,38 +65,73 @@ export class WebhooksService {
       (e) => e.organizationId === organizationId && e.enabled && e.subscribedEvents.includes(event),
     );
 
+    if (!endpoints.length) return;
+
     const timestamp = Math.floor(Date.now() / 1000);
     const rawBody = JSON.stringify({ event, timestamp, data: payload });
 
-    for (const ep of endpoints) {
-      const secret = SecurityUtils.decrypt(ep.secretEncrypted);
-      const signature = SecurityUtils.signWebhookPayload(secret, timestamp, rawBody);
-      const deliveryId = `del_${uuidv4()}`;
+    await Promise.all(endpoints.map((ep) => this.deliverToEndpoint(ep, event, timestamp, rawBody)));
+  }
 
-      // Record simulated async dispatch delivery
-      const delivery: WebhookDeliveryEntity = {
-        id: deliveryId,
-        endpointId: ep.id,
-        eventId: `evt_${uuidv4()}`,
-        attempt: 1,
-        requestBody: rawBody,
-        responseCode: 200,
-        responseBodyTruncated: JSON.stringify({
-          received: true,
-          headers: {
-            'PartnerIQ-Event': event,
-            'PartnerIQ-Delivery': deliveryId,
-            'PartnerIQ-Timestamp': String(timestamp),
-            'PartnerIQ-Signature': `v1=${signature}`,
-          },
-        }),
-        durationMs: 42,
-        status: 'SUCCESS',
-        createdAt: new Date(),
-      };
+  private async deliverToEndpoint(
+    ep: WebhookEndpointEntity,
+    event: WebhookEvent,
+    timestamp: number,
+    rawBody: string,
+  ) {
+    const secret = SecurityUtils.decrypt(ep.secretEncrypted);
+    const signature = SecurityUtils.signWebhookPayload(secret, timestamp, rawBody);
+    const deliveryId = `del_${uuidv4()}`;
+    const startedAt = Date.now();
 
-      dbStore.webhookDeliveries.push(delivery);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
+    let responseCode = 0;
+    let responseBodyTruncated = '';
+    let status = 'FAILED';
+
+    try {
+      await this.assertSafeDeliveryTarget(ep.url);
+      const response = await fetch(ep.url, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          'PartnerIQ-Event': event,
+          'PartnerIQ-Delivery': deliveryId,
+          'PartnerIQ-Timestamp': String(timestamp),
+          'PartnerIQ-Signature': `v1=${signature}`,
+        },
+        body: rawBody,
+      });
+
+      responseCode = response.status;
+      const bodyText = await response.text().catch(() => '');
+      responseBodyTruncated = bodyText.slice(0, 2000);
+      status = response.ok ? 'SUCCESS' : 'FAILED';
+    } catch (error: any) {
+      responseCode = 0;
+      responseBodyTruncated = `Delivery failed: ${error?.name === 'AbortError' ? 'request timed out after 5000ms' : error?.message || 'unknown error'}`;
+      status = 'FAILED';
+    } finally {
+      clearTimeout(timeout);
     }
+
+    const delivery: WebhookDeliveryEntity = {
+      id: deliveryId,
+      endpointId: ep.id,
+      eventId: `evt_${uuidv4()}`,
+      attempt: 1,
+      requestBody: rawBody,
+      responseCode,
+      responseBodyTruncated,
+      durationMs: Date.now() - startedAt,
+      status,
+      createdAt: new Date(),
+    };
+
+    dbStore.webhookDeliveries.push(delivery);
   }
 
   async getDeliveries(organizationId: string) {
@@ -113,10 +151,13 @@ export class WebhooksService {
       throw new BadRequestException('Webhook URL must use HTTPS');
     }
     const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '');
-    if (
-      host === 'localhost' ||
-      host.endsWith('.local') ||
-      host.endsWith('.internal') ||
+    if (host === 'localhost' || host.endsWith('.local') || host.endsWith('.internal') || this.isDisallowedNetworkAddress(host)) {
+      throw new BadRequestException('Webhook URL cannot target private, local, or cloud metadata network addresses');
+    }
+  }
+
+  private isDisallowedNetworkAddress(host: string): boolean {
+    return (
       /^127\./.test(host) ||
       /^10\./.test(host) ||
       /^192\.168\./.test(host) ||
@@ -124,13 +165,34 @@ export class WebhooksService {
       /^169\.254\./.test(host) || // AWS / GCP / Azure link-local instance metadata
       /^100\.(6[4-9]|[7-9]\d|1[0-1]\d|12[0-7])\./.test(host) || // Carrier-grade NAT (RFC 6598)
       host === '0.0.0.0' ||
+      host === '::' ||
       host === '::1' ||
       host === '0:0:0:0:0:0:0:1' ||
       host.startsWith('fe80:') || // IPv6 link-local
       host.startsWith('fc00:') || // IPv6 unique local
-      host.startsWith('fd00:')
-    ) {
-      throw new BadRequestException('Webhook URL cannot target private, local, or cloud metadata network addresses');
+      host.startsWith('fd00:') ||
+      host.startsWith('::ffff:127.') ||
+      host.startsWith('::ffff:10.') ||
+      host.startsWith('::ffff:192.168.')
+    );
+  }
+
+  /**
+   * Re-checks the endpoint host at delivery time by resolving DNS, so a
+   * webhook URL that passed registration-time validation cannot later be
+   * repointed (via DNS rebinding) at a private or cloud-metadata address.
+   */
+  private async assertSafeDeliveryTarget(url: string): Promise<void> {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+    if (host === 'localhost' || host.endsWith('.local') || host.endsWith('.internal') || this.isDisallowedNetworkAddress(host)) {
+      throw new Error('Webhook URL host is not allowed');
+    }
+    const resolved = await dnsLookup(parsed.hostname, { all: true });
+    for (const { address } of resolved) {
+      if (this.isDisallowedNetworkAddress(address.toLowerCase())) {
+        throw new Error('Webhook URL resolves to a private or disallowed network address');
+      }
     }
   }
 }

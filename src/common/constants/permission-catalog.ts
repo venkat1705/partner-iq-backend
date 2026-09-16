@@ -134,6 +134,13 @@ export const PERMISSIONS = [
   { code: 'performance.view', resource: 'performance', action: 'view', description: 'View affiliate performance and leaderboard' },
   { code: 'performance.manage', resource: 'performance', action: 'manage', description: 'Manage performance settings and period resets' },
   { code: 'rewards.grant', resource: 'rewards', action: 'grant', description: 'Manually grant rewards, badges, and bonuses' },
+
+  { code: 'coupons.view', resource: 'coupons', action: 'view', description: 'View organization product coupons' },
+  { code: 'coupons.create', resource: 'coupons', action: 'create', description: 'Create organization product coupons' },
+  { code: 'coupons.edit', resource: 'coupons', action: 'edit', description: 'Edit organization product coupons' },
+  { code: 'coupons.delete', resource: 'coupons', action: 'delete', description: 'Archive organization product coupons' },
+  { code: 'coupons.assign', resource: 'coupons', action: 'assign', description: 'Assign or unassign coupons to affiliates' },
+  { code: 'coupons.settings.update', resource: 'coupons', action: 'settings.update', description: 'Toggle coupon accessibility for the organization' },
 ];
 
 export const BUILT_IN_ROLES = {
@@ -244,6 +251,12 @@ export const BUILT_IN_ROLES = {
       'performance.view',
       'performance.manage',
       'rewards.grant',
+      'coupons.view',
+      'coupons.create',
+      'coupons.edit',
+      'coupons.delete',
+      'coupons.assign',
+      'coupons.settings.update',
     ],
   },
   PROGRAM_MANAGER: {
@@ -294,6 +307,10 @@ export const BUILT_IN_ROLES = {
       'performance.view',
       'performance.manage',
       'rewards.grant',
+      'coupons.view',
+      'coupons.create',
+      'coupons.edit',
+      'coupons.assign',
     ],
   },
   AFFILIATE_MANAGER: {
@@ -330,6 +347,10 @@ export const BUILT_IN_ROLES = {
       'automations.view',
       'performance.view',
       'rewards.grant',
+      'coupons.view',
+      'coupons.create',
+      'coupons.edit',
+      'coupons.assign',
     ],
   },
   FINANCE: {
@@ -429,6 +450,7 @@ export const BUILT_IN_ROLES = {
       'tiers.view',
       'milestones.view',
       'performance.view',
+      'coupons.view',
     ],
   },
 };
@@ -483,4 +505,6 @@ export const PERMISSION_ALIASES: Record<string, string[]> = {
   'view.automations': ['automations.view'],
   'manage.performance': ['performance.view', 'performance.manage', 'rewards.grant'],
   'view.performance': ['performance.view'],
+  'manage.coupons': ['coupons.view', 'coupons.create', 'coupons.edit', 'coupons.delete', 'coupons.assign', 'coupons.settings.update'],
+  'view.coupons': ['coupons.view'],
 };

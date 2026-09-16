@@ -44,6 +44,18 @@ export class SecurityUtils {
     return result;
   }
 
+  /**
+   * Cryptographically secure numeric OTP (e.g. for email verification codes).
+   * Uses crypto.randomInt per digit to avoid modulo bias.
+   */
+  static generateNumericOtp(length = 6): string {
+    let code = '';
+    for (let i = 0; i < length; i += 1) {
+      code += crypto.randomInt(0, 10).toString();
+    }
+    return code;
+  }
+
   private static base32Encode(buffer: Buffer): string {
     const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
     let bits = 0;

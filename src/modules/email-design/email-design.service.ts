@@ -6,6 +6,7 @@ import { EmailDesignSettings, EmailDesignTemplate, EmailTemplateOverride, Docume
 import { SYSTEM_TEMPLATE_CATALOG, SYSTEM_SECURITY_TEMPLATE_KEYS, SystemTemplateKey } from './constants/email-template-keys';
 import { DEFAULT_DOCUMENT_TEMPLATES } from './constants/document-template-defaults';
 import { DocumentType, TemplateStatus, PageSize, PageOrientation } from '../../common/enums';
+import { PLATFORM_CURRENCY } from '../../common/constants/currency';
 import { TemplateResolverService } from './services/template-resolver.service';
 import { TemplateRendererService } from './services/template-renderer.service';
 import { EmailSuppressionService } from './services/email-suppression.service';
@@ -291,10 +292,10 @@ export class EmailDesignService {
         html: payload.bodyTemplate || payload.html || payload.bodyHtml || payload.htmlContent,
         affiliate: { firstName: 'TestPartner', fullName: 'Test Partner' },
         organization: { name: 'PartnerIQ Test Lab' },
-        commission: { amountFormatted: '$125.00', currency: 'USD' },
-        payout: { amountFormatted: '$500.00', reference: 'REF-TEST-123' },
+        commission: { amountFormatted: '₹125.00', currency: PLATFORM_CURRENCY },
+        payout: { amountFormatted: '₹500.00', reference: 'REF-TEST-123' },
         trial: { daysRemaining: 3 },
-        billing: { amountFormatted: '$99.00', planName: 'Growth Plan' },
+        billing: { amountFormatted: '₹99.00', planName: 'Growth Plan' },
         user: { firstName: 'Admin' },
         security: { deviceName: 'Chrome on macOS', location: 'San Francisco, CA', ipAddress: '127.0.0.1', timestamp: new Date().toLocaleString() },
         links: { dashboardUrl: 'https://affiliate.partneriq.in', verificationUrl: 'https://partneriq.in/verify', resetPasswordUrl: 'https://partneriq.in/reset' },

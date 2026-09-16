@@ -12,16 +12,21 @@ export enum SystemTemplateKey {
   SECURITY_TWO_FACTOR_DISABLED = 'SECURITY_TWO_FACTOR_DISABLED',
   SECURITY_PAYOUT_METHOD_CHANGED = 'SECURITY_PAYOUT_METHOD_CHANGED',
   SECURITY_EMAIL_CHANGED = 'SECURITY_EMAIL_CHANGED',
+  SECURITY_API_KEY_CREATED = 'SECURITY_API_KEY_CREATED',
+  SECURITY_API_KEY_REVOKED = 'SECURITY_API_KEY_REVOKED',
 
   // Affiliate & Partner Communications (Organization Scope)
   AFFILIATE_INVITATION = 'AFFILIATE_INVITATION',
+  AFFILIATE_INVITATION_ACCEPTED = 'AFFILIATE_INVITATION_ACCEPTED',
   AFFILIATE_WELCOME = 'AFFILIATE_WELCOME',
   AFFILIATE_APPLICATION_RECEIVED = 'AFFILIATE_APPLICATION_RECEIVED',
   AFFILIATE_APPLICATION_APPROVED = 'AFFILIATE_APPLICATION_APPROVED',
   AFFILIATE_APPLICATION_REJECTED = 'AFFILIATE_APPLICATION_REJECTED',
   AFFILIATE_TIER_CHANGED = 'AFFILIATE_TIER_CHANGED',
+  AFFILIATE_REWARD_GRANTED = 'AFFILIATE_REWARD_GRANTED',
   AFFILIATE_NEW_ASSET = 'AFFILIATE_NEW_ASSET',
   AFFILIATE_PROGRAM_ANNOUNCEMENT = 'AFFILIATE_PROGRAM_ANNOUNCEMENT',
+  AFFILIATE_COUPON_ASSIGNED = 'AFFILIATE_COUPON_ASSIGNED',
 
   // Conversions & Commissions (Organization Scope)
   AFFILIATE_COMMISSION_CREATED = 'AFFILIATE_COMMISSION_CREATED',
@@ -37,12 +42,17 @@ export enum SystemTemplateKey {
   // Organization & Team (Platform / Organization Scope)
   ORGANIZATION_WELCOME = 'ORGANIZATION_WELCOME',
   ORGANIZATION_MEMBER_INVITED = 'ORGANIZATION_MEMBER_INVITED',
+  ORGANIZATION_MEMBER_JOINED = 'ORGANIZATION_MEMBER_JOINED',
+  ORGANIZATION_PROGRAM_CREATED = 'ORGANIZATION_PROGRAM_CREATED',
 
   // Billing & Subscriptions (Platform Scope)
   BILLING_PAYMENT_SUCCESS = 'BILLING_PAYMENT_SUCCESS',
   BILLING_PAYMENT_FAILED = 'BILLING_PAYMENT_FAILED',
   BILLING_TRIAL_ENDING = 'BILLING_TRIAL_ENDING',
   BILLING_SUBSCRIPTION_CANCELLED = 'BILLING_SUBSCRIPTION_CANCELLED',
+
+  // Integrations (Organization Scope)
+  INTEGRATION_DISCONNECTED = 'INTEGRATION_DISCONNECTED',
 }
 
 export type TemplateOwnership = 'SYSTEM' | 'PLATFORM' | 'ORGANIZATION';
@@ -76,21 +86,24 @@ export const SYSTEM_SECURITY_TEMPLATE_KEYS: SystemTemplateKey[] = [
   SystemTemplateKey.SECURITY_TWO_FACTOR_DISABLED,
   SystemTemplateKey.SECURITY_PAYOUT_METHOD_CHANGED,
   SystemTemplateKey.SECURITY_EMAIL_CHANGED,
+  SystemTemplateKey.SECURITY_API_KEY_CREATED,
+  SystemTemplateKey.SECURITY_API_KEY_REVOKED,
 ];
 
 export const SYSTEM_TEMPLATE_CATALOG: Record<SystemTemplateKey, SystemTemplateMetadata> = {
   [SystemTemplateKey.SECURITY_EMAIL_VERIFICATION]: {
     key: SystemTemplateKey.SECURITY_EMAIL_VERIFICATION,
-    name: 'Verify Email Address',
+    name: 'Verify Email Address (OTP Code)',
     category: 'AUTHENTICATION',
     ownership: 'SYSTEM',
-    defaultSubject: 'Verify your PartnerIQ email address',
-    defaultPreheader: 'Confirm your email address to activate your PartnerIQ account.',
-    description: 'Sent when a new account is registered or email is changed.',
-    requiredVariables: ['user.firstName', 'links.verificationUrl'],
+    defaultSubject: 'Your PartnerIQ verification code',
+    defaultPreheader: 'Enter this code to verify your email address.',
+    description: 'Sent with a one-time 6-digit code when a new account is registered or email is changed.',
+    requiredVariables: ['user.firstName', 'security.otpCode', 'security.expiryMinutes'],
     variablesSchema: [
       { key: 'user.firstName', required: true, type: 'string', description: 'User first name' },
-      { key: 'links.verificationUrl', required: true, type: 'url', description: 'Secure verification link' },
+      { key: 'security.otpCode', required: true, type: 'string', description: '6-digit one-time verification code' },
+      { key: 'security.expiryMinutes', required: true, type: 'number', description: 'Minutes until the code expires' },
     ],
   },
   [SystemTemplateKey.SECURITY_PASSWORD_RESET]: {
@@ -191,6 +204,35 @@ export const SYSTEM_TEMPLATE_CATALOG: Record<SystemTemplateKey, SystemTemplateMe
       { key: 'user.newEmail', required: true, type: 'string', description: 'Newly set email address' },
     ],
   },
+  [SystemTemplateKey.SECURITY_API_KEY_CREATED]: {
+    key: SystemTemplateKey.SECURITY_API_KEY_CREATED,
+    name: 'API Key Created',
+    category: 'SECURITY',
+    ownership: 'SYSTEM',
+    defaultSubject: 'A new API key was created on your PartnerIQ account',
+    defaultPreheader: 'Review the new credential if this wasn\'t you.',
+    description: 'Sent when a new API key is generated for an organization.',
+    requiredVariables: ['user.firstName', 'keyName', 'environment'],
+    variablesSchema: [
+      { key: 'user.firstName', required: true, type: 'string', description: 'User first name' },
+      { key: 'keyName', required: true, type: 'string', description: 'API key label' },
+      { key: 'environment', required: true, type: 'string', description: 'Live / Production or Test / Sandbox' },
+    ],
+  },
+  [SystemTemplateKey.SECURITY_API_KEY_REVOKED]: {
+    key: SystemTemplateKey.SECURITY_API_KEY_REVOKED,
+    name: 'API Key Revoked',
+    category: 'SECURITY',
+    ownership: 'SYSTEM',
+    defaultSubject: 'An API key was revoked on your PartnerIQ account',
+    defaultPreheader: 'This credential can no longer be used to access your account.',
+    description: 'Sent when an active API key is revoked/deleted.',
+    requiredVariables: ['user.firstName', 'keyName'],
+    variablesSchema: [
+      { key: 'user.firstName', required: true, type: 'string', description: 'User first name' },
+      { key: 'keyName', required: true, type: 'string', description: 'API key label' },
+    ],
+  },
 
   // AFFILIATE
   [SystemTemplateKey.AFFILIATE_INVITATION]: {
@@ -209,6 +251,22 @@ export const SYSTEM_TEMPLATE_CATALOG: Record<SystemTemplateKey, SystemTemplateMe
       { key: 'commissionRate', required: false, type: 'string', description: 'Commission rate or label' },
       { key: 'cookieDuration', required: false, type: 'string', description: 'Attribution cookie window' },
       { key: 'invitationUrl', required: true, type: 'url', description: 'Affiliate invitation acceptance URL' },
+      { key: 'payoutSchedule', required: false, type: 'string', description: 'Payout frequency label' },
+    ],
+  },
+  [SystemTemplateKey.AFFILIATE_INVITATION_ACCEPTED]: {
+    key: SystemTemplateKey.AFFILIATE_INVITATION_ACCEPTED,
+    name: 'Affiliate Invitation Accepted',
+    category: 'AFFILIATE',
+    ownership: 'ORGANIZATION',
+    defaultSubject: '{{affiliate.firstName}} accepted your partner invitation',
+    defaultPreheader: 'A new affiliate joined {{organization.name}}.',
+    description: 'Sent to the organization when an invited affiliate accepts and joins a program.',
+    requiredVariables: ['affiliate.firstName', 'organization.name', 'links.dashboardUrl'],
+    variablesSchema: [
+      { key: 'affiliate.firstName', required: true, type: 'string', description: 'Affiliate first name' },
+      { key: 'organization.name', required: true, type: 'string', description: 'Organization name' },
+      { key: 'links.dashboardUrl', required: true, type: 'url', description: 'Org dashboard URL' },
     ],
   },
   [SystemTemplateKey.AFFILIATE_WELCOME]: {
@@ -216,14 +274,14 @@ export const SYSTEM_TEMPLATE_CATALOG: Record<SystemTemplateKey, SystemTemplateMe
     name: 'Affiliate Partner Welcome',
     category: 'AFFILIATE',
     ownership: 'ORGANIZATION',
-    defaultSubject: 'Welcome to {{organization.name}} Partner Program!',
+    defaultSubject: 'Welcome to {{organizationName}} Partner Program!',
     defaultPreheader: 'Start promoting and earning commissions today.',
     description: 'Sent when an affiliate joins a partner program.',
-    requiredVariables: ['affiliate.firstName', 'organization.name', 'links.dashboardUrl'],
+    requiredVariables: ['affiliateName', 'organizationName', 'dashboardUrl'],
     variablesSchema: [
-      { key: 'affiliate.firstName', required: true, type: 'string', description: 'Affiliate first name' },
-      { key: 'organization.name', required: true, type: 'string', description: 'Organization name' },
-      { key: 'links.dashboardUrl', required: true, type: 'url', description: 'Affiliate portal URL' },
+      { key: 'affiliateName', required: true, type: 'string', description: 'Affiliate first name' },
+      { key: 'organizationName', required: true, type: 'string', description: 'Organization name' },
+      { key: 'dashboardUrl', required: true, type: 'url', description: 'Affiliate portal URL' },
     ],
   },
   [SystemTemplateKey.AFFILIATE_APPLICATION_RECEIVED]: {
@@ -245,7 +303,7 @@ export const SYSTEM_TEMPLATE_CATALOG: Record<SystemTemplateKey, SystemTemplateMe
     name: 'Application Approved',
     category: 'AFFILIATE',
     ownership: 'ORGANIZATION',
-    defaultSubject: 'Congratulations! Your {{organization.name}} application is approved 🎉',
+    defaultSubject: 'Your {{organization.name}} application is approved',
     defaultPreheader: 'Access your tracking links and start earning.',
     description: 'Sent when an affiliate application is approved.',
     requiredVariables: ['affiliate.firstName', 'organization.name', 'links.dashboardUrl'],
@@ -274,7 +332,7 @@ export const SYSTEM_TEMPLATE_CATALOG: Record<SystemTemplateKey, SystemTemplateMe
     name: 'Partner Tier Upgrade',
     category: 'AFFILIATE',
     ownership: 'ORGANIZATION',
-    defaultSubject: 'Tier Upgrade! You unlocked {{tier.name}} tier on {{organization.name}} 🚀',
+    defaultSubject: 'You’ve reached {{tier.name}} tier on {{organization.name}}',
     defaultPreheader: 'Enjoy higher commission rates and exclusive benefits.',
     description: 'Sent when an affiliate is upgraded to a higher performance tier.',
     requiredVariables: ['affiliate.firstName', 'organization.name', 'tier.name', 'tier.commissionRate'],
@@ -283,6 +341,40 @@ export const SYSTEM_TEMPLATE_CATALOG: Record<SystemTemplateKey, SystemTemplateMe
       { key: 'organization.name', required: true, type: 'string', description: 'Organization name' },
       { key: 'tier.name', required: true, type: 'string', description: 'New tier name' },
       { key: 'tier.commissionRate', required: true, type: 'string', description: 'Commission rate percentage' },
+    ],
+  },
+  [SystemTemplateKey.AFFILIATE_REWARD_GRANTED]: {
+    key: SystemTemplateKey.AFFILIATE_REWARD_GRANTED,
+    name: 'Reward Granted',
+    category: 'AFFILIATE',
+    ownership: 'ORGANIZATION',
+    defaultSubject: 'You earned a reward on {{organization.name}}',
+    defaultPreheader: 'A milestone or bonus reward was credited to your account.',
+    description: 'Sent when an affiliate is granted a milestone achievement or manual bonus reward.',
+    requiredVariables: ['affiliate.firstName', 'organization.name', 'reward.description'],
+    variablesSchema: [
+      { key: 'affiliate.firstName', required: true, type: 'string', description: 'Affiliate first name' },
+      { key: 'organization.name', required: true, type: 'string', description: 'Organization name' },
+      { key: 'reward.description', required: true, type: 'string', description: 'Description of the reward granted' },
+    ],
+  },
+  [SystemTemplateKey.AFFILIATE_COUPON_ASSIGNED]: {
+    key: SystemTemplateKey.AFFILIATE_COUPON_ASSIGNED,
+    name: 'Coupon Assigned',
+    category: 'AFFILIATE',
+    ownership: 'ORGANIZATION',
+    defaultSubject: 'Your affiliate coupon is ready: {{couponCode}}',
+    defaultPreheader: 'Share {{couponCode}} with your audience for {{discount}} off.',
+    description: 'Sent when an organization assigns a product discount coupon to an affiliate.',
+    requiredVariables: ['affiliateName', 'organizationName', 'couponCode', 'discount', 'portalUrl'],
+    variablesSchema: [
+      { key: 'affiliateName', required: true, type: 'string', description: 'Affiliate first name' },
+      { key: 'organizationName', required: true, type: 'string', description: 'Organization name' },
+      { key: 'programName', required: false, type: 'string', description: 'Coupon or promotion name' },
+      { key: 'couponCode', required: true, type: 'string', description: 'Coupon code' },
+      { key: 'discount', required: true, type: 'string', description: 'Discount summary, e.g. "20% off"' },
+      { key: 'expiryDate', required: false, type: 'string', description: 'Coupon expiry date, if any' },
+      { key: 'portalUrl', required: true, type: 'url', description: 'Affiliate portal coupons page URL' },
     ],
   },
   [SystemTemplateKey.AFFILIATE_NEW_ASSET]: {
@@ -402,7 +494,7 @@ export const SYSTEM_TEMPLATE_CATALOG: Record<SystemTemplateKey, SystemTemplateMe
     name: 'Payout Completed',
     category: 'PAYOUT',
     ownership: 'ORGANIZATION',
-    defaultSubject: 'Payout Sent! {{payout.amountFormatted}} deposited from {{organization.name}} 🎉',
+    defaultSubject: 'Payout sent: {{payout.amountFormatted}} from {{organization.name}}',
     defaultPreheader: 'Transfer complete. View your remittance advice statement.',
     description: 'Sent when payout transfer succeeds.',
     requiredVariables: ['affiliate.firstName', 'organization.name', 'payout.amountFormatted', 'payout.reference'],
@@ -454,12 +546,45 @@ export const SYSTEM_TEMPLATE_CATALOG: Record<SystemTemplateKey, SystemTemplateMe
     defaultSubject: 'You’ve been invited to join {{organization.name}} on PartnerIQ',
     defaultPreheader: 'Collaborate on affiliate management and payouts.',
     description: 'Sent when a user is invited to an organization team.',
-    requiredVariables: ['invitation.recipientEmail', 'organization.name', 'invitation.role', 'links.acceptUrl'],
+    requiredVariables: ['organizationName', 'invitedBy', 'role', 'invitationUrl'],
     variablesSchema: [
-      { key: 'invitation.recipientEmail', required: true, type: 'string', description: 'Recipient email' },
+      { key: 'organizationName', required: true, type: 'string', description: 'Organization name' },
+      { key: 'invitedBy', required: true, type: 'string', description: 'Name or email of the person who sent the invite' },
+      { key: 'role', required: true, type: 'string', description: 'Team role assigned' },
+      { key: 'invitationUrl', required: true, type: 'url', description: 'Invitation acceptance link' },
+      { key: 'expiresIn', required: false, type: 'string', description: 'Invitation link expiry window' },
+    ],
+  },
+
+  [SystemTemplateKey.ORGANIZATION_MEMBER_JOINED]: {
+    key: SystemTemplateKey.ORGANIZATION_MEMBER_JOINED,
+    name: 'Team Member Joined',
+    category: 'ORGANIZATION',
+    ownership: 'ORGANIZATION',
+    defaultSubject: '{{member.name}} joined {{organization.name}} on PartnerIQ',
+    defaultPreheader: 'Your team invitation was accepted.',
+    description: 'Sent to the inviter when an invited teammate accepts and joins the organization.',
+    requiredVariables: ['member.name', 'organization.name', 'links.dashboardUrl'],
+    variablesSchema: [
+      { key: 'member.name', required: true, type: 'string', description: 'New team member name' },
       { key: 'organization.name', required: true, type: 'string', description: 'Organization name' },
-      { key: 'invitation.role', required: true, type: 'string', description: 'Team role assigned' },
-      { key: 'links.acceptUrl', required: true, type: 'url', description: 'Invitation acceptance link' },
+      { key: 'links.dashboardUrl', required: true, type: 'url', description: 'Org dashboard URL' },
+    ],
+  },
+  [SystemTemplateKey.ORGANIZATION_PROGRAM_CREATED]: {
+    key: SystemTemplateKey.ORGANIZATION_PROGRAM_CREATED,
+    name: 'Program Created & Live',
+    category: 'ORGANIZATION',
+    ownership: 'ORGANIZATION',
+    defaultSubject: '{{program.name}} is now live on {{organization.name}}',
+    defaultPreheader: 'Your new partner program is ready to accept affiliates.',
+    description: 'Sent to organization admins when a new affiliate/partner program is created and published.',
+    requiredVariables: ['user.firstName', 'organization.name', 'program.name', 'links.dashboardUrl'],
+    variablesSchema: [
+      { key: 'user.firstName', required: true, type: 'string', description: 'Admin first name' },
+      { key: 'organization.name', required: true, type: 'string', description: 'Organization name' },
+      { key: 'program.name', required: true, type: 'string', description: 'Newly created program name' },
+      { key: 'links.dashboardUrl', required: true, type: 'url', description: 'Program dashboard URL' },
     ],
   },
 
@@ -522,6 +647,22 @@ export const SYSTEM_TEMPLATE_CATALOG: Record<SystemTemplateKey, SystemTemplateMe
     variablesSchema: [
       { key: 'user.firstName', required: true, type: 'string', description: 'User first name' },
       { key: 'billing.endDate', required: true, type: 'date', description: 'Access end date' },
+    ],
+  },
+  [SystemTemplateKey.INTEGRATION_DISCONNECTED]: {
+    key: SystemTemplateKey.INTEGRATION_DISCONNECTED,
+    name: 'Integration Disconnected',
+    category: 'ORGANIZATION',
+    ownership: 'ORGANIZATION',
+    defaultSubject: '{{provider}} was disconnected from PartnerIQ',
+    defaultPreheader: 'Automated conversion tracking for {{provider}} is currently paused.',
+    description: 'Sent when an integration is unlinked or its OAuth access is revoked (e.g. app uninstalled on the provider side).',
+    requiredVariables: ['provider', 'organizationName', 'reconnectUrl'],
+    variablesSchema: [
+      { key: 'provider', required: true, type: 'string', description: 'Integration provider name' },
+      { key: 'organizationName', required: true, type: 'string', description: 'Organization name' },
+      { key: 'disconnectedBy', required: false, type: 'string', description: 'Who or what triggered the disconnect' },
+      { key: 'reconnectUrl', required: true, type: 'url', description: 'Link to reconnect the integration' },
     ],
   },
 };

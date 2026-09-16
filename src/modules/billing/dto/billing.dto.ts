@@ -1,4 +1,5 @@
-import { IsArray, IsBoolean, IsDateString, IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import { IsArray, IsBoolean, IsDateString, IsEnum, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import { PLATFORM_CURRENCY } from '../../../common/constants/currency';
 import {
   BillingCouponCycleEligibility,
   BillingCouponCustomerEligibility,
@@ -78,6 +79,7 @@ export class CreatePlanDto {
   price!: number;
 
   @IsString()
+  @IsIn([PLATFORM_CURRENCY], { message: `Only ${PLATFORM_CURRENCY} is supported.` })
   currency!: string;
 
   @IsEnum(BillingInterval)
@@ -119,6 +121,7 @@ export class PricingPreviewDto {
 
   @IsOptional()
   @IsString()
+  @IsIn([PLATFORM_CURRENCY], { message: `Only ${PLATFORM_CURRENCY} is supported.` })
   currency?: string;
 }
 
@@ -145,6 +148,7 @@ export class CreateBillingCouponDto {
 
   @IsOptional()
   @IsString()
+  @IsIn([PLATFORM_CURRENCY], { message: `Only ${PLATFORM_CURRENCY} is supported.` })
   currency?: string;
 
   @IsEnum(BillingCouponDurationType)

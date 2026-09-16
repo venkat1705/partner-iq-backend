@@ -9,9 +9,64 @@ import { SecurityUtils } from '../../common/utils/security.utils';
 import { AuditAction, EnvironmentType } from '../../common/enums';
 import { API_KEY_SCOPES, API_KEY_SCOPE_PRESETS, CreateApiKeyDto } from './dto/api-key.dto';
 import { EnvironmentUtils } from '../../common/utils/environment.utils';
+import { SystemEmailDispatchService } from '../email-design/services/system-email-dispatch.service';
+import { SystemTemplateKey } from '../email-design/constants/email-template-keys';
+import { NotificationsService } from '../notifications/notifications.service';
+import { getAppConfig } from '../../config/app.config';
 
 @Injectable()
 export class ApiKeysService {
+  constructor(
+    private readonly emailDispatch?: SystemEmailDispatchService,
+    private readonly notificationsService?: NotificationsService,
+  ) { }
+
+  private async notifyApiKeyEvent(
+    templateKey: SystemTemplateKey,
+    userId: string,
+    organizationId: string,
+    keyName: string,
+    environment: EnvironmentType,
+    keyPrefix: string,
+  ) {
+    const user = dbStore.users.find((u) => u.id === userId);
+    if (!user?.email) return;
+
+    const environmentLabel = environment === EnvironmentType.TEST ? 'Test / Sandbox' : 'Live / Production';
+    const isRevoked = templateKey === SystemTemplateKey.SECURITY_API_KEY_REVOKED;
+
+    await this.emailDispatch?.send(
+      templateKey,
+      user.email,
+      {
+        // Flat field names — these match the email-design template's own variables
+        // (keyName/environment/maskedKey/createdBy/revokedBy), since the resolver renders
+        // the actual seeded email-design template, not a generic dot-path fallback body.
+        user: { firstName: user.firstName },
+        keyName,
+        environment: environmentLabel,
+        maskedKey: `${keyPrefix}••••••••••••••••`,
+        createdBy: user.email,
+        revokedBy: user.email,
+        createdDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        revokedDate: new Date().toUTCString(),
+        manageKeysUrl: `${getAppConfig().frontendUrl.replace(/\/$/, '')}/organizations/${organizationId}/settings?tab=apikeys`,
+      },
+      { organizationId, userId },
+    );
+
+    this.notificationsService?.createNotification({
+      userId,
+      organizationId,
+      type: 'security',
+      title: isRevoked ? 'API key revoked' : 'API key created',
+      body: isRevoked ? `API key "${keyName}" was revoked.` : `API key "${keyName}" was created.`,
+      channel: 'in_app',
+      priority: 'normal',
+      actionUrl: `/organizations/${organizationId}/settings?tab=apikeys`,
+    }).catch(() => undefined);
+  }
+
   async create(organizationId: string, createdByUserId: string, dto: CreateApiKeyDto, requestedEnvironment?: EnvironmentType) {
     const environment = requestedEnvironment || EnvironmentUtils.normalizeEnvironment(dto.environment || 'LIVE');
     const keyEnvironment = environment === EnvironmentType.TEST ? 'test' : 'live';
@@ -52,6 +107,8 @@ export class ApiKeysService {
       resourceId: apiKey.id,
       createdAt: new Date(),
     });
+
+    this.notifyApiKeyEvent(SystemTemplateKey.SECURITY_API_KEY_CREATED, createdByUserId, organizationId, apiKey.name, environment, apiKey.prefix).catch(() => undefined);
 
     // RETURN RAW KEY ONLY ONCE ON CREATION
     return {
@@ -112,6 +169,8 @@ export class ApiKeysService {
       resourceId: apiKey.id,
       createdAt: new Date(),
     });
+
+    this.notifyApiKeyEvent(SystemTemplateKey.SECURITY_API_KEY_REVOKED, userId, organizationId, apiKey.name, environment, apiKey.prefix).catch(() => undefined);
 
     return { success: true, message: 'API key revoked successfully' };
   }

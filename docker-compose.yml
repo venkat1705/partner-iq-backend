@@ -1,11 +1,16 @@
 version: '3.8'
 
+# All secrets are read from environment variables (e.g. via a local, git-ignored .env file
+# or your orchestrator's secret store) — never hardcode credentials in this file. See
+# docker-compose.env.example for the required variable names.
+
 services:
   partneriq-api:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: partneriq-api
+    user: "node"
     ports:
       - "3000:3000"
     environment:
@@ -13,13 +18,16 @@ services:
       - PORT=3000
       - DATABASE_HOST=postgres
       - DATABASE_PORT=5432
-      - DATABASE_NAME=partneriq
-      - DATABASE_USER=partneriq
-      - DATABASE_PASSWORD=partneriq_secure_pass
+      - DATABASE_NAME=${POSTGRES_DB:?POSTGRES_DB is required}
+      - DATABASE_USER=${POSTGRES_USER:?POSTGRES_USER is required}
+      - DATABASE_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - JWT_ACCESS_SECRET=partneriq_super_secret_jwt_access_key_min_32_chars
-      - JWT_REFRESH_SECRET=partneriq_super_secret_jwt_refresh_key_min_32_chars
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
+      - INTERNAL_OPS_KEY=${INTERNAL_OPS_KEY:?INTERNAL_OPS_KEY is required}
     depends_on:
       postgres:
         condition: service_healthy
@@ -32,6 +40,7 @@ services:
       context: ../affiliate-backend
       dockerfile: Dockerfile
     container_name: partneriq-affiliate-backend
+    user: "node"
     ports:
       - "3006:3006"
     environment:
@@ -41,14 +50,15 @@ services:
       - AFFILIATE_PORTAL_URL=http://localhost:3005
       - DATABASE_HOST=postgres
       - DATABASE_PORT=5432
-      - DATABASE_NAME=partneriq
-      - DATABASE_USER=partneriq
-      - DATABASE_PASSWORD=partneriq_secure_pass
+      - DATABASE_NAME=${POSTGRES_DB:?POSTGRES_DB is required}
+      - DATABASE_USER=${POSTGRES_USER:?POSTGRES_USER is required}
+      - DATABASE_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - JWT_ACCESS_SECRET=partneriq_super_secret_jwt_access_key_min_32_chars
-      - JWT_REFRESH_SECRET=partneriq_super_secret_jwt_refresh_key_min_32_chars
-      - ENCRYPTION_KEY=partneriq_dev_encryption_key_fallback_32x
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
     depends_on:
       postgres:
         condition: service_healthy
@@ -61,13 +71,19 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: partneriq-worker
+    user: "node"
     command: ["node", "dist/server.cjs", "--worker"]
     environment:
       - NODE_ENV=production
       - DATABASE_HOST=postgres
+      - DATABASE_NAME=${POSTGRES_DB:?POSTGRES_DB is required}
+      - DATABASE_USER=${POSTGRES_USER:?POSTGRES_USER is required}
+      - DATABASE_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       - REDIS_HOST=redis
-      - JWT_ACCESS_SECRET=partneriq_super_secret_jwt_access_key_min_32_chars
-      - JWT_REFRESH_SECRET=partneriq_super_secret_jwt_refresh_key_min_32_chars
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
     depends_on:
       postgres:
         condition: service_healthy
@@ -79,15 +95,17 @@ services:
     image: postgres:16-alpine
     container_name: partneriq-postgres
     environment:
-      POSTGRES_DB: partneriq
-      POSTGRES_USER: partneriq
-      POSTGRES_PASSWORD: partneriq_secure_pass
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     ports:
-      - "5432:5432"
+      # Bind to loopback only — the app containers reach Postgres over the internal Docker
+      # network by service name, so this port never needs to be reachable from the LAN/internet.
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U partneriq -d partneriq"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -96,12 +114,16 @@ services:
   redis:
     image: redis:7-alpine
     container_name: partneriq-redis
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"]
     ports:
-      - "6379:6379"
+      # Bind to loopback only — see postgres note above. Redis has no auth by default, so an
+      # internet/LAN-reachable port with no password (the previous config) lets any network
+      # peer read cache data and manipulate queues.
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5

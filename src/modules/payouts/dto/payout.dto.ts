@@ -7,4 +7,17 @@ export class CreatePayoutBatchDto {
   @IsArray()
   @IsString({ each: true })
   affiliateIds?: string[];
+
+  @ApiPropertyOptional({ example: 'RAZORPAY', description: 'Disbursement gateway (RAZORPAY, CASHFREE, or MANUAL)' })
+  @IsOptional()
+  @IsString()
+  gateway?: string;
 }
+
+export class ProcessPayoutBatchDto {
+  @ApiPropertyOptional({ example: 'RAZORPAY', description: 'Disbursement gateway (RAZORPAY, CASHFREE, or MANUAL)' })
+  @IsOptional()
+  @IsString()
+  gateway?: string;
+}
+

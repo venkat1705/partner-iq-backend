@@ -21,6 +21,7 @@ import {
 } from '../../database/schema';
 import { dbStore } from '../../database/store';
 import { SecurityUtils } from '../../common/utils/security.utils';
+import { PLATFORM_CURRENCY } from '../../common/constants/currency';
 import {
   UserStatus,
   PlatformRole,
@@ -424,8 +425,8 @@ export class InternalOpsService {
         name: orgName,
         slug,
         website: `https://${slug}.demo`,
-        country: 'US',
-        defaultCurrency: 'USD',
+        country: 'IN',
+        defaultCurrency: PLATFORM_CURRENCY,
         status: OrganizationStatus.ACTIVE,
         onboardingCompleted: true,
         createdBy: owner.id,

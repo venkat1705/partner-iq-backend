@@ -22,7 +22,12 @@
     "build:sdks": "npm run build:node && npm run build:browser",
     "test:sdk": "tsx src/tests/sdk-test.ts",
     "test:security": "tsx src/tests/security-audit.test.ts",
-    "test:oauth": "tsx src/tests/oauth.test.ts"
+    "test:oauth": "tsx src/tests/oauth.test.ts",
+    "test:analytics": "tsx src/tests/analytics-sanity-check.ts",
+    "test:attribution": "tsx src/tests/attribution-e2e.test.ts",
+    "test:limits": "tsx src/tests/subscription-limits.test.ts",
+    "test:legal": "tsx src/tests/legal-acceptance.test.ts",
+    "test:invitations": "cross-env DATABASE_PORT=59999 DATABASE_URL= tsx src/tests/affiliate-invitation-flow.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -30,6 +35,7 @@
     "@nestjs/core": "^11.1.28",
     "@nestjs/platform-express": "^11.1.28",
     "@nestjs/swagger": "^11.4.6",
+    "@nestjs/throttler": "^6.5.0",
     "@types/geoip-lite": "^1.4.4",
     "@types/qrcode": "^1.5.6",
     "bcryptjs": "^3.0.3",
@@ -52,7 +58,8 @@
     "swagger-ui-express": "^5.0.1",
     "typeorm": "^1.1.0",
     "uuid": "^14.0.1",
-    "xlsx": "^0.18.5"
+    "ws": "^8.21.3",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.24",

@@ -55,6 +55,9 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         errorCode = 'CONFLICT';
       } else if (status === HttpStatus.BAD_REQUEST || status === HttpStatus.UNPROCESSABLE_ENTITY) {
         errorCode = 'VALIDATION_ERROR';
+      } else if (status === HttpStatus.TOO_MANY_REQUESTS) {
+        errorCode = 'RATE_LIMITED';
+        message = 'Too many requests. Slow down and retry after the window in the Retry-After header resets.';
       }
     }
 

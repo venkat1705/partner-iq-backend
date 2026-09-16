@@ -65,8 +65,12 @@ export class InvitationsController {
 
     const result = await this.authService.register(dto, req.headers['user-agent'], req.ip || (req.headers['x-forwarded-for'] as string));
     try {
+      // Membership is granted immediately (invitation already proved the email was intended for this org);
+      // the session itself still waits on email OTP verification via /auth/verify-email-otp.
       await this.membershipsService.acceptInvitationForUser(token, result.userId);
-      res.cookie('refreshToken', result.refreshToken, this.refreshCookieOptions(7 * 24 * 3600 * 1000));
+      if ('refreshToken' in result) {
+        res.cookie('refreshToken', (result as any).refreshToken, this.refreshCookieOptions(7 * 24 * 3600 * 1000));
+      }
       return result;
     } catch (error) {
       await this.authService.removeNewlyRegisteredUser(result.userId);

@@ -11,6 +11,8 @@ import { PaymentProviderRouter } from '../providers/payment-provider.router';
 import { RazorpayProvider } from '../providers/razorpay.provider';
 import { BillingPricingService } from './billing-pricing.service';
 import { BillingCouponService } from './billing-coupon.service';
+import { BillingAccountService } from './billing-account.service';
+import { AddonService } from './addon.service';
 
 @Injectable()
 export class BillingService {
@@ -23,6 +25,8 @@ export class BillingService {
     private readonly razorpayProvider: RazorpayProvider,
     private readonly pricing: BillingPricingService,
     private readonly coupons: BillingCouponService,
+    private readonly accounts: BillingAccountService,
+    private readonly addons: AddonService,
   ) {}
 
   async checkout(organizationId: string, userId: string, dto: CheckoutDto, idempotencyKey?: string) {
@@ -98,8 +102,13 @@ export class BillingService {
       providerSubscriptionId,
     });
 
+    // Bind the subscription to the customer account so its allowances cover
+    // every organization the customer owns, not just this one.
+    const account = await this.accounts.resolveForOrganization(organizationId);
+
     const subscription = this.subscriptions.createPending({
       organizationId,
+      accountId: account.id,
       planId: plan.id,
       provider: providerType,
       providerCustomerId,
@@ -174,6 +183,13 @@ export class BillingService {
 
     const paymentDetails = await provider.fetchPayment(dto.razorpay_payment_id);
     const status = paymentDetails.status === 'captured' ? PaymentStatus.CAPTURED : PaymentStatus.AUTHORIZED;
+
+    // Add-on orders carry `kind: 'ADDON'` in their provider notes. They attach
+    // capacity to the existing base subscription rather than creating one.
+    if (paymentDetails.notes?.kind === 'ADDON') {
+      return this.verifyAddonPayment(organizationId, dto, paymentDetails, status);
+    }
+
     const subscription = dto.razorpay_subscription_id
       ? dbStore.billingSubscriptions.find((item) => item.organizationId === organizationId && item.providerSubscriptionId === dto.razorpay_subscription_id)
       : paymentDetails.notes?.internalSubscriptionId
@@ -211,6 +227,62 @@ export class BillingService {
     return {
       verified: true,
       message: 'Payment signature verified. Paid access is finalized from provider confirmation/webhook.',
+    };
+  }
+
+  /**
+   * Finalises an add-on checkout after the signature has been verified.
+   *
+   * Capacity is granted only when the provider reports the payment captured,
+   * and `activatePurchases` is idempotent, so a webhook arriving for the same
+   * order afterwards does not grant the capacity a second time.
+   */
+  private async verifyAddonPayment(
+    organizationId: string,
+    dto: VerifyPaymentDto,
+    paymentDetails: any,
+    status: PaymentStatus,
+  ) {
+    const existingPayment = dbStore.billingPayments.find(
+      (item) => item.providerPaymentId === dto.razorpay_payment_id,
+    );
+    if (!existingPayment) {
+      dbStore.billingPayments.push({
+        id: uuidv4(),
+        organizationId,
+        provider: PaymentProviderType.RAZORPAY,
+        providerPaymentId: dto.razorpay_payment_id,
+        providerOrderId: dto.razorpay_order_id,
+        amount: paymentDetails.amount,
+        currency: paymentDetails.currency,
+        status,
+        paymentMethod: paymentDetails.method,
+        paidAt: status === PaymentStatus.CAPTURED ? new Date() : undefined,
+        createdDate: new Date(),
+        modifiedDate: new Date(),
+      } as any);
+    }
+
+    if (paymentDetails.status !== 'captured') {
+      return {
+        verified: true,
+        message: 'Payment signature verified. Add-on capacity activates once the payment is captured.',
+        activated: [],
+      };
+    }
+
+    const activated = this.addons.activatePurchases({
+      providerOrderId: dto.razorpay_order_id,
+      providerPaymentId: dto.razorpay_payment_id,
+      purchaseIds: paymentDetails.notes?.purchaseIds
+        ? String(paymentDetails.notes.purchaseIds).split(',').filter(Boolean)
+        : undefined,
+    });
+
+    return {
+      verified: true,
+      message: 'Additional capacity is active on your subscription.',
+      activated,
     };
   }
 

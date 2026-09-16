@@ -1,5 +1,14 @@
 # @partneriq/sdk
 
+> **⚠️ DEPRECATED — do not use for new integrations.** This package is superseded and unmaintained.
+> Several of the routes it calls (e.g. `/api/v1/customers/identify`, `/api/v1/attributions/attach-order`)
+> no longer exist on the backend, and others are missing required path segments. It is marked
+> `"private": true` and is not part of the build.
+>
+> Use instead:
+> - **Server-to-server**: [`@partneriq-io/node`](../packages/partneriq-node) (`backend/packages/partneriq-node`)
+> - **Browser/client-side**: [`@partneriq-io/browser`](../packages/partneriq-browser) (`backend/packages/partneriq-browser`)
+
 > Official Node.js & TypeScript SDK for PartnerIQ — The B2B SaaS Partner & Affiliate Management Engine.
 
 [![npm version](https://img.shields.io/npm/v/@partneriq/sdk.svg)](https://www.npmjs.com/package/@partneriq/sdk)

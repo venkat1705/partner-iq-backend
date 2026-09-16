@@ -27,6 +27,12 @@ export class BrevoEmailProvider implements EmailProvider {
       htmlContent: input.htmlContent,
       textContent: input.textContent,
       tags: input.tags || [input.templateKey || 'partneriq-email'].filter(Boolean),
+      // A missing List-Unsubscribe header is one of the strongest signals Gmail/Outlook
+      // use to route mail into Promotions/spam instead of the primary inbox.
+      headers: {
+        'List-Unsubscribe': `<mailto:${sender.email}?subject=unsubscribe>`,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      },
     };
 
     if (input.replyTo) {

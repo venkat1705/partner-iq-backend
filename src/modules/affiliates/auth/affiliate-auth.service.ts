@@ -1,13 +1,16 @@
 import {
   BadRequestException,
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
   UnauthorizedException,
+  forwardRef,
 } from '@nestjs/common';
 import { IsNull } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import { initializeDataSource } from '../../../database/data-source';
+import { AffiliatesService } from '../affiliates.service';
 import { Affiliate, AffiliateInvitation, AffiliatePortalProfile, AuditLog, User, UserIdentity } from '../../../database/schema';
 import { dbStore } from '../../../database/store';
 import { AuditAction, PlatformRole, UserStatus } from '../../../common/enums';
@@ -18,6 +21,9 @@ import { GoogleOAuthService } from '../../auth/oauth/providers/google/google-oau
 import { ExternalIdentity } from '../../auth/oauth/providers/oauth-provider.interface';
 import { OAuthFlowType, OAuthStateService } from '../../auth/oauth/state/oauth-state.service';
 import { assertUserEligibleForAffiliate } from '../affiliate-eligibility.policy';
+import { SystemEmailDispatchService } from '../../email-design/services/system-email-dispatch.service';
+import { SystemTemplateKey } from '../../email-design/constants/email-template-keys';
+import { NotificationsService } from '../../notifications/notifications.service';
 
 export interface AffiliateRegisterPayload {
   fullName: string;
@@ -28,6 +34,12 @@ export interface AffiliateRegisterPayload {
   country?: string;
   referralCode?: string;
   termsAccepted?: boolean;
+  /**
+   * Set when the partner arrived from an organization's invitation email. The
+   * registered email must match the invited address, and the invitation is
+   * completed automatically once the account exists.
+   */
+  invitationToken?: string;
 }
 
 @Injectable()
@@ -36,6 +48,10 @@ export class AffiliateAuthService {
     private readonly authService: AuthService,
     private readonly googleOAuthService: GoogleOAuthService,
     private readonly stateService: OAuthStateService,
+    @Inject(forwardRef(() => AffiliatesService))
+    private readonly affiliatesService: AffiliatesService,
+    private readonly emailDispatch?: SystemEmailDispatchService,
+    private readonly notificationsService?: NotificationsService,
   ) { }
 
   private async repositories() {
@@ -58,9 +74,34 @@ export class AffiliateAuthService {
     const normalizedEmail = payload.email.toLowerCase().trim();
     assertUserEligibleForAffiliate(normalizedEmail);
 
+    // An invitation binds this registration to one address. Checking it before
+    // the account is created means a mismatch leaves nothing behind, and the
+    // check lives here rather than in the browser because that is the only
+    // place it cannot be bypassed.
+    if (payload.invitationToken) {
+      const invitation = await this.affiliatesService.peekInvitationByToken(payload.invitationToken);
+      const invitedEmail = invitation.email.toLowerCase().trim();
+      if (invitedEmail !== normalizedEmail) {
+        throw new BadRequestException({
+          code: 'INVITATION_EMAIL_MISMATCH',
+          message: 'Please use the email address that received this invitation.',
+          details: { invitedEmail },
+        });
+      }
+    }
+
     const { users } = await this.repositories();
     const existing = await users.findOne({ where: { email: normalizedEmail, deletedAt: IsNull() } });
     if (existing) {
+      // An invited partner who already has a portal account should sign in and
+      // have the invitation completed, not be told to go away.
+      if (payload.invitationToken) {
+        throw new BadRequestException({
+          code: 'AFFILIATE_ACCOUNT_EXISTS',
+          message: 'You already have a PartnerIQ affiliate account. Sign in to finish joining this program.',
+          details: { email: normalizedEmail, shouldSignIn: true },
+        });
+      }
       throw new BadRequestException('User with this email already exists');
     }
 
@@ -96,10 +137,48 @@ export class AffiliateAuthService {
       referralCode: payload.referralCode,
     });
 
-    return this.withAffiliateContext(result);
+    const dashboardUrl = `${getAppConfig().affiliateFrontendUrl.replace(/\/$/, '')}/dashboard`;
+    this.emailDispatch?.send(
+      SystemTemplateKey.AFFILIATE_WELCOME,
+      normalizedEmail,
+      {
+        affiliateName: savedUser.firstName,
+        organizationName: 'PartnerIQ',
+        dashboardUrl,
+        affiliate: { firstName: savedUser.firstName },
+        organization: { name: 'PartnerIQ' },
+        links: { dashboardUrl },
+      },
+      { userId: savedUser.id },
+    ).catch(() => undefined);
+
+    this.notificationsService?.createNotification({
+      userId: savedUser.id,
+      type: 'system',
+      title: 'Welcome to PartnerIQ',
+      body: 'Your affiliate account is ready. Apply to a partner program to start earning.',
+      channel: 'in_app',
+      priority: 'normal',
+      actionUrl: '/dashboard',
+    }).catch(() => undefined);
+
+    // The account now exists, so the invitation that sent them here can be
+    // completed and the partner lands on their dashboard already joined.
+    const invitation = await this.affiliatesService.completeInvitationAfterAuth(
+      payload.invitationToken,
+      savedUser.id,
+    );
+
+    return { ...(await this.withAffiliateContext(result)), invitation };
   }
 
-  async login(email: string, password: string, userAgent?: string, ipAddress?: string) {
+  async login(
+    email: string,
+    password: string,
+    userAgent?: string,
+    ipAddress?: string,
+    invitationToken?: string,
+  ) {
     const normalizedEmail = email.toLowerCase().trim();
     const result = await this.authService.login(
       { email: normalizedEmail, password },
@@ -112,6 +191,16 @@ export class AffiliateAuthService {
       const userId = (result as any).user?.id;
       if (userId) {
         await this.ensureAffiliateProfile({ userId, email: normalizedEmail });
+      }
+
+      // Existing affiliate arriving from an invitation link: no new account is
+      // created, the invitation simply adds them to the invited program.
+      if (invitationToken && userId) {
+        const invitation = await this.affiliatesService.completeInvitationAfterAuth(
+          invitationToken,
+          userId,
+        );
+        return { ...(await this.withAffiliateContext(result)), invitation };
       }
     }
 
@@ -140,7 +229,7 @@ export class AffiliateAuthService {
     return this.toAffiliateMe(base);
   }
 
-  async initiateGoogleAuth(query: { returnUrl?: string; flowType?: OAuthFlowType; invitationToken?: string; origin?: string }) {
+  async initiateGoogleAuth(query: { returnUrl?: string; flowType?: OAuthFlowType; invitationToken?: string }) {
     const config = getAppConfig();
     if (config.googleOAuthEnabled === false) {
       throw new BadRequestException('Google OAuth authentication is currently disabled.');
@@ -154,7 +243,6 @@ export class AffiliateAuthService {
     const state = this.stateService.createState({
       flowType: query.flowType || 'LOGIN',
       returnUrl: this.sanitizeAffiliateReturnUrl(query.returnUrl),
-      frontendOrigin: query.origin,
       invitationToken: query.invitationToken,
     });
 
@@ -211,6 +299,22 @@ export class AffiliateAuthService {
     }
 
     assertUserEligibleForAffiliate(identity.email);
+
+    // A Google sign-in that came from an invitation link must be the invited
+    // person. Checked before the account is created or linked, so signing in
+    // with the wrong Google account leaves nothing behind.
+    if (state.invitationToken) {
+      const invitation = await this.affiliatesService.peekInvitationByToken(state.invitationToken);
+      const invitedEmail = invitation.email.toLowerCase().trim();
+      if (invitedEmail !== identity.email.toLowerCase().trim()) {
+        throw new ForbiddenException({
+          code: 'INVITATION_EMAIL_MISMATCH',
+          message: 'Please use the email address that received this invitation.',
+          details: { invitedEmail },
+        });
+      }
+    }
+
     const { user, isNewUser } = await this.resolveOrCreateGoogleUser(identity);
     await this.ensureAffiliateProfile({
       userId: user.id,
@@ -224,11 +328,18 @@ export class AffiliateAuthService {
       isNewUser,
     });
 
+    // The partner is authenticated now, so the invitation can be completed and
+    // the membership created.
+    const invitation = await this.affiliatesService.completeInvitationAfterAuth(
+      state.invitationToken,
+      user.id,
+    );
+
     return {
       ...(await this.withAffiliateContext(session)),
       returnUrl: this.sanitizeAffiliateReturnUrl(state.returnUrl) || '/dashboard',
-      frontendOrigin: state.frontendOrigin,
       isNewUser,
+      invitation,
     };
   }
 
@@ -388,10 +499,12 @@ export class AffiliateAuthService {
         id: storedProfile.id,
         userId,
         website: storedProfile.website || '',
-        country: storedProfile.country || 'India',
+        // Serialized as stored. An unset field is reported as unset rather than
+        // being filled in with a plausible-looking guess.
+        country: storedProfile.country || '',
         partnerType: storedProfile.partnerType || 'AFFILIATE',
-        primaryMarket: storedProfile.primaryMarket || 'India',
-        audienceSize: storedProfile.audienceSize || '0-1k',
+        primaryMarket: storedProfile.primaryMarket || '',
+        audienceSize: storedProfile.audienceSize || '',
         socialProfiles: storedProfile.socialProfiles || {},
         bio: storedProfile.bio || '',
         onboardingCompleted: isOnboarded,
@@ -446,30 +559,38 @@ export class AffiliateAuthService {
       return changed ? await affiliatePortalProfiles.save(existing) : existing;
     }
 
+    // Only what the partner actually gave us. Seeding a new profile with
+    // 'India' and '0-1k' wrote figures into the database that the partner never
+    // entered, and the profile screen then showed them as if they had — there
+    // was no way to tell a real answer from an invented one. Unknown fields stay
+    // empty so onboarding can ask for them.
     const created = affiliatePortalProfiles.create({
       userId: input.userId,
       email: input.email.toLowerCase().trim(),
       fullName: input.fullName,
+      // A genuine system default: every portal account is an affiliate.
       partnerType: input.partnerType || 'AFFILIATE',
-      country: input.country || 'India',
+      country: input.country || '',
       website: input.website || '',
-      primaryMarket: 'India',
-      audienceSize: '0-1k',
+      primaryMarket: '',
+      audienceSize: '',
       socialProfiles: {},
       bio: '',
       onboardingCompleted: false,
-      taxCountry: input.country || 'India',
+      // Tax details drive withholding, so they are never guessed. These stay
+      // blank and unverified until the partner submits them.
+      taxCountry: input.country || '',
       panOrTaxId: '',
-      taxClassification: 'INDIVIDUAL',
+      taxClassification: '',
       withholdingRate: 0,
       taxVerified: false,
-      taxFormType: 'PAN_TDS',
+      taxFormType: '',
     });
     return await affiliatePortalProfiles.save(created);
   }
 
-  async forgotPassword(email: string, origin?: string) {
-    return this.authService.forgotPassword(email, 'affiliate', origin);
+  async forgotPassword(email: string) {
+    return this.authService.forgotPassword(email, 'affiliate');
   }
 
   async verifyResetToken(token: string) {

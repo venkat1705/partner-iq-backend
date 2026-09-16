@@ -4,7 +4,10 @@ import { dbStore } from '../../../database/store';
 import { LedgerService } from '../../ledger/ledger.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { BrevoEmailService } from '../../memberships/brevo-email.service';
-import { LedgerEntryType, MilestoneRewardStatus, MilestoneRewardType } from '../../../common/enums';
+import { AuditAction, CommissionType, LedgerEntryType, MilestoneRewardStatus, MilestoneRewardType } from '../../../common/enums';
+import { SystemEmailDispatchService } from '../../email-design/services/system-email-dispatch.service';
+import { SystemTemplateKey } from '../../email-design/constants/email-template-keys';
+import { getAppConfig } from '../../../config/app.config';
 
 export interface ExecuteRewardContext {
   organizationId: string;
@@ -27,6 +30,7 @@ export class RewardExecutorService {
     private readonly ledgerService: LedgerService,
     private readonly notificationsService: NotificationsService,
     private readonly brevoEmail: BrevoEmailService,
+    private readonly emailDispatch?: SystemEmailDispatchService,
   ) {}
 
   async executeReward(ctx: ExecuteRewardContext): Promise<{ success: boolean; error?: string; details?: any }> {
@@ -54,6 +58,49 @@ export class RewardExecutorService {
             amountCents,
           );
           results.fixedBonus = { amountCents, status: 'CREDITED' };
+        }
+      }
+
+      // 1b. COMMISSION RATE CHANGE — permanently boosts the affiliate's effective commission
+      // rate on this program enrollment. Framed in the admin UI as an additive "+X%" boost
+      // (basis points), so it increments whatever the affiliate's current effective rate is
+      // (their existing per-affiliate override if one is already set, otherwise their active
+      // tier's override, otherwise the program default) rather than replacing it outright —
+      // stacking milestone rewards keep adding up rather than clobbering each other.
+      // Persisted on ProgramAffiliate.commissionOverride, which commissions.service.ts reads
+      // with higher precedence than the tier default (but still below an explicit commission
+      // rule, which stays the final word for merchant-configured business logic).
+      if (type === MilestoneRewardType.COMMISSION_RATE_CHANGE || config.commissionRateOverride) {
+        const boostBps = Number(config.commissionRateOverride || 0);
+        if (boostBps !== 0) {
+          const commissionChange = this.applyCommissionRateBoost(ctx.organizationId, ctx.programId, ctx.affiliateId, boostBps);
+          if (commissionChange) {
+            results.commissionRateChange = commissionChange;
+
+            dbStore.auditLogs.push({
+              id: uuidv4(),
+              organizationId: ctx.organizationId,
+              actorType: 'SYSTEM',
+              actorId: 'system',
+              action: AuditAction.REWARD_GRANTED,
+              resourceType: 'program_affiliate',
+              resourceId: ctx.affiliateId,
+              metadata: {
+                rewardKind: 'COMMISSION_RATE_CHANGE',
+                source: ctx.source,
+                programId: ctx.programId,
+                previousRateBps: commissionChange.previousRateBps,
+                newRateBps: commissionChange.newRateBps,
+                boostBps,
+              },
+              createdAt: new Date(),
+            });
+          } else {
+            this.logger.warn(
+              `Skipped COMMISSION_RATE_CHANGE reward for affiliate ${ctx.affiliateId}: program ${ctx.programId} is not percentage-based.`,
+            );
+            results.commissionRateChange = { status: 'SKIPPED', reason: 'Program is not percentage-based' };
+          }
         }
       }
 
@@ -93,11 +140,33 @@ export class RewardExecutorService {
       }
 
       // 4. EMAIL
-      if (config.emailSubject || config.emailBody || type === MilestoneRewardType.EMAIL) {
+      if (config.emailSubject || config.emailBody || type === MilestoneRewardType.EMAIL || results.fixedBonus || results.badge) {
         try {
           if (affiliate?.email) {
             const subject = config.emailSubject || `Congratulations on your new achievement!`;
-            // Log prepared email
+            const rewardDescription = config.emailBody
+              || (results.fixedBonus ? `A bonus of ${(results.fixedBonus.amountCents / 100).toFixed(2)} was credited to your account.` : undefined)
+              || (results.badge ? `You earned the "${results.badge.badgeName}" badge.` : undefined)
+              || ctx.reason
+              || `You unlocked a new reward in ${program?.name || 'PartnerIQ'}.`;
+
+            const dashboardUrl = `${getAppConfig().affiliateFrontendUrl.replace(/\/$/, '')}/dashboard`;
+            const templateKey = ctx.source === 'TIER' ? SystemTemplateKey.AFFILIATE_TIER_CHANGED : SystemTemplateKey.AFFILIATE_REWARD_GRANTED;
+
+            await this.emailDispatch?.send(
+              templateKey,
+              affiliate.email,
+              {
+                subject,
+                affiliate: { firstName: (affiliate.displayName || '').split(' ')[0] || affiliate.displayName },
+                organization: { name: organization?.name || 'PartnerIQ' },
+                reward: { description: rewardDescription },
+                tier: { name: config.tierName || 'Upgraded', commissionRate: config.commissionRate || '' },
+                links: { dashboardUrl },
+              },
+              { organizationId: ctx.organizationId },
+            );
+
             dbStore.automationEmailLogs.push({
               id: uuidv4(),
               organizationId: ctx.organizationId,
@@ -141,5 +210,79 @@ export class RewardExecutorService {
       this.logger.error(`Failed to execute reward: ${err.message}`, err.stack);
       return { success: false, error: err.message, details: results };
     }
+  }
+
+  /**
+   * Increments the affiliate's effective commission rate on this program enrollment by
+   * `boostBps` basis points, persisting the result on ProgramAffiliate.commissionOverride.
+   * Returns null (no-op) if the program isn't percentage-based, since a basis-point boost
+   * cannot be meaningfully applied to a flat per-conversion fee.
+   */
+  private applyCommissionRateBoost(
+    organizationId: string,
+    programId: string,
+    affiliateId: string,
+    boostBps: number,
+  ): { previousRateBps: number; newRateBps: number } | null {
+    const program = dbStore.programs.find((p) => p.id === programId);
+    let enrollment = dbStore.programAffiliates.find(
+      (pa) => pa.organizationId === organizationId && pa.programId === programId && pa.affiliateId === affiliateId,
+    );
+
+    // Resolve the affiliate's current effective PERCENTAGE rate, in this precedence order:
+    // existing per-affiliate override -> active tier override -> program default.
+    let baseRateBps: number | undefined;
+    let baseIsPercentage = true;
+
+    if (enrollment?.commissionOverride !== undefined && enrollment.commissionOverride !== null && enrollment.commissionOverrideType) {
+      baseIsPercentage = enrollment.commissionOverrideType === CommissionType.PERCENTAGE;
+      baseRateBps = baseIsPercentage ? enrollment.commissionOverride : undefined;
+    }
+
+    if (baseRateBps === undefined) {
+      const affiliateTier = dbStore.affiliateTiers.find(
+        (at) => at.organizationId === organizationId && at.affiliateId === affiliateId && (!at.programId || at.programId === programId),
+      );
+      const tier = affiliateTier
+        ? dbStore.partnerTiers.find((t) => t.id === affiliateTier.currentTierId && t.isActive && !t.deletedAt)
+        : undefined;
+
+      if (tier?.commissionRateOverride !== undefined && tier?.commissionRateOverride !== null) {
+        baseRateBps = tier.commissionRateOverride;
+        baseIsPercentage = true;
+      } else if (tier?.fixedCommissionOverride !== undefined && tier?.fixedCommissionOverride !== null) {
+        baseIsPercentage = false;
+      }
+    }
+
+    if (baseRateBps === undefined && baseIsPercentage) {
+      if (program?.commissionType && program.commissionType !== CommissionType.PERCENTAGE && program.commissionType !== CommissionType.RECURRING_PERCENTAGE) {
+        baseIsPercentage = false;
+      } else {
+        baseRateBps = program?.defaultCommissionValue ?? 1000;
+      }
+    }
+
+    if (!baseIsPercentage || baseRateBps === undefined) {
+      return null;
+    }
+
+    const newRateBps = Math.max(0, Math.min(10000, baseRateBps + boostBps));
+
+    if (!enrollment) {
+      // Defensive fallback: a reward should never fail to apply just because the enrollment
+      // row is momentarily missing from this lookup — dbStore keeps program enrollment
+      // records, so this should always exist by the time a conversion/tier/milestone event
+      // fires for this affiliate on this program.
+      this.logger.warn(
+        `No ProgramAffiliate enrollment found for affiliate ${affiliateId} on program ${programId}; cannot persist commission rate boost.`,
+      );
+      return null;
+    }
+
+    enrollment.commissionOverride = newRateBps;
+    enrollment.commissionOverrideType = CommissionType.PERCENTAGE;
+
+    return { previousRateBps: baseRateBps, newRateBps };
   }
 }

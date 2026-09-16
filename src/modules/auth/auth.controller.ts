@@ -16,6 +16,8 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
+import { LegalAcceptanceService } from './legal-acceptance.service';
+import { LEGAL_DOCUMENT_VERSIONS } from '../../common/constants/legal-documents';
 import { OAuthService } from './oauth/oauth.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { MfaRateLimiterGuard } from '../../common/guards/mfa-rate-limiter.guard';
@@ -35,6 +37,8 @@ import {
   RegenerateRecoveryCodesDto,
   StepUpVerifyDto,
   UpdateOrgSecurityPolicyDto,
+  VerifyEmailOtpDto,
+  ResendEmailOtpDto,
 } from './dto/auth.dto';
 
 function refreshCookieOptions(appConfig: ReturnType<typeof getAppConfig>, expiresIn = 30 * 24 * 3600 * 1000) {
@@ -53,6 +57,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly oAuthService: OAuthService,
+    private readonly legalAcceptance: LegalAcceptanceService,
   ) { }
 
   // ─────────────────────────────────────────────────────────
@@ -74,7 +79,10 @@ export class AuthController {
       req.ip || (req.headers['x-forwarded-for'] as string),
     );
 
-    res.cookie('refreshToken', result.refreshToken, refreshCookieOptions(appConfig));
+    // No session is issued until the email OTP challenge is verified
+    if (!('requiresEmailVerification' in result) && 'refreshToken' in (result as any)) {
+      res.cookie('refreshToken', (result as any).refreshToken, refreshCookieOptions(appConfig));
+    }
     return { success: true, data: result };
   }
 
@@ -93,8 +101,8 @@ export class AuthController {
       req.ip || (req.headers['x-forwarded-for'] as string),
     );
 
-    // Only set refresh cookie when login is fully complete (not when MFA challenge is pending)
-    if (!('requiresMfa' in result) && 'refreshToken' in result) {
+    // Only set refresh cookie when login is fully complete (not when an MFA or email-verification challenge is pending)
+    if (!('requiresMfa' in result) && !('requiresEmailVerification' in result) && 'refreshToken' in result) {
       res.cookie('refreshToken', (result as any).refreshToken, refreshCookieOptions(appConfig));
       return { success: true, data: result };
     }
@@ -153,6 +161,50 @@ export class AuthController {
     const appConfig = getAppConfig();
     const result = await this.authService.logoutAll(user.userId);
     res.clearCookie('refreshToken', { path: '/', secure: appConfig.cookieSecure, sameSite: appConfig.cookieSameSite });
+    return { success: true, data: result };
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // Email OTP Verification (Signup / Unverified Login)
+  // ─────────────────────────────────────────────────────────
+
+  @Post('verify-email-otp')
+  @UseGuards(MfaRateLimiterGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify the emailed OTP code to activate the account and receive a session' })
+  async verifyEmailOtp(
+    @Body() dto: VerifyEmailOtpDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const appConfig = getAppConfig();
+    const result = await this.authService.verifyEmailOtp(
+      dto.challengeId,
+      dto.code,
+      req.headers['user-agent'],
+      req.ip || (req.headers['x-forwarded-for'] as string),
+    );
+
+    if ('refreshToken' in result) {
+      res.cookie('refreshToken', result.refreshToken, refreshCookieOptions(appConfig));
+    }
+    return { success: true, data: result };
+  }
+
+  @Post('resend-email-otp')
+  @UseGuards(MfaRateLimiterGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Resend the email verification OTP (rate-limited, cooldown-gated)' })
+  async resendEmailOtp(
+    @Body() dto: ResendEmailOtpDto,
+    @Req() req: Request,
+  ) {
+    const result = await this.authService.resendEmailOtp(
+      dto.challengeId,
+      dto.email,
+      req.headers['user-agent'],
+      req.ip || (req.headers['x-forwarded-for'] as string),
+    );
     return { success: true, data: result };
   }
 
@@ -494,9 +546,11 @@ export class AuthController {
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Request password reset (timing-safe — always returns success)' })
-  async forgotPassword(@Body() dto: ForgotPasswordDto, @Req() req: Request) {
-    const origin = dto.origin || (req.headers.origin as string) || (req.headers.referer ? new URL(req.headers.referer).origin : undefined);
-    const result = await this.authService.forgotPassword(dto.email, dto.portal || origin, origin);
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    // Never derive the reset link destination from client-supplied Host/Origin/Referer
+    // headers or body fields — only a known portal identifier ('affiliate' vs default)
+    // selects between server-configured frontend URLs. See auth.service.forgotPassword.
+    const result = await this.authService.forgotPassword(dto.email, dto.portal);
     return { success: true, data: result };
   }
 
@@ -588,10 +642,11 @@ export class AuthController {
 
       if (result && typeof result === 'object' && 'returnUrl' in result && (result as any).returnUrl) {
         const rawReturnUrl = (result as any).returnUrl as string;
-        const redirectUrl = rawReturnUrl.startsWith('http://') || rawReturnUrl.startsWith('https://')
+        // Only allow same-origin relative paths; never redirect to an absolute/external URL.
+        const safePath = rawReturnUrl.startsWith('/') && !rawReturnUrl.startsWith('//') && !rawReturnUrl.includes('\\')
           ? rawReturnUrl
-          : `${frontendBase}${rawReturnUrl.startsWith('/') ? rawReturnUrl : `/${rawReturnUrl}`}`;
-        return res.redirect(redirectUrl);
+          : '/app/dashboard';
+        return res.redirect(`${frontendBase}${safePath}`);
       }
 
       return res.redirect(`${frontendBase}/app/dashboard`);
@@ -619,6 +674,33 @@ export class AuthController {
       return { success: true, data: result };
     }
     return { success: true, data: result };
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // Legal acceptance
+  // ─────────────────────────────────────────────────────────
+
+  /**
+   * The signed-in user's recorded acceptances, plus any required document they
+   * have not accepted at the version currently in force. A non-empty
+   * `outstanding` means their consent is stale and should be re-collected.
+   */
+  @Get('legal-acceptances')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT')
+  @ApiOperation({ summary: 'Get the current user’s legal document acceptances' })
+  async getLegalAcceptances(@CurrentUser() user: any) {
+    const accepted = this.legalAcceptance.listForUser(user.userId);
+    const outstanding = this.legalAcceptance.getOutstandingDocuments(user.userId);
+    return {
+      success: true,
+      data: {
+        accepted,
+        outstanding,
+        currentVersions: LEGAL_DOCUMENT_VERSIONS,
+        hasAcceptedAll: outstanding.length === 0,
+      },
+    };
   }
 
   // ─────────────────────────────────────────────────────────

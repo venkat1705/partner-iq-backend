@@ -13,11 +13,12 @@ import { LeaderboardQueryDto, ChangeTierDto } from '../dto/performance.dto';
 import { GrantRewardDto } from '../dto/milestone.dto';
 import { RewardService } from '../rewards/reward.service';
 import { JwtAuthGuard as AuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { OrganizationGuard } from '../../../common/guards/organization.guard';
 import { PermissionsGuard as RbacGuard } from '../../../common/guards/permissions.guard';
 import { RequirePermissions as RequirePermission } from '../../../common/decorators/require-permissions.decorator';
 
-@Controller(['api/v1/affiliate-performance', 'affiliate-performance'])
-@UseGuards(AuthGuard, RbacGuard)
+@Controller(['api/v1/organizations/:organizationId/affiliate-performance', 'organizations/:organizationId/affiliate-performance'])
+@UseGuards(AuthGuard, OrganizationGuard, RbacGuard)
 export class PerformanceController {
   constructor(
     private readonly performanceService: PerformanceService,
@@ -26,32 +27,28 @@ export class PerformanceController {
 
   @Get('summary')
   @RequirePermission('performance.view')
-  async getPerformanceSummary(@Req() req: any, @Query('programId') programId?: string) {
-    const orgId = req.user.organizationId;
+  async getPerformanceSummary(@Param('organizationId') orgId: string, @Query('programId') programId?: string) {
     return this.performanceService.getOrganizationPerformanceOverview(orgId, programId);
   }
 
   @Get('analytics/funnel')
   @RequirePermission('performance.view')
-  async getActivationFunnel(@Req() req: any, @Query('programId') programId?: string) {
-    const orgId = req.user.organizationId;
+  async getActivationFunnel(@Param('organizationId') orgId: string, @Query('programId') programId?: string) {
     return this.performanceService.getActivationFunnel(orgId, programId);
   }
 
   @Get('leaderboard')
   @RequirePermission('performance.view')
-  async getLeaderboard(@Req() req: any, @Query() dto: LeaderboardQueryDto) {
-    const orgId = req.user.organizationId;
+  async getLeaderboard(@Param('organizationId') orgId: string, @Query() dto: LeaderboardQueryDto) {
     return this.performanceService.getLeaderboard(orgId, dto);
   }
 
   @Get(':affiliateId')
   @RequirePermission('performance.view')
   async getAffiliatePerformanceDetail(
-    @Req() req: any,
+    @Param('organizationId') orgId: string,
     @Param('affiliateId') affiliateId: string,
   ) {
-    const orgId = req.user.organizationId;
     return this.performanceService.getAffiliatePerformanceDetail(orgId, affiliateId);
   }
 
@@ -59,10 +56,10 @@ export class PerformanceController {
   @RequirePermission('tiers.assign')
   async changeAffiliateTier(
     @Req() req: any,
+    @Param('organizationId') orgId: string,
     @Param('affiliateId') affiliateId: string,
     @Body() dto: ChangeTierDto,
   ) {
-    const orgId = req.user.organizationId;
     return this.performanceService.changeAffiliateTier(orgId, affiliateId, dto, req.user.id);
   }
 
@@ -70,10 +67,10 @@ export class PerformanceController {
   @RequirePermission('rewards.grant')
   async grantReward(
     @Req() req: any,
+    @Param('organizationId') orgId: string,
     @Param('affiliateId') affiliateId: string,
     @Body() dto: GrantRewardDto,
   ) {
-    const orgId = req.user.organizationId;
     return this.rewardService.grantManualReward(orgId, affiliateId, dto, req.user.id);
   }
 }

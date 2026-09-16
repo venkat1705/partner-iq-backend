@@ -10,6 +10,14 @@ import {
 } from '../constants/email-template-keys';
 import { AUTH_EMAIL_TEMPLATES } from '../../../config/auth-email-templates.config';
 
+// Explicit key -> template id aliases for SystemTemplateKeys whose natural
+// prefix-stripped form doesn't match the id of the dedicated template meant
+// for them (e.g. ORGANIZATION_MEMBER_INVITED strips to "member-invited",
+// but the designed template for it is "org-invitation").
+const TEMPLATE_KEY_ID_ALIASES: Record<string, string> = {
+  ORGANIZATION_MEMBER_INVITED: 'org-invitation',
+};
+
 export interface ResolvedTemplate {
   templateKey: string;
   source: 'SYSTEM_SECURITY' | 'ORGANIZATION_OVERRIDE' | 'PLATFORM_DEFAULT' | 'CODE_REGISTRY_FALLBACK' | 'CUSTOM_TEMPLATE';
@@ -36,19 +44,31 @@ export class TemplateResolverService {
       const kebabTarget = target.replace(/_/g, '-');
       const snakeTarget = target.replace(/-/g, '_');
       const strippedTarget = kebabTarget.replace(/^(security|affiliate|organization|billing)-/, '');
+      const aliasTarget = TEMPLATE_KEY_ID_ALIASES[(tKey || '').toUpperCase()];
 
-      // Check in-memory store
-      const memMatch = dbStore.emailDesignTemplates.find((t) => {
+      if (aliasTarget) {
+        const aliasMatch = dbStore.emailDesignTemplates.find(
+          (t) => t.templateId && t.templateId.toLowerCase() === aliasTarget,
+        );
+        if (aliasMatch) return aliasMatch;
+      }
+
+      // Check in-memory store — prefer an exact (unstripped) id match over the
+      // looser prefix-stripped fallback, so a dedicated template (e.g. 'affiliate-welcome')
+      // always wins over an unrelated generic template that happens to share the
+      // stripped name (e.g. 'welcome').
+      const exactMatch = dbStore.emailDesignTemplates.find((t) => {
         if (!t.templateId) return false;
         const dbId = t.templateId.toLowerCase();
-        return (
-          dbId === target ||
-          dbId === kebabTarget ||
-          dbId === snakeTarget ||
-          dbId === strippedTarget
-        );
+        return dbId === target || dbId === kebabTarget || dbId === snakeTarget;
       });
-      if (memMatch) return memMatch;
+      if (exactMatch) return exactMatch;
+
+      const strippedMatch = dbStore.emailDesignTemplates.find((t) => {
+        if (!t.templateId) return false;
+        return t.templateId.toLowerCase() === strippedTarget;
+      });
+      if (strippedMatch) return strippedMatch;
 
       // Check PostgreSQL repository
       if (AppDataSource.isInitialized) {
@@ -100,12 +120,30 @@ export class TemplateResolverService {
     };
 
     const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Mirrors email-design's escapeHtml() — the same function template authors call on
+    // every interpolated value (e.g. renderDetailCard). Sample defaultData baked into the
+    // seeded bodyTemplate at seed time is escaped, so restoring {{placeholders}} by searching
+    // for the RAW default value only works when it contains no HTML-special characters
+    // (e.g. "Sarah Jenkins" matches, but "Creator & Agency Partner Program" never does,
+    // because the baked HTML actually contains "Creator &amp; Agency Partner Program").
+    const escapeHtmlLike = (value: string) =>
+      value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
     const restorePlaceholdersFromDefaultData = (bodyTemplate: string, defaultData?: Record<string, any>) => {
       if (!bodyTemplate || !defaultData) return bodyTemplate;
 
       return Object.entries(defaultData).reduce((html, [key, value]) => {
         if (typeof value !== 'string' || value.length < 2) return html;
-        return html.replace(new RegExp(escapeRegExp(value), 'g'), `{{${key}}}`);
+        html = html.replace(new RegExp(escapeRegExp(value), 'g'), `{{${key}}}`);
+        const escaped = escapeHtmlLike(value);
+        if (escaped !== value) {
+          html = html.replace(new RegExp(escapeRegExp(escaped), 'g'), `{{${key}}}`);
+        }
+        return html;
       }, bodyTemplate);
     };
 
@@ -193,7 +231,24 @@ export class TemplateResolverService {
 
       let bodyTemplate = extractBodyFromRenderBody(dbDesignTemplate);
       if (!bodyTemplate) {
-        bodyTemplate = `<h2>Security Notice</h2><p>Hi {{user.firstName}},</p><p>${catalogItem?.description || 'Please complete your requested action.'}</p><p style="margin-top:20px;"><a href="{{links.resetPasswordUrl}}" class="btn">Continue Secure Action →</a></p>`;
+        const isEmailOtpTemplate =
+          templateKey === SystemTemplateKey.SECURITY_EMAIL_VERIFICATION ||
+          templateKey === 'EMAIL_VERIFICATION' ||
+          templateKey === AUTH_EMAIL_TEMPLATES.EMAIL_VERIFICATION;
+
+        if (isEmailOtpTemplate) {
+          bodyTemplate = `
+<h1 style="font-family:'Montserrat',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:22px;font-weight:800;color:#0F172A;margin:0 0 16px 0;letter-spacing:-0.5px;">Verify your email</h1>
+<p style="font-family:'Montserrat',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:15px;line-height:1.6;color:#334155;margin:0 0 24px 0;">Hi {{user.firstName}}, use the code below to verify your email address and finish setting up your PartnerIQ account:</p>
+<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%"><tr><td align="center" style="padding:8px 0 20px 0;">
+  <span style="display:inline-block;padding:16px 28px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;font-family:'JetBrains Mono',Consolas,Monaco,'Courier New',Courier,monospace;font-size:32px;font-weight:700;letter-spacing:8px;color:#0F172A;">{{security.otpCode}}</span>
+</td></tr></table>
+<p style="font-family:'Montserrat',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:13px;line-height:1.6;color:#64748B;text-align:center;margin:0 0 20px 0;">This code expires in <strong>{{security.expiryMinutes}} minutes</strong>.</p>
+<hr style="border:none;border-top:1px solid #E2E8F0;margin:24px 0;"/>
+<p style="font-family:'Montserrat',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:12px;line-height:1.5;color:#94A3B8;margin:0;">If you didn't request this code, you can safely ignore this email — your account remains secure.</p>`;
+        } else {
+          bodyTemplate = `<h2>Security Notice</h2><p>Hi {{user.firstName}},</p><p>${catalogItem?.description || 'Please complete your requested action.'}</p><p style="margin-top:20px;"><a href="{{links.resetPasswordUrl}}" class="btn">Continue Secure Action →</a></p>`;
+        }
       }
 
       return {
@@ -228,7 +283,14 @@ export class TemplateResolverService {
     const platformTemplate = await matchDbTemplate(templateKey);
 
     const catalogItem = SYSTEM_TEMPLATE_CATALOG[templateKey as SystemTemplateKey];
-    const defaultBodyText = `<p>Hi {{affiliate.firstName}}{{user.firstName}},</p><p>${catalogItem?.description || 'You have a new update from ' + '{{organization.name}}'}.</p><p style="margin-top:16px;"><a href="{{links.dashboardUrl}}" class="btn">View Details →</a></p>`;
+    const fontFamily = "'Montserrat',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif";
+    const defaultBodyText = `
+<h1 style="font-family:${fontFamily};font-size:22px;font-weight:800;color:#0F172A;margin:0 0 16px 0;letter-spacing:-0.5px;">${catalogItem?.name || 'Update from PartnerIQ'}</h1>
+<p style="font-family:${fontFamily};font-size:15px;line-height:1.6;color:#334155;margin:0 0 16px 0;">Hi {{affiliate.firstName}}{{user.firstName}},</p>
+<p style="font-family:${fontFamily};font-size:15px;line-height:1.6;color:#334155;margin:0 0 24px 0;">${catalogItem?.description || 'You have a new update from {{organization.name}}.'}</p>
+<table role="presentation" border="0" cellpadding="0" cellspacing="0"><tr><td align="center" style="border-radius:8px;background-color:#2563EB;">
+  <a href="{{links.dashboardUrl}}" target="_blank" style="font-family:${fontFamily};font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;padding:12px 24px;display:inline-block;border-radius:8px;background-color:#2563EB;">View in Dashboard &rarr;</a>
+</td></tr></table>`;
 
     let platformBody = extractBodyFromRenderBody(platformTemplate) || defaultBodyText;
     platformBody = restorePlaceholdersFromDefaultData(platformBody, platformTemplate?.payload?.defaultData);

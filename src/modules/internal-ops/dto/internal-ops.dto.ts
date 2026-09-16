@@ -131,7 +131,7 @@ export class GenerateTestDocumentDto {
 
   @ApiPropertyOptional({
     example: {
-      invoice: { number: 'PIQ-TEST-001', total: 299, currency: 'USD', status: 'PAID' },
+      invoice: { number: 'PIQ-TEST-001', total: 299, currency: 'INR', status: 'PAID' },
       items: [{ description: 'PartnerIQ Growth Subscription', qty: 1, unitPrice: 299, total: 299 }],
     },
   })

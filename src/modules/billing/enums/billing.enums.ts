@@ -103,3 +103,27 @@ export enum BillingPromotionStatus {
   EXPIRED = 'EXPIRED',
   ARCHIVED = 'ARCHIVED',
 }
+
+/**
+ * Metered resources whose creation is gated by the customer's subscription.
+ * Counted account-wide (across every organization on the subscription), never
+ * per organization.
+ */
+export enum BillingResourceType {
+  ORGANIZATION = 'ORGANIZATION',
+  PROGRAM = 'PROGRAM',
+  AFFILIATE = 'AFFILIATE',
+  MEMBER = 'MEMBER',
+}
+
+export enum BillingAddonPurchaseStatus {
+  /** Created at checkout, capacity not yet granted. */
+  PENDING = 'PENDING',
+  /** Paid and granting capacity right now. */
+  ACTIVE = 'ACTIVE',
+  /** Will stop granting capacity at `endDate`. */
+  CANCEL_PENDING = 'CANCEL_PENDING',
+  CANCELLED = 'CANCELLED',
+  EXPIRED = 'EXPIRED',
+  FAILED = 'FAILED',
+}

@@ -37,10 +37,13 @@ import { AuthLevel, PlatformRole, Role, SecurityEventType, UserStatus } from '..
 import { MembershipStatus, ProgramAccessType } from '../../common/enums/rbac';
 import { getRolePermissions } from '../../common/constants/permissions';
 import { RiskEngineService } from './risk-engine.service';
+import { LegalAcceptanceService } from './legal-acceptance.service';
+import { LegalAcceptanceContext } from '../../common/constants/legal-documents';
 import { EmailQueueProducer } from '../email-design/queue/email-queue.producer';
 import { EmailQueueWorker } from '../email-design/queue/email-queue.worker';
 import { SystemTemplateKey } from '../email-design/constants/email-template-keys';
 import { AUTH_EMAIL_TEMPLATES } from '../../config/auth-email-templates.config';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   RegisterDto,
   LoginDto,
@@ -69,6 +72,8 @@ export class AuthService {
     private readonly riskEngine: RiskEngineService,
     @Optional() @Inject(forwardRef(() => EmailQueueProducer)) private readonly emailQueueProducer?: EmailQueueProducer,
     @Optional() @Inject(forwardRef(() => EmailQueueWorker)) private readonly emailQueueWorker?: EmailQueueWorker,
+    @Optional() private readonly notificationsService?: NotificationsService,
+    @Optional() private readonly legalAcceptance?: LegalAcceptanceService,
   ) { }
 
   private async repositories() {
@@ -683,6 +688,17 @@ export class AuthService {
     const { users } = await this.repositories();
     const normalizedEmail = dto.email.toLowerCase().trim();
 
+    // Consent is a precondition, checked before the account exists so a refusal
+    // leaves nothing behind. The frontend also validates the checkbox, but that
+    // is a convenience — this is the check that actually governs.
+    if (dto.acceptedTerms !== true) {
+      throw new BadRequestException({
+        code: 'LEGAL_ACCEPTANCE_REQUIRED',
+        message:
+          'You must accept the Master Services Agreement, Privacy Policy, and Anti-Fraud Guidelines to create an account.',
+      });
+    }
+
     assertUserEligibleForOrganization(normalizedEmail);
 
     const existing = await users.findOne({
@@ -716,16 +732,32 @@ export class AuthService {
       dbStore.users.push(savedUser);
     }
 
-    const tokens = await this.createSessionAndTokens(savedUser, userAgent, ipAddress);
+    // Evidence of consent: one row per document, stamped with the version in
+    // force, the time, and where the acceptance came from.
+    await this.legalAcceptance?.recordSignupAcceptance({
+      userId: savedUser.id,
+      context: LegalAcceptanceContext.SIGNUP,
+      ipAddress,
+      userAgent,
+    });
+
+    const { challenge, rawCode } = await this.createEmailOtpChallengeInternal(savedUser, userAgent, ipAddress);
+    await this.dispatchEmailVerificationOtp(savedUser, rawCode);
+
+    await this.recordSecurityEvent({
+      userId: savedUser.id,
+      eventType: SecurityEventType.EMAIL_OTP_CHALLENGE_CREATED,
+      ipAddress,
+      metadata: { challengeId: challenge.challengeId, stage: 'registration' },
+    });
 
     return {
-      ...tokens,
+      requiresEmailVerification: true,
+      challengeId: challenge.challengeId,
       userId: savedUser.id,
       email: savedUser.email,
-      firstName: savedUser.firstName,
-      lastName: savedUser.lastName,
-      platformRole: savedUser.platformRole,
-      message: 'User registered successfully. Please verify your email.',
+      expiresAt: challenge.expiresAt,
+      message: 'Account created. Enter the verification code we emailed you to continue.',
     };
   }
 
@@ -798,6 +830,26 @@ export class AuthService {
     user.failedLoginAttempts = 0;
     user.lastLoginAt = new Date();
     await users.save(user);
+
+    // Email must be verified before a session is issued.
+    // Affiliates are out of scope for this gate — they have their own onboarding/verification model.
+    if (!user.emailVerified && user.platformRole !== PlatformRole.AFFILIATE) {
+      const { challenge } = await this.getOrCreateActiveEmailOtpChallenge(user, userAgent, ipAddress, { resend: true });
+      await this.recordSecurityEvent({
+        userId: user.id,
+        eventType: SecurityEventType.EMAIL_OTP_CHALLENGE_CREATED,
+        ipAddress,
+        browser,
+        operatingSystem: os,
+        metadata: { challengeId: challenge.challengeId, stage: 'login' },
+      });
+      return {
+        requiresEmailVerification: true,
+        challengeId: challenge.challengeId,
+        email: user.email,
+        expiresAt: challenge.expiresAt,
+      };
+    }
 
     // Geolocation lookup
     const geo = await lookupIp(ipAddress);
@@ -946,6 +998,366 @@ export class AuthService {
     }
     const challenge = await this.createMfaChallengeInternal(user, userAgent, ipAddress);
     return { requiresMfa: true, challengeId: challenge.challengeId, availableMethods: ['TOTP', 'RECOVERY_CODE'], expiresAt: challenge.expiresAt };
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // Email OTP Verification (Signup / Unverified Login)
+  // ─────────────────────────────────────────────────────────
+
+  private static readonly EMAIL_OTP_TTL_MINUTES = 10;
+  private static readonly EMAIL_OTP_RESEND_COOLDOWN_SECONDS = 60;
+
+  /**
+   * Creates a brand-new EMAIL_OTP challenge with a fresh code. Internal — callers
+   * that want to avoid re-sending a different code on every request should use
+   * getOrCreateActiveEmailOtpChallenge instead.
+   */
+  private async createEmailOtpChallengeInternal(
+    user: User,
+    userAgent?: string,
+    ipAddress?: string,
+  ): Promise<{ challenge: MfaChallenge; rawCode: string }> {
+    const { mfaChallenges } = await this.repositories();
+    const rawCode = SecurityUtils.generateNumericOtp(6);
+    // Encrypted (not hashed) at rest — reversible so a cooldown-gated resend can
+    // re-send the SAME code instead of silently rotating it on every request.
+    const codeEncrypted = SecurityUtils.encrypt(rawCode);
+    const now = new Date();
+
+    const challenge = mfaChallenges.create({
+      userId: user.id,
+      challengeId: uuidv4(),
+      method: 'EMAIL_OTP',
+      expiresAt: new Date(now.getTime() + AuthService.EMAIL_OTP_TTL_MINUTES * 60 * 1000),
+      ipAddress,
+      userAgent,
+      metadata: {
+        userEmail: user.email,
+        codeEncrypted,
+        lastSentAt: now.toISOString(),
+      },
+    });
+    const saved = await mfaChallenges.save(challenge);
+    return { challenge: saved, rawCode };
+  }
+
+  /**
+   * Time-boxed OTP issuance: reuses the currently active (unused, unexpired) EMAIL_OTP
+   * challenge for this user instead of minting a new code on every call. A brand-new
+   * code is only generated when no active challenge exists (expired/used/never created).
+   * When `resend` is true and an active challenge exists, the same code is re-dispatched
+   * subject to a cooldown so the user isn't flooded with emails.
+   */
+  private async getOrCreateActiveEmailOtpChallenge(
+    user: User,
+    userAgent?: string,
+    ipAddress?: string,
+    options: { resend?: boolean } = {},
+  ): Promise<{ challenge: MfaChallenge; isNew: boolean; cooldownRemainingSeconds?: number }> {
+    const { mfaChallenges } = await this.repositories();
+    const now = new Date();
+
+    const active = await mfaChallenges.findOne({
+      where: { userId: user.id, method: 'EMAIL_OTP', usedAt: IsNull() },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (active && active.expiresAt > now) {
+      const lastSentAt = active.metadata?.lastSentAt ? new Date(active.metadata.lastSentAt) : active.createdAt;
+      const secondsSinceLastSend = (now.getTime() - lastSentAt.getTime()) / 1000;
+
+      if (!options.resend) {
+        // Caller just wants the existing pending challenge (e.g. unverified login) — don't re-send.
+        return { challenge: active, isNew: false };
+      }
+
+      if (secondsSinceLastSend < AuthService.EMAIL_OTP_RESEND_COOLDOWN_SECONDS) {
+        return {
+          challenge: active,
+          isNew: false,
+          cooldownRemainingSeconds: Math.ceil(
+            AuthService.EMAIL_OTP_RESEND_COOLDOWN_SECONDS - secondsSinceLastSend,
+          ),
+        };
+      }
+
+      // Cooldown elapsed — decrypt and re-send the SAME code rather than minting a new one.
+      const rawCode = this.decryptOtpCode(active);
+      if (rawCode) {
+        active.metadata = { ...(active.metadata || {}), lastSentAt: now.toISOString() };
+        await mfaChallenges.save(active);
+        await this.dispatchEmailVerificationOtp(user, rawCode, this.minutesUntil(active.expiresAt));
+        return { challenge: active, isNew: false };
+      }
+      // Fall through to minting a new one if, for some reason, the code can't be recovered.
+    }
+
+    // No active challenge (or it expired) — mint a fresh code.
+    const { challenge, rawCode } = await this.createEmailOtpChallengeInternal(user, userAgent, ipAddress);
+    await this.dispatchEmailVerificationOtp(user, rawCode, AuthService.EMAIL_OTP_TTL_MINUTES);
+    return { challenge, isNew: true };
+  }
+
+  private decryptOtpCode(challenge: MfaChallenge): string | null {
+    const codeEncrypted = challenge.metadata?.codeEncrypted as string | undefined;
+    if (!codeEncrypted) return null;
+    try {
+      return SecurityUtils.decrypt(codeEncrypted);
+    } catch {
+      return null;
+    }
+  }
+
+  private minutesUntil(date: Date): number {
+    return Math.max(1, Math.round((date.getTime() - Date.now()) / 60000));
+  }
+
+  async resendEmailOtp(challengeId?: string, email?: string, userAgent?: string, ipAddress?: string) {
+    const { users, mfaChallenges } = await this.repositories();
+    let user: User | null = null;
+
+    if (challengeId) {
+      const existing = await mfaChallenges.findOne({ where: { challengeId, method: 'EMAIL_OTP' } });
+      if (existing) {
+        user = await users.findOne({ where: { id: existing.userId, deletedAt: IsNull() } });
+      }
+    }
+    if (!user && email) {
+      const normalizedEmail = email.toLowerCase().trim();
+      user = await users.findOne({ where: { email: normalizedEmail, deletedAt: IsNull() } });
+    }
+
+    // Generic response regardless of outcome — never reveal account existence
+    const genericResponse = { success: true, message: 'If a verification is pending for this account, a new code has been sent.' };
+
+    if (!user || user.emailVerified) {
+      return genericResponse;
+    }
+
+    const result = await this.getOrCreateActiveEmailOtpChallenge(user, userAgent, ipAddress, { resend: true });
+    if (result.cooldownRemainingSeconds) {
+      throw new BadRequestException(
+        `Please wait ${result.cooldownRemainingSeconds}s before requesting another code.`,
+      );
+    }
+
+    return { ...genericResponse, challengeId: result.challenge.challengeId, expiresAt: result.challenge.expiresAt };
+  }
+
+  async verifyEmailOtp(challengeId: string, code: string, userAgent?: string, ipAddress?: string) {
+    const { mfaChallenges, users } = await this.repositories();
+    const { browser, os } = this.parseUserAgent(userAgent);
+
+    const challenge = await mfaChallenges.findOne({ where: { challengeId, method: 'EMAIL_OTP' } });
+    if (!challenge) throw new BadRequestException('Invalid or expired verification code');
+    if (challenge.usedAt || challenge.expiresAt < new Date()) {
+      throw new BadRequestException('This verification code has expired. Please request a new one.');
+    }
+
+    const user = await users.findOne({ where: { id: challenge.userId, deletedAt: IsNull() } });
+    if (!user) throw new NotFoundException('User not found');
+
+    const storedCode = this.decryptOtpCode(challenge);
+    const isValid = Boolean(storedCode) && /^\d{6}$/.test(code) && SecurityUtils.timingSafeCompare(storedCode!, code);
+
+    if (!isValid) {
+      await this.recordSecurityEvent({
+        userId: user.id,
+        eventType: SecurityEventType.EMAIL_OTP_FAILED,
+        ipAddress,
+        browser,
+        operatingSystem: os,
+        metadata: { challengeId },
+      });
+      throw new BadRequestException('Invalid verification code');
+    }
+
+    // Consume the challenge
+    challenge.usedAt = new Date();
+    await mfaChallenges.save(challenge);
+
+    // Mark the account verified
+    user.emailVerified = true;
+    if (user.status === UserStatus.PENDING_VERIFICATION) {
+      user.status = UserStatus.ACTIVE;
+    }
+    await users.save(user);
+    const memUser = dbStore.users.find((item) => item.id === user.id);
+    if (memUser) {
+      memUser.emailVerified = true;
+      memUser.status = user.status;
+    }
+
+    await this.recordSecurityEvent({
+      userId: user.id,
+      eventType: SecurityEventType.EMAIL_VERIFIED,
+      ipAddress,
+      browser,
+      operatingSystem: os,
+      metadata: { challengeId },
+    });
+    await this.recordSecurityEvent({
+      userId: user.id,
+      eventType: SecurityEventType.EMAIL_OTP_VERIFIED,
+      ipAddress,
+      browser,
+      operatingSystem: os,
+      metadata: { challengeId },
+    });
+
+    // Geolocation + device bookkeeping, same as a normal successful login
+    const geo = await lookupIp(ipAddress);
+    const { device, isNew: isNewDevice } = await this.upsertDeviceRecord(user.id, userAgent, ipAddress, geo ?? undefined);
+
+    const tokens = await this.createSessionAndTokens(
+      user, userAgent, ipAddress,
+      { deviceId: device.id, authLevel: AuthLevel.PASSWORD, geo: geo ?? undefined, isNewDevice },
+    );
+
+    await this.recordSecurityEvent({
+      userId: user.id,
+      sessionId: tokens.sessionId,
+      deviceId: device.id,
+      eventType: SecurityEventType.LOGIN_SUCCESS,
+      ipAddress,
+      browser,
+      operatingSystem: os,
+      metadata: { method: 'EMAIL_OTP' },
+    });
+
+    return tokens;
+  }
+
+  private async dispatchEmailVerificationOtp(user: User, code: string, expiresInMinutes = AuthService.EMAIL_OTP_TTL_MINUTES) {
+    const templateKey = AUTH_EMAIL_TEMPLATES.EMAIL_VERIFICATION;
+    const recipientEmail = user.email;
+    const firstName = user.firstName || 'there';
+
+    this.logger.log(`[DispatchEmail] Sending email verification OTP to ${recipientEmail} with templateKey: ${templateKey}`);
+
+    const payload = {
+      subject: 'Your PartnerIQ verification code',
+      preheader: 'Enter this code to verify your email address.',
+      user: { firstName, name: firstName, email: recipientEmail },
+      userName: firstName,
+      firstName,
+      recipientEmail,
+      email: recipientEmail,
+      security: { otpCode: code, expiryMinutes: expiresInMinutes },
+      otpCode: code,
+      expiryMinutes: expiresInMinutes,
+      expiryTime: `${expiresInMinutes} minutes`,
+      organizationName: 'PartnerIQ',
+    };
+
+    let sent = false;
+
+    // 1. Try queued worker path if available
+    if (this.emailQueueProducer && this.emailQueueWorker) {
+      try {
+        const { jobId } = await this.emailQueueProducer.enqueue({
+          templateKey,
+          recipientEmail,
+          payload,
+          userId: user.id,
+          metadata: { source: 'email-otp-verification' },
+        });
+        const processedLog = await this.emailQueueWorker.processJob(jobId);
+        if (processedLog.status === 'SENT') {
+          sent = true;
+          this.logger.log(`[DispatchEmail] Email OTP job [${jobId}] processed and SENT via ${processedLog.provider}`);
+        } else {
+          this.logger.warn(`[DispatchEmail] Queue job [${jobId}] returned status: ${processedLog.status} (${processedLog.failureMessage || 'Unknown issue'}). Invoking direct fallback.`);
+        }
+      } catch (queueErr: any) {
+        this.logger.error(`[DispatchEmail] Error in queue processing: ${queueErr?.message}. Invoking direct fallback.`);
+      }
+    }
+
+    // 2. Direct Delivery Fallback (if queue failed or wasn't available)
+    if (!sent) {
+      const apiKey = process.env.BREVO_API_KEY;
+      const senderEmail = process.env.BREVO_SENDER_EMAIL || 'no-reply@partneriq.local';
+      const senderName = process.env.BREVO_SENDER_NAME || 'PartnerIQ';
+
+      const codeDigits = code.split('');
+      const codeHtml = codeDigits
+        .map((digit, idx) => `<span style="display:inline-block;min-width:34px;padding:10px 0;margin:0 3px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;font-family:'JetBrains Mono',Consolas,Monaco,'Courier New',Courier,monospace;font-size:26px;font-weight:700;color:#0F172A;text-align:center;">${digit}</span>${idx === 2 ? '<span style="display:inline-block;width:8px;"></span>' : ''}`)
+        .join('');
+
+      const defaultHtml = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"/><title>Your verification code</title></head>
+<body style="margin:0;padding:24px;background:#F8FAFC;font-family:'Montserrat',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <div style="max-width:480px;margin:0 auto;background:#ffffff;border-radius:12px;border:1px solid #E2E8F0;padding:36px 32px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);">
+    <h1 style="margin:0 0 16px 0;font-size:22px;font-weight:800;color:#0F172A;letter-spacing:-0.5px;">Verify your email</h1>
+    <p style="margin:0 0 24px 0;font-size:15px;line-height:1.6;color:#334155;">Hi ${firstName}, use the code below to verify your email address and finish setting up your PartnerIQ account:</p>
+    <div style="text-align:center;margin:0 0 24px 0;">${codeHtml}</div>
+    <p style="margin:0 0 16px 0;font-size:13px;line-height:1.6;color:#64748B;text-align:center;">This code expires in <strong>${expiresInMinutes} minutes</strong>.</p>
+    <hr style="border:none;border-top:1px solid #E2E8F0;margin:24px 0;"/>
+    <p style="margin:0;font-size:12px;line-height:1.5;color:#94A3B8;">If you didn't request this code, you can safely ignore this email &mdash; your account remains secure.</p>
+  </div>
+</body>
+</html>`;
+
+      if (apiKey) {
+        try {
+          const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+            method: 'POST',
+            headers: {
+              accept: 'application/json',
+              'api-key': apiKey,
+              'content-type': 'application/json',
+            },
+            body: JSON.stringify({
+              sender: { email: senderEmail, name: senderName },
+              to: [{ email: recipientEmail }],
+              subject: 'Your PartnerIQ verification code',
+              htmlContent: defaultHtml,
+              textContent: `Hi ${firstName},\n\nYour PartnerIQ verification code is: ${code}\n\nThis code expires in ${expiresInMinutes} minutes. If you didn't request this, you can safely ignore this email.`,
+            }),
+          });
+
+          if (!response.ok) {
+            const errBody = await response.text().catch(() => '');
+            this.logger.error(`[DispatchEmail] Brevo direct email-OTP delivery failed (${response.status}): ${errBody}`);
+          } else {
+            const resJson = await response.json().catch(() => ({}));
+            this.logger.log(`[DispatchEmail] Brevo direct email-OTP delivered to ${recipientEmail} (MsgId: ${resJson?.messageId || resJson?.messageIds?.[0]})`);
+            sent = true;
+          }
+        } catch (fetchErr: any) {
+          this.logger.error(`[DispatchEmail] Brevo network request failed: ${fetchErr?.message}`);
+        }
+      } else {
+        this.logger.warn(`[DispatchEmail] [DEV MODE] Email verification OTP simulated for ${recipientEmail}.\n👉 Code: ${code} (expires in ${expiresInMinutes} minutes)`);
+        sent = true;
+      }
+
+      // Record in delivery logs
+      const jobId = uuidv4();
+      const [localPart, domain] = recipientEmail.split('@');
+      const maskedEmail = `${localPart.substring(0, 2)}***@${domain || 'local'}`;
+      dbStore.emailDeliveryLogs.unshift({
+        id: jobId,
+        messageId: jobId,
+        templateKey,
+        recipientEmail,
+        recipientEmailMasked: maskedEmail,
+        subject: 'Your PartnerIQ verification code',
+        provider: apiKey ? 'brevo' : 'development',
+        status: sent ? 'SENT' : 'FAILED',
+        attemptCount: 1,
+        sentAt: sent ? new Date() : undefined,
+        failedAt: sent ? undefined : new Date(),
+        metadata: {
+          payload: { ...payload, security: { ...payload.security, otpCode: '[REDACTED]' }, otpCode: '[REDACTED]' },
+          userId: user.id,
+        },
+        queuedAt: new Date(),
+        createdAt: new Date(),
+      } as any);
+    }
   }
 
   // ─────────────────────────────────────────────────────────
@@ -1321,53 +1733,14 @@ export class AuthService {
     }
 
     if (session.revokedAt || session.refreshTokenHash !== incomingHash) {
-      // Rotation Grace Period: If the session was rotated recently (within 15 minutes),
-      // allow concurrent requests from the same client to retrieve the active session tokens
-      // instead of falsely triggering token reuse revocation.
-      const ROTATION_GRACE_PERIOD_MS = 15 * 60 * 1000; // 15 minutes
-      if (
-        session.revokedAt &&
-        session.revokeReason === 'TOKEN_ROTATED' &&
-        Date.now() - new Date(session.revokedAt).getTime() < ROTATION_GRACE_PERIOD_MS
-      ) {
-        const activeSession = await authSessions.findOne({
-          where: { tokenFamilyId: decoded.tfid, revokedAt: IsNull() },
-          order: { createdAt: 'DESC' },
-        });
-
-        if (activeSession) {
-          const activeUser = await users.findOne({
-            where: { id: activeSession.userId, deletedAt: IsNull() },
-          });
-          if (activeUser) {
-            const freshAccessToken = jwt.sign(
-              { sub: activeUser.id, sid: activeSession.id, type: 'access' },
-              jwtConfig.accessSecret,
-              { expiresIn: jwtConfig.accessTtl } as SignOptions,
-            );
-            const freshRefreshToken = jwt.sign(
-              { sub: activeUser.id, sid: activeSession.id, tfid: activeSession.tokenFamilyId, type: 'refresh' },
-              jwtConfig.refreshSecret,
-              { expiresIn: jwtConfig.refreshTtl } as SignOptions,
-            );
-            activeSession.refreshTokenHash = SecurityUtils.hashToken(freshRefreshToken);
-            activeSession.lastUsedAt = new Date();
-            await authSessions.save(activeSession);
-
-            return {
-              accessToken: freshAccessToken,
-              refreshToken: freshRefreshToken,
-              sessionId: activeSession.id,
-              user: {
-                id: activeUser.id,
-                email: activeUser.email,
-                firstName: activeUser.firstName,
-                lastName: activeUser.lastName,
-              },
-            };
-          }
-        }
-      }
+      // No grace period here, deliberately: a previous version of this method tolerated reuse of
+      // an already-rotated refresh token for 15 minutes (to smooth over concurrent-tab races), but
+      // that window is indistinguishable from an attacker replaying a stolen pre-rotation token -
+      // it defeated refresh-token-reuse (theft) detection entirely for its own duration. Standard
+      // rotation security (OAuth 2.1 / RFC 6749bis guidance) treats ANY reuse of a superseded
+      // refresh token as a signal of compromise and revokes the whole token family unconditionally.
+      // A legitimate concurrent-tab race should be handled client-side (a mutex/shared-lock around
+      // the refresh call), not by weakening server-side reuse detection.
 
       // Token reuse detected — revoke entire family
       await authSessions.update(
@@ -1695,7 +2068,7 @@ export class AuthService {
     return { success: true, message: 'Password changed successfully. Please log in again.' };
   }
 
-  async forgotPassword(email: string, portalOrOrigin?: string, requestOrigin?: string) {
+  async forgotPassword(email: string, portal?: string) {
     const { users } = await this.repositories();
     const normalizedEmail = email ? email.toLowerCase().trim() : '';
     this.logger.log(`[ForgotPassword] Request received for: "${normalizedEmail}"`);
@@ -1722,25 +2095,15 @@ export class AuthService {
         { expiresIn: '1h' } as SignOptions,
       );
 
-      // Resolve destination frontend url from env or origins
-      let baseUrl = appConfig.frontendUrl;
-      const isAffiliate =
-        portalOrOrigin === 'affiliate' ||
-        portalOrOrigin === 'affiliate-portal' ||
-        (requestOrigin && (requestOrigin.includes('3005') || requestOrigin.includes('affiliate'))) ||
-        (portalOrOrigin && (portalOrOrigin.includes('3005') || portalOrOrigin.includes('affiliate')));
-
-      if (isAffiliate) {
-        baseUrl = appConfig.affiliateFrontendUrl;
-      } else if (portalOrOrigin && portalOrOrigin.startsWith('http')) {
-        baseUrl = portalOrOrigin;
-      } else if (requestOrigin && requestOrigin.startsWith('http')) {
-        baseUrl = requestOrigin;
-      }
-
-      baseUrl = baseUrl.replace(/\/$/, '');
+      // Resolve destination frontend url strictly from server-side configuration.
+      // Never trust a client-supplied Host/Origin/Referer header or arbitrary URL here —
+      // doing so lets an attacker redirect the reset link (and its secret token) to a
+      // phishing domain. `portal` is only ever a fixed identifier, not a URL.
+      const isAffiliate = portal === 'affiliate' || portal === 'affiliate-portal';
+      const baseUrl = (isAffiliate ? appConfig.affiliateFrontendUrl : appConfig.frontendUrl).replace(/\/$/, '');
       const resetPasswordUrl = `${baseUrl}/reset-password?token=${encodeURIComponent(resetToken)}`;
-      this.logger.log(`[ForgotPassword] Destination URL: ${resetPasswordUrl}`);
+      // Never log the reset URL/token itself — only the user identifier and event.
+      this.logger.log(`[ForgotPassword] Reset token issued for user ${user.id} (${isAffiliate ? 'affiliate' : 'frontend'} portal).`);
 
       await this.dispatchPasswordResetEmail(user, resetPasswordUrl);
 
@@ -2067,21 +2430,34 @@ export class AuthService {
     opts: { title: string; body: string; actionUrl?: string; metadata?: Record<string, any> },
   ) {
     try {
-      const notification = {
-        id: uuidv4(),
-        userId,
-        organizationId: undefined,
-        type: 'security' as any,
-        title: opts.title,
-        body: opts.body,
-        channel: 'in_app' as any,
-        priority: 'high' as any,
-        isRead: false,
-        createdAt: new Date().toISOString(),
-        actionUrl: opts.actionUrl,
-        metadata: opts.metadata || {},
-      };
-      dbStore.notifications.unshift(notification as any);
+      if (this.notificationsService) {
+        this.notificationsService.createNotification({
+          userId,
+          type: 'security',
+          title: opts.title,
+          body: opts.body,
+          channel: 'in_app',
+          priority: 'high',
+          actionUrl: opts.actionUrl,
+          metadata: opts.metadata || {},
+        }).catch(() => undefined);
+      } else {
+        // No DI container available (e.g. direct-instantiation tests) — fall back to the raw write.
+        dbStore.notifications.unshift({
+          id: uuidv4(),
+          userId,
+          organizationId: undefined,
+          type: 'security' as any,
+          title: opts.title,
+          body: opts.body,
+          channel: 'in_app' as any,
+          priority: 'high' as any,
+          isRead: false,
+          createdAt: new Date().toISOString(),
+          actionUrl: opts.actionUrl,
+          metadata: opts.metadata || {},
+        } as any);
+      }
 
       // Dispatch security email notification if user email is found
       const user = dbStore.users.find((u) => u.id === userId);
@@ -2096,10 +2472,11 @@ export class AuthService {
           templateKey = AUTH_EMAIL_TEMPLATES.NEW_LOGIN_ALERT;
         }
 
+        const dashboardUrl = opts.actionUrl || '/app/settings?tab=security';
         const securityPayload = {
           timestamp: new Date().toLocaleString(),
           details: opts.body,
-          actionUrl: opts.actionUrl || '/app/settings?tab=security',
+          actionUrl: dashboardUrl,
           deviceName: opts.metadata?.deviceName || 'Web Browser / Workstation',
           location: opts.metadata?.location || 'Current Network Location',
           ipAddress: opts.metadata?.ipAddress || 'Authorized Network IP',
@@ -2114,10 +2491,23 @@ export class AuthService {
               subject: opts.title,
               preheader: opts.body,
               user: { firstName: user.firstName, lastName: user.lastName, email: user.email },
+              firstName: user.firstName,
               security: securityPayload,
+              // Flat fields — the "new-login-alert" email-design template reads these
+              // directly (device/browser/location/ipAddress/loginTime/secureAccountUrl),
+              // not the nested security.* structure used by the generic fallback body.
+              device: securityPayload.deviceName,
+              browser: opts.metadata?.browser || securityPayload.deviceName,
+              location: securityPayload.location,
+              ipAddress: securityPayload.ipAddress,
+              loginTime: securityPayload.timestamp,
+              secureAccountUrl: dashboardUrl,
               links: {
-                dashboardUrl: opts.actionUrl || '/app/settings?tab=security',
-                securityUrl: opts.actionUrl || '/app/settings?tab=security',
+                dashboardUrl,
+                securityUrl: dashboardUrl,
+                // Generic "Security Notice" fallback body (used for password-changed/2FA
+                // toggled, which have no dedicated email-design template) links via this key.
+                resetPasswordUrl: dashboardUrl,
               },
             },
             userId,

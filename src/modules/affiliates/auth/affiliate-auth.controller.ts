@@ -46,6 +46,9 @@ export class AffiliateAuthController {
       body.password,
       req.headers['user-agent'],
       req.ip || (req.headers['x-forwarded-for'] as string),
+      // Present when the partner followed an invitation link; completing it
+      // here is what joins an existing affiliate to the invited program.
+      body.invitationToken,
     );
     if (result.refreshToken) {
       res.cookie('affiliateRefreshToken', result.refreshToken, affiliateRefreshCookieOptions());
@@ -94,9 +97,8 @@ export class AffiliateAuthController {
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Request password reset for affiliate account' })
-  async forgotPassword(@Body() body: any, @Req() req: Request) {
-    const origin = body?.origin || req.headers.origin || (req.headers.referer ? new URL(req.headers.referer).origin : undefined);
-    const result = await this.affiliateAuthService.forgotPassword(body.email, origin as string);
+  async forgotPassword(@Body() body: any) {
+    const result = await this.affiliateAuthService.forgotPassword(body.email);
     return { success: true, data: result };
   }
 
@@ -124,8 +126,8 @@ export class AffiliateAuthController {
   @Get('google')
   @ApiOperation({ summary: 'Start affiliate Google OAuth flow' })
   async google(@Query() query: any, @Req() req: Request, @Res() res: Response) {
-    const origin = query.origin || req.headers.origin || (req.headers.referer ? new URL(req.headers.referer).origin : undefined);
-    const result = await this.affiliateAuthService.initiateGoogleAuth({ ...query, origin });
+    const { origin, ...safeQuery } = query || {};
+    const result = await this.affiliateAuthService.initiateGoogleAuth(safeQuery);
     if (req.headers.accept?.includes('application/json') || req.query.json === 'true') {
       return res.json({ success: true, data: result });
     }
@@ -138,7 +140,7 @@ export class AffiliateAuthController {
     const config = getAppConfig();
     try {
       const result = await this.affiliateAuthService.handleGoogleCallback(query);
-      const affiliateBase = result.frontendOrigin || config.affiliateFrontendUrl.replace(/\/$/, '');
+      const affiliateBase = config.affiliateFrontendUrl.replace(/\/$/, '');
       res.cookie('affiliateRefreshToken', result.refreshToken, affiliateRefreshCookieOptions());
       const targetPath = result.returnUrl?.startsWith('/') ? result.returnUrl : '/dashboard';
       const redirectUrl = `${affiliateBase}/auth/google/callback?token=${encodeURIComponent(result.accessToken)}&refreshToken=${encodeURIComponent(result.refreshToken || '')}&returnUrl=${encodeURIComponent(targetPath)}&isNew=${result.isNewUser ? 'true' : 'false'}`;

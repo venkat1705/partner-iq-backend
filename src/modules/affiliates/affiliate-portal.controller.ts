@@ -13,13 +13,16 @@ import {
   BadRequestException,
   HttpCode,
   HttpStatus,
+  Inject,
   Optional,
+  forwardRef,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { v4 as uuidv4 } from 'uuid';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { dbStore } from '../../database/store';
-import { AffiliateStatus, TrackingLinkStatus, EnvironmentType, PayoutStatus } from '../../common/enums';
+import { AffiliateStatus, TrackingLinkStatus, EnvironmentType, PayoutStatus, ProgramStatus, ConversionStatus, CommissionType } from '../../common/enums';
+import { PLATFORM_CURRENCY } from '../../common/constants/currency';
 import { SecurityUtils } from '../../common/utils/security.utils';
 import { AuthService } from '../auth/auth.service';
 import { initializeDataSource } from '../../database/data-source';
@@ -52,6 +55,7 @@ import { IsNull, In } from 'typeorm';
 import { UserStatus, PlatformRole } from '../../common/enums';
 import { assertUserEligibleForAffiliate } from './affiliate-eligibility.policy';
 import { AffiliatesService } from './affiliates.service';
+import { AffiliateAuthService } from './auth/affiliate-auth.service';
 
 @ApiTags('Affiliate Self Portal')
 @Controller()
@@ -59,6 +63,9 @@ export class AffiliatePortalController {
   constructor(
     @Optional() private readonly authService?: AuthService,
     private readonly affiliatesService?: AffiliatesService,
+    @Optional()
+    @Inject(forwardRef(() => AffiliateAuthService))
+    private readonly affiliateAuthService?: AffiliateAuthService,
   ) { }
 
   private resolveAffiliateEmail(req: any): string {
@@ -258,102 +265,44 @@ export class AffiliatePortalController {
   // ----------------------------------------------------
   // Affiliate Auth — Register
   // ----------------------------------------------------
+  /**
+   * Legacy affiliate registration.
+   *
+   * This used to be a second, independent registration implementation: it
+   * accepted 8-character passwords where the canonical path requires 12, wrote
+   * its own profile row, and knew nothing about invitation binding or legal
+   * acceptance. Anything posting here could sidestep every control on the real
+   * registration path.
+   *
+   * No client calls it, so rather than leave a weaker duplicate reachable, the
+   * route now delegates to the canonical `AffiliateAuthService.register`. The
+   * URL keeps working for any caller we do not know about, and gets the same
+   * checks as everyone else.
+   */
   @Post('api/v1/affiliate/legacy/auth/register')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Register a new affiliate account' })
+  @ApiOperation({ summary: 'Register a new affiliate account (delegates to the canonical flow)' })
   async affiliateRegister(@Body() body: any, @Req() req: any) {
-    const { fullName, email, password, partnerType } = body || {};
-
-    if (!email || !password || !fullName) {
-      throw new BadRequestException('fullName, email, and password are required.');
+    if (!this.affiliateAuthService) {
+      throw new BadRequestException('Affiliate registration is unavailable.');
     }
 
-    if (password.length < 8) {
-      throw new BadRequestException('Password must be at least 8 characters.');
-    }
-
-    const normalizedEmail = (email as string).toLowerCase().trim();
-    assertUserEligibleForAffiliate(normalizedEmail);
-
-    const nameParts = (fullName as string).trim().split(/\s+/);
-    const firstName = nameParts[0] || 'Partner';
-    const lastName = nameParts.slice(1).join(' ') || '';
-
-    const { users, affiliatePortalProfiles } = await this.repositories();
-
-    const existing = await users.findOne({
-      where: { email: normalizedEmail, deletedAt: IsNull() },
-    });
-    if (existing) {
-      throw new BadRequestException('An account with this email already exists.');
-    }
-
-    const passwordHash = await SecurityUtils.hashPassword(password);
-    const newUser = users.create({
-      email: normalizedEmail,
-      passwordHash,
-      firstName,
-      lastName,
-      status: UserStatus.ACTIVE,
-      emailVerified: false,
-      platformRole: PlatformRole.AFFILIATE,
-      failedLoginAttempts: 0,
-    });
-    const savedUser = await users.save(newUser);
-
-    if (dbStore.users && !dbStore.users.some((item) => item.id === savedUser.id)) {
-      dbStore.users.push(savedUser);
-    }
-
-    await affiliatePortalProfiles.save(affiliatePortalProfiles.create({
-      userId: savedUser.id,
-      email: normalizedEmail,
-      fullName,
-      partnerType: partnerType || 'AFFILIATE',
-      country: 'India',
-      primaryMarket: 'India',
-      audienceSize: '0-1k',
-      socialProfiles: {},
-      onboardingCompleted: false,
-      taxCountry: 'India',
-      taxClassification: 'INDIVIDUAL',
-      withholdingRate: 0,
-      taxVerified: false,
-      taxFormType: 'PAN_TDS',
-    }));
-
-    if (this.authService) {
-      const loginResult = await this.authService.login(
-        { email: normalizedEmail, password },
-        req.headers['user-agent'],
-        req.ip || req.headers['x-forwarded-for'],
-        { allowAffiliate: true },
-      );
-      return {
-        success: true,
-        data: {
-          ...loginResult,
-          userId: savedUser.id,
-          email: savedUser.email,
-          firstName: savedUser.firstName,
-          lastName: savedUser.lastName,
-          fullName: `${savedUser.firstName} ${savedUser.lastName}`.trim(),
-          message: 'Affiliate account created successfully.',
-        },
-      };
-    }
-
-    return {
-      success: true,
-      data: {
-        userId: savedUser.id,
-        email: savedUser.email,
-        firstName: savedUser.firstName,
-        lastName: savedUser.lastName,
-        fullName: `${savedUser.firstName} ${savedUser.lastName}`.trim(),
-        message: 'Affiliate account created successfully.',
+    const result = await this.affiliateAuthService.register(
+      {
+        fullName: body?.fullName,
+        email: body?.email,
+        password: body?.password,
+        partnerType: body?.partnerType,
+        country: body?.country,
+        website: body?.website,
+        invitationToken: body?.invitationToken,
+        termsAccepted: body?.termsAccepted,
       },
-    };
+      req.headers['user-agent'],
+      req.ip || req.headers['x-forwarded-for'],
+    );
+
+    return { success: true, data: result };
   }
 
   @Get('api/v1/affiliate/me/profile')
@@ -434,7 +383,7 @@ export class AffiliatePortalController {
       };
     }
 
-    const { trackingLinks, conversions, commissions, payoutItems, programAffiliates } = await this.repositories();
+    const { trackingLinks, conversions, commissions, payoutItems, programAffiliates, affiliateTiers, partnerTiers, programs } = await this.repositories();
 
     const linksQuery = trackingLinks.createQueryBuilder('tl')
       .where('tl.affiliateId IN (:...affiliateIds)', { affiliateIds });
@@ -467,16 +416,66 @@ export class AffiliatePortalController {
       .take(5)
       .getMany();
 
-    const totalEarnings = commList.reduce((sum, c: any) => sum + Number(c.amount || c.commissionAmount || 0), 0);
-    const pendingCommission = commList
-      .filter((c: any) => c.status === 'PENDING')
-      .reduce((sum, c: any) => sum + Number(c.amount || c.commissionAmount || 0), 0);
+    // Net of any refund/chargeback clawback — a commission's status only ever becomes
+    // REFUNDED/PARTIALLY_REFUNDED/PROCESSING after it was created as APPROVED (commissions
+    // are never created in any other status), so summing raw commissionAmount here counted
+    // money that was later reversed as still "earned" forever.
+    const totalEarnings = commList.reduce(
+      (sum, c: any) => sum + (Number(c.amount || c.commissionAmount || 0) - Number(c.reversedAmount || 0)),
+      0,
+    );
+    // Conversions held for fraud review never get a Commission row in the first place (one
+    // is only created once the conversion is APPROVED), so filtering commList for a
+    // 'PENDING' status here can never match anything — this bucket always showed $0
+    // regardless of how much was actually awaiting review. Estimate it from the conversions
+    // themselves instead, using each program's default commission rate as a placeholder
+    // until the real commission is calculated on approval.
+    const pendingConversions = convList.filter((c: any) => c.status === ConversionStatus.PENDING);
+    const pendingProgramIds = [...new Set(pendingConversions.map((c: any) => c.programId).filter(Boolean))];
+    const pendingPrograms = pendingProgramIds.length
+      ? await programs.createQueryBuilder('p').where('p.id IN (:...ids)', { ids: pendingProgramIds }).getMany()
+      : [];
+    const pendingProgramById = new Map(pendingPrograms.map((p: any) => [p.id, p]));
+    const pendingCommission = pendingConversions.reduce((sum, c: any) => {
+      const program = pendingProgramById.get(c.programId);
+      const commissionValue = program?.defaultCommissionValue ?? 1000; // 10.00% fallback, matches CommissionsService default
+      const estimated =
+        program?.commissionType === CommissionType.FIXED_AMOUNT
+          ? commissionValue
+          : Math.round((Number(c.amount || 0) * commissionValue) / 10000);
+      return sum + estimated;
+    }, 0);
     const payableCommission = commList
-      .filter((c: any) => c.status === 'PAYABLE' || c.status === 'APPROVED')
-      .reduce((sum, c: any) => sum + Number(c.amount || c.commissionAmount || 0), 0);
+      .filter((c: any) => c.status === ConversionStatus.APPROVED)
+      .reduce((sum, c: any) => sum + (Number(c.amount || c.commissionAmount || 0) - Number(c.reversedAmount || 0)), 0);
     const paidCommission = poList.reduce((sum, item: any) => sum + Number(item.amount || (item as any).netAmount || 0), 0);
     const clicks = links.reduce((sum, link: any) => sum + Number((link as any).clickCount || (link as any).clicks || 0), 0);
-    const revenue = convList.reduce((sum, conversion: any) => sum + Number(conversion.amount || (conversion as any).value || 0), 0);
+    // Rejected (fraud-blocked) conversions never earned anything and shouldn't inflate the
+    // "Attributed Revenue" shown to the affiliate; pending ones are kept since they're real,
+    // just not yet confirmed — mirroring pendingCommission above.
+    const attributedConvList = convList.filter((c: any) => c.status !== ConversionStatus.REJECTED);
+    const revenue = attributedConvList.reduce((sum, conversion: any) => sum + Number(conversion.amount || (conversion as any).value || 0), 0);
+
+    // Real current tier — the highest tier held across the affiliate's (possibly
+    // multi-org) enrollments, not a hardcoded "Standard Partner" placeholder.
+    let currentTier: { id: string; name: string; code: string; tierLevel: number; icon?: string; badge?: string; colorToken?: string } | null = null;
+    for (const aff of scopedAffiliates) {
+      const affTier = await affiliateTiers.findOne({ where: { organizationId: aff.organizationId, affiliateId: aff.id } });
+      if (!affTier?.currentTierId) continue;
+      const tierDef = await partnerTiers.findOne({ where: { id: affTier.currentTierId } });
+      if (!tierDef) continue;
+      if (!currentTier || tierDef.level > currentTier.tierLevel) {
+        currentTier = {
+          id: tierDef.id,
+          name: tierDef.name,
+          code: tierDef.code,
+          tierLevel: tierDef.level,
+          icon: tierDef.icon,
+          badge: tierDef.badge,
+          colorToken: tierDef.colorToken,
+        };
+      }
+    }
 
     return {
       totalEarnings,
@@ -488,9 +487,9 @@ export class AffiliatePortalController {
       conversions: convList.length,
       conversionRate: clicks > 0 ? Number(((convList.length / clicks) * 100).toFixed(2)) : 0,
       revenue,
-      currentTier: {
-        name: scopedAffiliates.length ? 'Standard Partner' : 'Not enrolled',
-        tierLevel: scopedAffiliates.length ? 1 : 0,
+      currentTier: currentTier || {
+        name: 'Bronze',
+        tierLevel: 1,
         minEarnings: 0,
       },
       topLinks: links.slice(0, 5),
@@ -524,6 +523,7 @@ export class AffiliatePortalController {
       payoutItems,
       affiliateTiers,
       partnerTiers,
+      programs,
     } = await this.repositories();
 
     const orgList = orgIds.length > 0 ? await organizations.createQueryBuilder('o')
@@ -547,7 +547,7 @@ export class AffiliatePortalController {
             name: aff.displayName || 'Partner Brand',
             slug: 'partner-brand',
             status: 'ACTIVE',
-            defaultCurrency: 'USD',
+            defaultCurrency: PLATFORM_CURRENCY,
           } as any;
         }
       }
@@ -574,15 +574,36 @@ export class AffiliatePortalController {
       });
 
       const totalClicks = links.reduce((acc, l: any) => acc + Number(l.clickCount || l.clicks || 0), 0);
-      const totalEarnings = comms.reduce((acc, c: any) => acc + Number(c.amount || c.commissionAmount || 0), 0);
-      const pendingCommission = comms
-        .filter((c: any) => c.status === 'PENDING')
-        .reduce((acc, c: any) => acc + Number(c.amount || c.commissionAmount || 0), 0);
+      // See getDashboard() above for why these need to be net-of-reversal / estimated from
+      // pending conversions rather than filtered by commission status — the same duplicated
+      // aggregation bug (commissions are never created with status 'PENDING', so that filter
+      // always matched nothing; and raw commissionAmount ignores later refunds/chargebacks).
+      const totalEarnings = comms.reduce(
+        (acc, c: any) => acc + (Number(c.amount || c.commissionAmount || 0) - Number(c.reversedAmount || 0)),
+        0,
+      );
+      const pendingConvs = convs.filter((c: any) => c.status === ConversionStatus.PENDING);
+      const pendingProgIds = [...new Set(pendingConvs.map((c: any) => c.programId).filter(Boolean))];
+      const pendingProgs = pendingProgIds.length
+        ? await programs.createQueryBuilder('p').where('p.id IN (:...ids)', { ids: pendingProgIds }).getMany()
+        : [];
+      const pendingProgById = new Map(pendingProgs.map((p: any) => [p.id, p]));
+      const pendingCommission = pendingConvs.reduce((acc, c: any) => {
+        const prog = pendingProgById.get(c.programId);
+        const commissionValue = prog?.defaultCommissionValue ?? 1000; // 10.00% fallback, matches CommissionsService default
+        const estimated =
+          prog?.commissionType === CommissionType.FIXED_AMOUNT
+            ? commissionValue
+            : Math.round((Number(c.amount || 0) * commissionValue) / 10000);
+        return acc + estimated;
+      }, 0);
       const payableCommission = comms
-        .filter((c: any) => c.status === 'PAYABLE' || c.status === 'APPROVED')
-        .reduce((acc, c: any) => acc + Number(c.amount || c.commissionAmount || 0), 0);
+        .filter((c: any) => c.status === ConversionStatus.APPROVED)
+        .reduce((acc, c: any) => acc + (Number(c.amount || c.commissionAmount || 0) - Number(c.reversedAmount || 0)), 0);
       const paidCommission = pos.reduce((acc, p: any) => acc + Number(p.amount || (p as any).netAmount || 0), 0);
-      const attributedRevenue = convs.reduce((acc, c: any) => acc + Number(c.amount || (c as any).value || 0), 0);
+      const attributedRevenue = convs
+        .filter((c: any) => c.status !== ConversionStatus.REJECTED)
+        .reduce((acc, c: any) => acc + Number(c.amount || (c as any).value || 0), 0);
 
       const affTier = await affiliateTiers.findOne({
         where: { organizationId: org.id, affiliateId: aff.id },
@@ -618,7 +639,7 @@ export class AffiliatePortalController {
           name: org.name,
           slug: org.slug,
           subdomain: org.slug,
-          currency: (org as any).defaultCurrency || (org as any).currency || 'USD',
+          currency: (org as any).defaultCurrency || (org as any).currency || PLATFORM_CURRENCY,
           industry: (org as any).industry || 'Software',
           description: (org as any).description || `${org.name} Official Partner Network`,
           branding: {
@@ -708,7 +729,7 @@ export class AffiliatePortalController {
         slug: p.slug,
         description: (p as any).description || `Official ${p.name} for content creators and partners.`,
         type: (p as any).type || 'RECURRING',
-        commissionSummary: isFlat ? `$${rate} per activation` : `${rate}% recurring lifetime`,
+        commissionSummary: isFlat ? `₹${rate} per activation` : `${rate}% recurring lifetime`,
         commissionRate: rate,
         isFlat,
         attributionWindowDays: p.cookieDurationDays || 60,
@@ -754,11 +775,20 @@ export class AffiliatePortalController {
       if (matchedOrg) targetOrgId = matchedOrg.id;
     }
 
-    const whereClause: any = { deletedAt: IsNull() };
-    if (targetOrgId) {
-      whereClause.organizationId = targetOrgId;
+    // This is a public, unauthenticated endpoint — never allow it to dump every program
+    // across every tenant. It must always be scoped to one organization, and only surface
+    // programs that org has explicitly marked ACTIVE + PUBLIC (never draft/paused/private
+    // programs, which can contain confidential commission rates and terms).
+    if (!targetOrgId) {
+      throw new BadRequestException('organizationId or slug is required.');
     }
-    const programList = await programs.find({ where: whereClause });
+    const whereClause: any = {
+      deletedAt: IsNull(),
+      organizationId: targetOrgId,
+      status: ProgramStatus.ACTIVE,
+      visibility: 'PUBLIC',
+    };
+    const programList = await programs.find({ where: whereClause, take: 100 });
     const orgIds = [...new Set(programList.map((p) => p.organizationId))];
     const orgList = orgIds.length ? await organizations.find({ where: { id: In(orgIds) } }) : [];
     const brandingList = orgIds.length ? await organizationBrandings.find({ where: { organizationId: In(orgIds) } }) : [];
@@ -778,7 +808,7 @@ export class AffiliatePortalController {
         title: p.name,
         slug: p.slug,
         category: (p as any).category || 'SAAS',
-        commission: isFlat ? `$${rate} Flat` : `${rate}% Recurring`,
+        commission: isFlat ? `₹${rate} Flat` : `${rate}% Recurring`,
         cookieWindow: `${p.cookieDurationDays || 60} Days`,
         avgEpc: '$4.20',
         featured: (p as any).featured ?? true,
@@ -851,7 +881,7 @@ export class AffiliatePortalController {
         programName: prog?.name || 'Affiliate Program',
         programCategory: (prog as any)?.category || 'SaaS',
         programDescription: (prog as any)?.description || '',
-        commissionSummary: isFlat ? `$${rate} Flat` : `${rate}% Recurring`,
+        commissionSummary: isFlat ? `₹${rate} Flat` : `${rate}% Recurring`,
         cookieWindow: `${prog?.cookieDurationDays || 60} Days`,
         affiliateApprovalMode: prog?.affiliateApprovalMode || 'AUTO',
         name: app.name,
@@ -906,7 +936,7 @@ export class AffiliatePortalController {
       programName: prog?.name || 'Affiliate Program',
       programCategory: (prog as any)?.category || 'SaaS',
       programDescription: (prog as any)?.description || '',
-      commissionSummary: isFlat ? `$${rate} Flat` : `${rate}% Recurring`,
+      commissionSummary: isFlat ? `₹${rate} Flat` : `${rate}% Recurring`,
       cookieWindow: `${prog?.cookieDurationDays || 60} Days`,
       affiliateApprovalMode: prog?.affiliateApprovalMode || 'AUTO',
       name: app.name,
@@ -1030,13 +1060,30 @@ export class AffiliatePortalController {
 
     const shortCode = body.slug || body.customAlias || SecurityUtils.generateRandomCode(8).toLowerCase();
 
+    // Reject any destination that isn't a plain http(s) URL — otherwise an affiliate could
+    // register a tracking link (or reachable via the public /r/:code redirect) pointing at a
+    // javascript: URI or other dangerous scheme to attack visitors who click it.
+    const resolvedDestinationUrl = body.destinationUrl || (prog as any)?.landingPageUrl || '';
+    if (resolvedDestinationUrl) {
+      let isValidHttpUrl = false;
+      try {
+        const parsed = new URL(resolvedDestinationUrl);
+        isValidHttpUrl = parsed.protocol === 'http:' || parsed.protocol === 'https:';
+      } catch {
+        isValidHttpUrl = false;
+      }
+      if (!isValidHttpUrl) {
+        throw new BadRequestException('destinationUrl must be a valid http:// or https:// URL.');
+      }
+    }
+
     const link = trackingLinks.create({
       id: uuidv4(),
       organizationId: orgId,
       environment: EnvironmentType.LIVE,
       programId: prog.id,
       affiliateId: affiliate.id,
-      destinationUrl: body.destinationUrl || (prog as any)?.landingPageUrl || '',
+      destinationUrl: resolvedDestinationUrl,
       shortCode,
       status: TrackingLinkStatus.ACTIVE,
       subId: body.subId,
@@ -1281,7 +1328,7 @@ export class AffiliatePortalController {
         saleValue: conv?.amount || c.saleValue || 0,
         rateDescription: c.rateDescription || '',
         amount: c.amount || c.commissionAmount || 0,
-        currency: (org as any)?.defaultCurrency || (org as any)?.currency || 'USD',
+        currency: (org as any)?.defaultCurrency || (org as any)?.currency || PLATFORM_CURRENCY,
         status: c.status,
         createdAt: c.createdAt,
         expectedPayableDate: new Date(new Date(c.createdAt).getTime() + 14 * 86400000).toISOString(),
@@ -1347,7 +1394,7 @@ export class AffiliatePortalController {
         organizationId: batch?.organizationId || organizationId || org?.id,
         organizationName: org?.name || 'Partner',
         amount: net,
-        currency: batch?.currency || (org as any)?.defaultCurrency || 'USD',
+        currency: batch?.currency || (org as any)?.defaultCurrency || PLATFORM_CURRENCY,
         provider: (pi as any).provider || '',
         providerReference: pi.providerReference || `po_${pi.id.slice(0, 8)}`,
         payoutMethodMasked: (pi as any).payoutMethodMasked || '',
@@ -1375,7 +1422,7 @@ export class AffiliatePortalController {
   @ApiOperation({ summary: 'Request instant settlement payout' })
   async requestInstantPayout(@Req() req: any, @Body('organizationId') organizationId: string) {
     const email = this.resolveAffiliateEmail(req);
-    const { organizations, affiliates, commissions, payoutBatches, payoutItems } = await this.repositories();
+    const { organizations, affiliates } = await this.repositories();
 
     const org = await organizations.findOne({ where: { id: organizationId } });
     if (!org) throw new NotFoundException('Organization not found');
@@ -1384,46 +1431,76 @@ export class AffiliatePortalController {
       where: { organizationId: org.id, email: email.toLowerCase().trim() },
     });
     if (!affiliate) throw new BadRequestException('Join this organization before requesting a payout.');
+    if (affiliate.status !== AffiliateStatus.ACTIVE) {
+      throw new BadRequestException('Your affiliate account is not active and cannot request payouts.');
+    }
 
-    const payableCommissions = await commissions.find({
-      where: {
+    const dataSource = await initializeDataSource();
+
+    // Run the read-reserve-write sequence inside one serializable transaction with a
+    // pessimistic row lock on the affiliate's payable commissions. This prevents concurrent
+    // /request-instant calls (or a race with admin batch creation) from reading the same
+    // "payable" commissions twice and creating multiple payout batches against one balance.
+    const { batch, newPayout, grossAmount, commissionCount } = await dataSource.transaction(async (manager) => {
+      const payableCommissions = await manager
+        .getRepository(Commission)
+        .createQueryBuilder('commission')
+        .setLock('pessimistic_write')
+        .where('commission.organizationId = :organizationId', { organizationId: org.id })
+        .andWhere('commission.affiliateId = :affiliateId', { affiliateId: affiliate.id })
+        .andWhere('commission.status IN (:...statuses)', { statuses: ['PAYABLE', 'APPROVED'] })
+        .getMany();
+
+      const grossAmount = payableCommissions.reduce(
+        (sum, commission: any) => sum + Number(commission.amount || commission.commissionAmount || 0),
+        0,
+      );
+      if (grossAmount <= 0) throw new BadRequestException('No payable balance is available.');
+
+      const batchRepo = manager.getRepository(PayoutBatch);
+      const itemRepo = manager.getRepository(PayoutItem);
+      const commissionRepo = manager.getRepository(Commission);
+
+      const batch = batchRepo.create({
+        id: uuidv4(),
         organizationId: org.id,
+        environment: EnvironmentType.LIVE,
+        totalAmount: grossAmount,
+        currency: (org as any).defaultCurrency || PLATFORM_CURRENCY,
+        status: PayoutStatus.PROCESSING,
+        createdBy: affiliate.id,
+        createdAt: new Date(),
+      });
+      await batchRepo.save(batch);
+
+      const newPayout = itemRepo.create({
+        id: uuidv4(),
+        batchId: batch.id,
+        organizationId: org.id,
+        environment: EnvironmentType.LIVE,
         affiliateId: affiliate.id,
-        status: In(['PAYABLE', 'APPROVED']),
-      },
-    });
+        amount: grossAmount,
+        currency: (org as any).defaultCurrency || PLATFORM_CURRENCY,
+        status: PayoutStatus.PROCESSING,
+        providerReference: `instant_${uuidv4().slice(0, 8)}`,
+        createdAt: new Date(),
+      });
+      await itemRepo.save(newPayout);
 
-    const grossAmount = payableCommissions.reduce(
-      (sum, commission: any) => sum + Number(commission.amount || commission.commissionAmount || 0),
-      0,
-    );
-    if (grossAmount <= 0) throw new BadRequestException('No payable balance is available.');
+      // Reserve the commissions against this batch so they can never be selected again by
+      // a concurrent instant payout request or an admin payout batch draft.
+      const commissionIds = payableCommissions.map((c: any) => c.id);
+      if (commissionIds.length > 0) {
+        await commissionRepo
+          .createQueryBuilder()
+          .update(Commission)
+          .set({ status: 'PROCESSING' as any })
+          .whereInIds(commissionIds)
+          .execute();
+      }
 
-    const batch = payoutBatches.create({
-      id: uuidv4(),
-      organizationId: org.id,
-      environment: EnvironmentType.LIVE,
-      totalAmount: grossAmount,
-      currency: (org as any).defaultCurrency || 'USD',
-      status: PayoutStatus.PROCESSING,
-      createdBy: affiliate.id,
-      createdAt: new Date(),
+      return { batch, newPayout, grossAmount, commissionCount: payableCommissions.length };
     });
-    await payoutBatches.save(batch);
-
-    const newPayout = payoutItems.create({
-      id: uuidv4(),
-      batchId: batch.id,
-      organizationId: org.id,
-      environment: EnvironmentType.LIVE,
-      affiliateId: affiliate.id,
-      amount: grossAmount,
-      currency: (org as any).defaultCurrency || 'USD',
-      status: PayoutStatus.PROCESSING,
-      providerReference: `instant_${uuidv4().slice(0, 8)}`,
-      createdAt: new Date(),
-    });
-    await payoutItems.save(newPayout);
 
     if (dbStore.payoutItems) {
       dbStore.payoutItems.unshift(newPayout as any);
@@ -1433,8 +1510,8 @@ export class AffiliatePortalController {
       id: newPayout.id,
       organizationId: org.id,
       organizationName: org.name,
-      amount: grossAmount,
-      currency: (org as any).defaultCurrency || (org as any).currency || 'USD',
+      amount: batch.totalAmount,
+      currency: (org as any).defaultCurrency || (org as any).currency || PLATFORM_CURRENCY,
       provider: '',
       providerReference: newPayout.providerReference,
       payoutMethodMasked: '',
@@ -1446,7 +1523,7 @@ export class AffiliatePortalController {
       taxWithheld: 0,
       feeDeduction: 0,
       netAmount: grossAmount,
-      commissionCount: payableCommissions.length,
+      commissionCount,
     };
   }
 

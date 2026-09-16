@@ -94,6 +94,60 @@ export class CreateCommissionRuleDto {
   status?: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
 }
 
+export class UpdateCommissionRuleDto {
+  @ApiPropertyOptional({ example: 'Gold Tier 20% US Bonus' })
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
+  @IsNumber()
+  priority?: number;
+
+  @ApiPropertyOptional({ example: 'ALL' })
+  @IsOptional()
+  @IsString()
+  matchType?: 'ALL' | 'ANY';
+
+  @ApiPropertyOptional({ enum: CommissionType, example: CommissionType.PERCENTAGE })
+  @IsOptional()
+  @IsEnum(CommissionType)
+  commissionType?: CommissionType;
+
+  @ApiPropertyOptional({ example: 2000, description: 'Commission value (20.00% = 2000 basis points or fixed cents)' })
+  @IsOptional()
+  @IsNumber()
+  commissionValue?: number;
+
+  @ApiPropertyOptional({ example: 14 })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  holdPeriodDays?: number;
+
+  @ApiPropertyOptional({
+    example: {
+      all: [
+        { field: 'country', operator: 'eq', value: 'US' },
+        { field: 'fraudScore', operator: 'lt', value: 30 },
+      ],
+    },
+  })
+  @IsOptional()
+  conditions?: any;
+
+  @ApiPropertyOptional({ type: [CommissionRuleConditionDto] })
+  @IsOptional()
+  @IsArray()
+  conditionList?: Array<{ field: string; operator: string; value: any }>;
+
+  @ApiPropertyOptional({ example: 'ACTIVE' })
+  @IsOptional()
+  @IsString()
+  status?: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
+}
+
 export class TestCommissionRulesDto {
   @ApiPropertyOptional({ example: 'IN' })
   @IsOptional()

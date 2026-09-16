@@ -1,0 +1,4012 @@
+[
+  {
+    "controller": "AdminController",
+    "file": "src/modules/admin/admin.controller.ts",
+    "line": 15,
+    "httpMethod": "GET",
+    "path": "/api/v1/admin/overview",
+    "authRequirement": "Bearer JWT",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "AdminController",
+    "file": "src/modules/admin/admin.controller.ts",
+    "line": 21,
+    "httpMethod": "GET",
+    "path": "/api/v1/admin/affiliates/settings",
+    "authRequirement": "Bearer JWT",
+    "domain": "affiliates",
+    "summary": "Get real platform admin data across all organizations"
+  },
+  {
+    "controller": "AdminController",
+    "file": "src/modules/admin/admin.controller.ts",
+    "line": 27,
+    "httpMethod": "PATCH",
+    "path": "/api/v1/admin/affiliates/settings",
+    "authRequirement": "Bearer JWT",
+    "domain": "affiliates",
+    "summary": "Get platform-wide affiliate eligibility settings"
+  },
+  {
+    "controller": "AdminController",
+    "file": "src/modules/admin/admin.controller.ts",
+    "line": 36,
+    "httpMethod": "PUT",
+    "path": "/api/v1/admin/affiliates/settings",
+    "authRequirement": "Bearer JWT",
+    "domain": "affiliates",
+    "summary": "Update platform-wide affiliate eligibility settings"
+  },
+  {
+    "controller": "AffiliatePortalController",
+    "file": "src/modules/affiliates/affiliate-portal.controller.ts",
+    "line": 261,
+    "httpMethod": "POST",
+    "path": "/api/v1/affiliate/legacy/auth/register",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "affiliates",
+    "summary": ""
+  },
+  {
+    "controller": "AffiliatePortalController",
+    "file": "src/modules/affiliates/affiliate-portal.controller.ts",
+    "line": 359,
+    "httpMethod": "GET",
+    "path": "/api/v1/affiliate/me/profile",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "affiliates",
+    "summary": "Register a new affiliate account"
+  },
+  {
+    "controller": "AffiliatePortalController",
+    "file": "src/modules/affiliates/affiliate-portal.controller.ts",
+    "line": 367,
+    "httpMethod": "PATCH",
+    "path": "/api/v1/affiliate/me/profile",
+    "authRequirement": "Bearer JWT",
+    "domain": "affiliates",
+    "summary": "Get current affiliate user profile"
+  },
+  {
+    "controller": "AffiliatePortalController",
+    "file": "src/modules/affiliates/affiliate-portal.controller.ts",
+    "line": 403,
+    "httpMethod": "GET",
+    "path": "/api/v1/affiliate/me/dashboard",
+    "authRequirement": "Bearer JWT",
+    "domain": "affiliates",
+    "summary": "Update current affiliate user profile"
+  },
+  {
+    "controller": "AffiliatePortalController",
+    "file": "src/modules/affiliates/affiliate-portal.controller.ts",
+    "line": 527,
+    "httpMethod": "GET",
+    "path": "/api/v1/affiliate/me/partnerships",
+    "authRequirement": "Bearer JWT",
+    "domain": "affiliates",
+    "summary": "Aggregated affiliate dashboard metrics"
+  },
+  {
+    "controller": "AffiliatePortalController",
+    "file": "src/modules/affiliates/affiliate-portal.controller.ts",
+    "line": 665,
+    "httpMethod": "GET",
+    "path": "/api/v1/affiliate/me/programs",
+    "authRequirement": "Bearer JWT",
+    "domain": "programs",
+    "summary": "List all organization partnerships for current affiliate"
+  },
+  {
+    "controller": "AffiliatePortalController",
+    "file": "src/modules/affiliates/affiliate-portal.controller.ts",
+    "line": 763,
+    "httpMethod": "GET",
+    "path": "/api/v1/public/programs",
+    "authRequirement": "Bearer JWT",
+    "domain": "programs",
+    "summary": "List programs available to or joined by current affiliate"
+  },
+  {
+    "controller": "AffiliatePortalController",
+    "file": "src/modules/affiliates/affiliate-portal.controller.ts",
+    "line": 813,
+    "httpMethod": "GET",
+    "path": "/api/v1/public/organizations/:slug/programs",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "programs",
+    "summary": "Public marketplace programs"
+  },
+  {
+    "controller": "AffiliatePortalController",
+    "file": "src/modules/affiliates/affiliate-portal.controller.ts",
+    "line": 825,
+    "httpMethod": "GET",
+    "path": "/api/v1/affiliate/me/applications",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "affiliates",
+    "summary": "Public programs for specific organization by slug"
+  },
+  {
+    "controller": "AffiliatePortalController",
+    "file": "src/modules/affiliates/affiliate-portal.controller.ts",
+    "line": 892,
+    "httpMethod": "GET",
+    "path": "/api/v1/affiliate/me/applications/:id",
+    "authRequirement": "Bearer JWT",
+    "domain": "affiliates",
+    "summary": "List program applications submitted by current affiliate"
+  },
+  {
+    "controller": "AffiliatePortalController",
+    "file": "src/modules/affiliates/affiliate-portal.controller.ts",
+    "line": 949,
+    "httpMethod": "GET",
+    "path": "/api/v1/affiliate/me/links",
+    "authRequirement": "Bearer JWT",
+    "domain": "affiliates",
+    "summary": "Get a specific program application for current affiliate"
+  },
+  {
+    "controller": "AffiliatePortalController",
+    "file": "src/modules/affiliates/affiliate-portal.controller.ts",
+    "line": 1014,
+    "httpMethod": "POST",
+    "path": "/api/v1/affiliate/me/links",
+    "authRequirement": "Bearer JWT",
+    "domain": "affiliates",
+    "summary": "List tracking links for current affiliate"
+  },
+  {
+    "controller": "AffiliatePortalController",
+    "file": "src/modules/affiliates/affiliate-portal.controller.ts",
+    "line": 1098,
+    "httpMethod": "DELETE",
+    "path": "/api/v1/affiliate/me/links/:linkId",
+    "authRequirement": "Bearer JWT",
+    "domain": "affiliates",
+    "summary": "Create a tracking link"
+  },
+  {
+    "controller": "AffiliatePortalController",
+    "file": "src/modules/affiliates/affiliate-portal.controller.ts",
+    "line": 1123,
+    "httpMethod": "GET",
+    "path": "/api/v1/affiliate/me/coupons",
+    "authRequirement": "Bearer JWT",
+    "domain": "affiliates",
+    "summary": "Archive/delete tracking link"
+  },
+  {
+    "controller": "AffiliatePortalController",
+    "file": "src/modules/affiliates/affiliate-portal.controller.ts",
+    "line": 1168,
+    "httpMethod": "GET",
+    "path": "/api/v1/affiliate/me/assets",
+    "authRequirement": "Bearer JWT",
+    "domain": "affiliates",
+    "summary": "List coupons for current affiliate"
+  },
+  {
+    "controller": "AffiliatePortalController",
+    "file": "src/modules/affiliates/affiliate-portal.controller.ts",
+    "line": 1206,
+    "httpMethod": "GET",
+    "path": "/api/v1/affiliate/me/conversions",
+    "authRequirement": "Bearer JWT",
+    "domain": "conversions",
+    "summary": "List marketing assets for current affiliate"
+  },
+  {
+    "controller": "AffiliatePortalController",
+    "file": "src/modules/affiliates/affiliate-portal.controller.ts",
+    "line": 1262,
+    "httpMethod": "GET",
+    "path": "/api/v1/affiliate/me/commissions",
+    "authRequirement": "Bearer JWT",
+    "domain": "commissions",
+    "summary": "List conversions for current affiliate"
+  },
+  {
+    "controller": "AffiliatePortalController",
+    "file": "src/modules/affiliates/affiliate-portal.controller.ts",
+    "line": 1328,
+    "httpMethod": "GET",
+    "path": "/api/v1/affiliate/me/payouts",
+    "authRequirement": "Bearer JWT",
+    "domain": "payouts",
+    "summary": "List commissions for current affiliate"
+  },
+  {
+    "controller": "AffiliatePortalController",
+    "file": "src/modules/affiliates/affiliate-portal.controller.ts",
+    "line": 1393,
+    "httpMethod": "POST",
+    "path": "/api/v1/affiliate/me/payouts/request-instant",
+    "authRequirement": "Bearer JWT",
+    "domain": "payouts",
+    "summary": "List payouts for current affiliate"
+  },
+  {
+    "controller": "AffiliatePortalController",
+    "file": "src/modules/affiliates/affiliate-portal.controller.ts",
+    "line": 1477,
+    "httpMethod": "GET",
+    "path": "/api/v1/affiliate/me/payout-methods",
+    "authRequirement": "Bearer JWT",
+    "domain": "affiliates",
+    "summary": "Request instant settlement payout"
+  },
+  {
+    "controller": "AffiliatePortalController",
+    "file": "src/modules/affiliates/affiliate-portal.controller.ts",
+    "line": 1488,
+    "httpMethod": "POST",
+    "path": "/api/v1/affiliate/me/payout-methods",
+    "authRequirement": "Bearer JWT",
+    "domain": "affiliates",
+    "summary": "List payout methods for current affiliate"
+  },
+  {
+    "controller": "AffiliatePortalController",
+    "file": "src/modules/affiliates/affiliate-portal.controller.ts",
+    "line": 1526,
+    "httpMethod": "PATCH",
+    "path": "/api/v1/affiliate/me/payout-methods/:methodId/default",
+    "authRequirement": "Bearer JWT",
+    "domain": "affiliates",
+    "summary": "Add a new payout method"
+  },
+  {
+    "controller": "AffiliatePortalController",
+    "file": "src/modules/affiliates/affiliate-portal.controller.ts",
+    "line": 1541,
+    "httpMethod": "DELETE",
+    "path": "/api/v1/affiliate/me/payout-methods/:methodId",
+    "authRequirement": "Bearer JWT",
+    "domain": "affiliates",
+    "summary": "Set default payout method"
+  },
+  {
+    "controller": "AffiliatePortalController",
+    "file": "src/modules/affiliates/affiliate-portal.controller.ts",
+    "line": 1556,
+    "httpMethod": "GET",
+    "path": "/api/v1/affiliate/me/tax-profile",
+    "authRequirement": "Bearer JWT",
+    "domain": "affiliates",
+    "summary": "Delete payout method"
+  },
+  {
+    "controller": "AffiliatePortalController",
+    "file": "src/modules/affiliates/affiliate-portal.controller.ts",
+    "line": 1565,
+    "httpMethod": "PATCH",
+    "path": "/api/v1/affiliate/me/tax-profile",
+    "authRequirement": "Bearer JWT",
+    "domain": "affiliates",
+    "summary": "Get current tax profile"
+  },
+  {
+    "controller": "AffiliatePortalController",
+    "file": "src/modules/affiliates/affiliate-portal.controller.ts",
+    "line": 1586,
+    "httpMethod": "GET",
+    "path": "/api/v1/affiliate/me/invitations",
+    "authRequirement": "Bearer JWT",
+    "domain": "affiliates",
+    "summary": "Update tax profile"
+  },
+  {
+    "controller": "AffiliatePortalController",
+    "file": "src/modules/affiliates/affiliate-portal.controller.ts",
+    "line": 1595,
+    "httpMethod": "POST",
+    "path": "/api/v1/affiliate/me/invitations/:invitationId/accept",
+    "authRequirement": "Bearer JWT",
+    "domain": "affiliates",
+    "summary": "List invitations for current affiliate"
+  },
+  {
+    "controller": "AffiliatePortalController",
+    "file": "src/modules/affiliates/affiliate-portal.controller.ts",
+    "line": 1607,
+    "httpMethod": "POST",
+    "path": "/api/v1/affiliate/me/invitations/:invitationId/decline",
+    "authRequirement": "Bearer JWT",
+    "domain": "affiliates",
+    "summary": "Accept affiliate invitation for current affiliate"
+  },
+  {
+    "controller": "AffiliatePortalController",
+    "file": "src/modules/affiliates/affiliate-portal.controller.ts",
+    "line": 1619,
+    "httpMethod": "GET",
+    "path": "/api/v1/affiliate/me/sessions",
+    "authRequirement": "Bearer JWT",
+    "domain": "affiliates",
+    "summary": "Decline affiliate invitation"
+  },
+  {
+    "controller": "AffiliatePortalController",
+    "file": "src/modules/affiliates/affiliate-portal.controller.ts",
+    "line": 1650,
+    "httpMethod": "GET",
+    "path": "/api/v1/affiliate/me/timeseries",
+    "authRequirement": "Bearer JWT",
+    "domain": "affiliates",
+    "summary": "Get active sessions for security"
+  },
+  {
+    "controller": "AffiliatePortalController",
+    "file": "src/modules/affiliates/affiliate-portal.controller.ts",
+    "line": 1736,
+    "httpMethod": "GET",
+    "path": "/api/v1/affiliate/me/support-tickets",
+    "authRequirement": "Bearer JWT",
+    "domain": "affiliates",
+    "summary": "Time-series chart data for analytics and dashboard"
+  },
+  {
+    "controller": "AffiliatePortalController",
+    "file": "src/modules/affiliates/affiliate-portal.controller.ts",
+    "line": 1746,
+    "httpMethod": "POST",
+    "path": "/api/v1/affiliate/me/support-tickets",
+    "authRequirement": "Bearer JWT",
+    "domain": "affiliates",
+    "summary": "List support tickets"
+  },
+  {
+    "controller": "AffiliatesController",
+    "file": "src/modules/affiliates/affiliates.controller.ts",
+    "line": 32,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/affiliates",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "affiliates",
+    "summary": ""
+  },
+  {
+    "controller": "AffiliatesController",
+    "file": "src/modules/affiliates/affiliates.controller.ts",
+    "line": 46,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/affiliates",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, EnvironmentGuard, ProgramGuard, PermissionsGuard]; Perms: 'manage.affiliates'",
+    "domain": "affiliates",
+    "summary": "Add affiliate directly to organization"
+  },
+  {
+    "controller": "AffiliatesController",
+    "file": "src/modules/affiliates/affiliates.controller.ts",
+    "line": 59,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/affiliates/:affiliateId",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, EnvironmentGuard, ProgramGuard, PermissionsGuard]; Perms: 'manage.affiliates'",
+    "domain": "affiliates",
+    "summary": "List all affiliates for organization or filtered by program"
+  },
+  {
+    "controller": "AffiliatesController",
+    "file": "src/modules/affiliates/affiliates.controller.ts",
+    "line": 72,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/affiliate-invitations",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, EnvironmentGuard, PermissionsGuard]; Perms: 'manage.affiliates'",
+    "domain": "affiliates",
+    "summary": "Get specific affiliate details"
+  },
+  {
+    "controller": "AffiliatesController",
+    "file": "src/modules/affiliates/affiliates.controller.ts",
+    "line": 86,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/affiliate-invitations/bulk-upload",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, EnvironmentGuard, PermissionsGuard]; Perms: 'manage.affiliates'",
+    "domain": "affiliates",
+    "summary": "Invite affiliate partner to a program"
+  },
+  {
+    "controller": "AffiliatesController",
+    "file": "src/modules/affiliates/affiliates.controller.ts",
+    "line": 100,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/affiliate-invitations",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, EnvironmentGuard, PermissionsGuard]; Perms: 'manage.affiliates'",
+    "domain": "affiliates",
+    "summary": "Bulk invite affiliate partners via CSV or XLSX file"
+  },
+  {
+    "controller": "AffiliatesController",
+    "file": "src/modules/affiliates/affiliates.controller.ts",
+    "line": 112,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/partner-suggestions",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, EnvironmentGuard, PermissionsGuard]; Perms: 'manage.affiliates'",
+    "domain": "affiliates",
+    "summary": "List affiliate invitations"
+  },
+  {
+    "controller": "AffiliatesController",
+    "file": "src/modules/affiliates/affiliates.controller.ts",
+    "line": 125,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/affiliate-invitations/:invitationId/resend",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, EnvironmentGuard, PermissionsGuard]; Perms: 'manage.affiliates'",
+    "domain": "affiliates",
+    "summary": "Get suggested network partners for invitation"
+  },
+  {
+    "controller": "AffiliatesController",
+    "file": "src/modules/affiliates/affiliates.controller.ts",
+    "line": 139,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/affiliate-invitations/:invitationId/revoke",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'manage.affiliates'",
+    "domain": "affiliates",
+    "summary": "Resend affiliate invitation"
+  },
+  {
+    "controller": "AffiliatesController",
+    "file": "src/modules/affiliates/affiliates.controller.ts",
+    "line": 153,
+    "httpMethod": "GET",
+    "path": "/api/v1/public/affiliate-invitations/:token",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'manage.affiliates'",
+    "domain": "affiliates",
+    "summary": "Revoke affiliate invitation"
+  },
+  {
+    "controller": "AffiliatesController",
+    "file": "src/modules/affiliates/affiliates.controller.ts",
+    "line": 160,
+    "httpMethod": "POST",
+    "path": "/api/v1/public/affiliate-invitations/:token/accept",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "affiliates",
+    "summary": "Get public affiliate invitation details"
+  },
+  {
+    "controller": "AffiliatesController",
+    "file": "src/modules/affiliates/affiliates.controller.ts",
+    "line": 171,
+    "httpMethod": "POST",
+    "path": "/api/v1/affiliate-applications/apply",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "affiliates",
+    "summary": "Accept affiliate invitation"
+  },
+  {
+    "controller": "AffiliatesController",
+    "file": "src/modules/affiliates/affiliates.controller.ts",
+    "line": 178,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/applications",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "affiliates",
+    "summary": "Public endpoint for affiliates to apply to a program"
+  },
+  {
+    "controller": "AffiliatesController",
+    "file": "src/modules/affiliates/affiliates.controller.ts",
+    "line": 187,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/applications/:applicationId",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'manage.affiliates'",
+    "domain": "affiliates",
+    "summary": "List pending affiliate applications"
+  },
+  {
+    "controller": "AffiliatesController",
+    "file": "src/modules/affiliates/affiliates.controller.ts",
+    "line": 199,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/applications/:applicationId/approve",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'manage.affiliates'",
+    "domain": "affiliates",
+    "summary": "Get details of a specific affiliate application"
+  },
+  {
+    "controller": "AffiliatesController",
+    "file": "src/modules/affiliates/affiliates.controller.ts",
+    "line": 213,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/applications/:applicationId/reject",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'manage.affiliates'",
+    "domain": "affiliates",
+    "summary": "Approve an affiliate application"
+  },
+  {
+    "controller": "AffiliateAuthController",
+    "file": "src/modules/affiliates/auth/affiliate-auth.controller.ts",
+    "line": 25,
+    "httpMethod": "POST",
+    "path": "/api/v1/affiliate/auth/register",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "affiliates",
+    "summary": ""
+  },
+  {
+    "controller": "AffiliateAuthController",
+    "file": "src/modules/affiliates/auth/affiliate-auth.controller.ts",
+    "line": 40,
+    "httpMethod": "POST",
+    "path": "/api/v1/affiliate/auth/login",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "affiliates",
+    "summary": "Register affiliate portal account"
+  },
+  {
+    "controller": "AffiliateAuthController",
+    "file": "src/modules/affiliates/auth/affiliate-auth.controller.ts",
+    "line": 56,
+    "httpMethod": "POST",
+    "path": "/api/v1/affiliate/auth/refresh",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "affiliates",
+    "summary": "Login to affiliate portal"
+  },
+  {
+    "controller": "AffiliateAuthController",
+    "file": "src/modules/affiliates/auth/affiliate-auth.controller.ts",
+    "line": 73,
+    "httpMethod": "POST",
+    "path": "/api/v1/affiliate/auth/logout",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "affiliates",
+    "summary": "Refresh affiliate portal session"
+  },
+  {
+    "controller": "AffiliateAuthController",
+    "file": "src/modules/affiliates/auth/affiliate-auth.controller.ts",
+    "line": 85,
+    "httpMethod": "GET",
+    "path": "/api/v1/affiliate/auth/me",
+    "authRequirement": "Bearer JWT",
+    "domain": "affiliates",
+    "summary": "Logout affiliate portal session"
+  },
+  {
+    "controller": "AffiliateAuthController",
+    "file": "src/modules/affiliates/auth/affiliate-auth.controller.ts",
+    "line": 94,
+    "httpMethod": "POST",
+    "path": "/api/v1/affiliate/auth/forgot-password",
+    "authRequirement": "Bearer JWT",
+    "domain": "affiliates",
+    "summary": "Current affiliate portal user"
+  },
+  {
+    "controller": "AffiliateAuthController",
+    "file": "src/modules/affiliates/auth/affiliate-auth.controller.ts",
+    "line": 103,
+    "httpMethod": "GET",
+    "path": "/api/v1/affiliate/auth/verify-reset-token",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "affiliates",
+    "summary": "Request password reset for affiliate account"
+  },
+  {
+    "controller": "AffiliateAuthController",
+    "file": "src/modules/affiliates/auth/affiliate-auth.controller.ts",
+    "line": 111,
+    "httpMethod": "POST",
+    "path": "/api/v1/affiliate/auth/reset-password",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "affiliates",
+    "summary": "Verify affiliate password reset token validity"
+  },
+  {
+    "controller": "AffiliateAuthController",
+    "file": "src/modules/affiliates/auth/affiliate-auth.controller.ts",
+    "line": 119,
+    "httpMethod": "GET",
+    "path": "/api/v1/affiliate/auth/google/status",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "affiliates",
+    "summary": "Reset affiliate password with secure token"
+  },
+  {
+    "controller": "AffiliateAuthController",
+    "file": "src/modules/affiliates/auth/affiliate-auth.controller.ts",
+    "line": 124,
+    "httpMethod": "GET",
+    "path": "/api/v1/affiliate/auth/google",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "affiliates",
+    "summary": ""
+  },
+  {
+    "controller": "AffiliateAuthController",
+    "file": "src/modules/affiliates/auth/affiliate-auth.controller.ts",
+    "line": 135,
+    "httpMethod": "GET",
+    "path": "/api/v1/affiliate/auth/google/callback",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "affiliates",
+    "summary": "Start affiliate Google OAuth flow"
+  },
+  {
+    "controller": "AnalyticsController",
+    "file": "src/modules/analytics/analytics.controller.ts",
+    "line": 18,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/overview",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]",
+    "domain": "org members",
+    "summary": ""
+  },
+  {
+    "controller": "AnalyticsController",
+    "file": "src/modules/analytics/analytics.controller.ts",
+    "line": 25,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/analytics/revenue",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'view.organization'",
+    "domain": "org members",
+    "summary": "Single source-of-truth organization dashboard overview"
+  },
+  {
+    "controller": "AnalyticsController",
+    "file": "src/modules/analytics/analytics.controller.ts",
+    "line": 32,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/analytics/commissions",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'view.organization'",
+    "domain": "commissions",
+    "summary": "Organization revenue metrics"
+  },
+  {
+    "controller": "AnalyticsController",
+    "file": "src/modules/analytics/analytics.controller.ts",
+    "line": 39,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/analytics/conversions",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'view.organization'",
+    "domain": "conversions",
+    "summary": "Organization commission metrics"
+  },
+  {
+    "controller": "AnalyticsController",
+    "file": "src/modules/analytics/analytics.controller.ts",
+    "line": 46,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/analytics/affiliates",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'view.organization'",
+    "domain": "affiliates",
+    "summary": "Organization conversion metrics"
+  },
+  {
+    "controller": "AnalyticsController",
+    "file": "src/modules/analytics/analytics.controller.ts",
+    "line": 53,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/analytics/payouts",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'view.organization'",
+    "domain": "payouts",
+    "summary": "Organization affiliate metrics"
+  },
+  {
+    "controller": "AnalyticsController",
+    "file": "src/modules/analytics/analytics.controller.ts",
+    "line": 60,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/analytics/timeseries",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'view.organization'",
+    "domain": "org members",
+    "summary": "Organization payout metrics"
+  },
+  {
+    "controller": "AnalyticsController",
+    "file": "src/modules/analytics/analytics.controller.ts",
+    "line": 72,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/analytics/top-programs",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'view.organization'",
+    "domain": "org members",
+    "summary": "Monthly revenue/commission/conversion time series for dashboard charts"
+  },
+  {
+    "controller": "AnalyticsController",
+    "file": "src/modules/analytics/analytics.controller.ts",
+    "line": 79,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/analytics/mrr",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'view.organization'",
+    "domain": "org members",
+    "summary": "Top-performing programs by real attributed revenue"
+  },
+  {
+    "controller": "AnalyticsController",
+    "file": "src/modules/analytics/analytics.controller.ts",
+    "line": 86,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/analytics/programs/:programId",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'view.organization'",
+    "domain": "programs",
+    "summary": "PartnerIQ"
+  },
+  {
+    "controller": "AnalyticsController",
+    "file": "src/modules/analytics/analytics.controller.ts",
+    "line": 97,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/analytics/affiliates/:affiliateId",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'view.organization'",
+    "domain": "affiliates",
+    "summary": "Program-scoped analytics"
+  },
+  {
+    "controller": "ApiKeysController",
+    "file": "src/modules/api-keys/api-keys.controller.ts",
+    "line": 30,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/api-keys",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, EnvironmentGuard, PermissionsGuard]",
+    "domain": "API keys",
+    "summary": ""
+  },
+  {
+    "controller": "ApiKeysController",
+    "file": "src/modules/api-keys/api-keys.controller.ts",
+    "line": 42,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/api-keys",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, EnvironmentGuard, PermissionsGuard]; Perms: 'manage.api_keys'",
+    "domain": "API keys",
+    "summary": "Create a new server-to-server API key"
+  },
+  {
+    "controller": "ApiKeysController",
+    "file": "src/modules/api-keys/api-keys.controller.ts",
+    "line": 52,
+    "httpMethod": "DELETE",
+    "path": "/api/v1/organizations/:organizationId/api-keys/:apiKeyId",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, EnvironmentGuard, PermissionsGuard]; Perms: 'manage.api_keys'",
+    "domain": "API keys",
+    "summary": "List all API keys for organization"
+  },
+  {
+    "controller": "AssetManagementController",
+    "file": "src/modules/asset-management/asset-management.controller.ts",
+    "line": 30,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/assets/upload-url",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "AssetManagementController",
+    "file": "src/modules/asset-management/asset-management.controller.ts",
+    "line": 37,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/assets",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'assets.create'",
+    "domain": "programs",
+    "summary": "Create a secure signed upload URL for an asset"
+  },
+  {
+    "controller": "AssetManagementController",
+    "file": "src/modules/asset-management/asset-management.controller.ts",
+    "line": 43,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/assets",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'assets.create'",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "AssetManagementController",
+    "file": "src/modules/asset-management/asset-management.controller.ts",
+    "line": 49,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/assets/:assetId",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'assets.view'",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "AssetManagementController",
+    "file": "src/modules/asset-management/asset-management.controller.ts",
+    "line": 55,
+    "httpMethod": "PATCH",
+    "path": "/api/v1/organizations/:organizationId/assets/:assetId",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'assets.view'",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "AssetManagementController",
+    "file": "src/modules/asset-management/asset-management.controller.ts",
+    "line": 66,
+    "httpMethod": "DELETE",
+    "path": "/api/v1/organizations/:organizationId/assets/:assetId",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'assets.edit'",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "AssetManagementController",
+    "file": "src/modules/asset-management/asset-management.controller.ts",
+    "line": 72,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/assets/:assetId/version",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'assets.delete'",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "AssetManagementController",
+    "file": "src/modules/asset-management/asset-management.controller.ts",
+    "line": 83,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/assets/:assetId/versions",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'assets.edit'",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "AssetManagementController",
+    "file": "src/modules/asset-management/asset-management.controller.ts",
+    "line": 89,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/assets/:assetId/restore/:versionId",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'assets.view'",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "AssetManagementController",
+    "file": "src/modules/asset-management/asset-management.controller.ts",
+    "line": 100,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/asset-bundles",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'assets.edit'",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "AssetManagementController",
+    "file": "src/modules/asset-management/asset-management.controller.ts",
+    "line": 106,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/asset-bundles",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'assetBundles.create'",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "AssetManagementController",
+    "file": "src/modules/asset-management/asset-management.controller.ts",
+    "line": 112,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/asset-bundles/:bundleId",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'assetBundles.view'",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "AssetManagementController",
+    "file": "src/modules/asset-management/asset-management.controller.ts",
+    "line": 118,
+    "httpMethod": "PATCH",
+    "path": "/api/v1/organizations/:organizationId/asset-bundles/:bundleId",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'assetBundles.view'",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "AssetManagementController",
+    "file": "src/modules/asset-management/asset-management.controller.ts",
+    "line": 129,
+    "httpMethod": "DELETE",
+    "path": "/api/v1/organizations/:organizationId/asset-bundles/:bundleId",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'assetBundles.edit'",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "AssetManagementController",
+    "file": "src/modules/asset-management/asset-management.controller.ts",
+    "line": 135,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/asset-bundles/:bundleId/assets",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'assetBundles.delete'",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "AssetManagementController",
+    "file": "src/modules/asset-management/asset-management.controller.ts",
+    "line": 146,
+    "httpMethod": "DELETE",
+    "path": "/api/v1/organizations/:organizationId/asset-bundles/:bundleId/assets/:assetId",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'assetBundles.edit'",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "AssetManagementController",
+    "file": "src/modules/asset-management/asset-management.controller.ts",
+    "line": 152,
+    "httpMethod": "PATCH",
+    "path": "/api/v1/organizations/:organizationId/asset-bundles/:bundleId/reorder",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'assetBundles.edit'",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "AssetManagementController",
+    "file": "src/modules/asset-management/asset-management.controller.ts",
+    "line": 158,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/asset-bundles/:bundleId/publish",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'assetBundles.edit'",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "AssetManagementController",
+    "file": "src/modules/asset-management/asset-management.controller.ts",
+    "line": 165,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/asset-bundles/:bundleId/archive",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'assetBundles.publish'",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "AssetManagementController",
+    "file": "src/modules/asset-management/asset-management.controller.ts",
+    "line": 172,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/affiliate/assets",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'assetBundles.publish'",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "AssetManagementController",
+    "file": "src/modules/asset-management/asset-management.controller.ts",
+    "line": 178,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/affiliate/asset-bundles",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'assets.download'",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "AssetManagementController",
+    "file": "src/modules/asset-management/asset-management.controller.ts",
+    "line": 184,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/affiliate/asset-bundles/:bundleId",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'assets.download'",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "AssetManagementController",
+    "file": "src/modules/asset-management/asset-management.controller.ts",
+    "line": 190,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/affiliate/assets/:assetId/activity",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'assets.download'",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "AssetManagementController",
+    "file": "src/modules/asset-management/asset-management.controller.ts",
+    "line": 201,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/affiliate/assets/:assetId/download",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'assets.download'",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "AssetManagementController",
+    "file": "src/modules/asset-management/asset-management.controller.ts",
+    "line": 207,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/asset-analytics",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'assets.download'",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "AuditController",
+    "file": "src/modules/audit/audit.controller.ts",
+    "line": 16,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/audit-logs",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 64,
+    "httpMethod": "POST",
+    "path": "/api/v1/auth/register",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "public",
+    "summary": ""
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 86,
+    "httpMethod": "POST",
+    "path": "/api/v1/auth/login",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "public",
+    "summary": "Register a new user account"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 110,
+    "httpMethod": "POST",
+    "path": "/api/v1/auth/refresh",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "public",
+    "summary": "Login with email and password"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 134,
+    "httpMethod": "POST",
+    "path": "/api/v1/auth/logout",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "public",
+    "summary": "Rotate refresh token and get new access token"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 149,
+    "httpMethod": "POST",
+    "path": "/api/v1/auth/logout-all",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": "Logout current session"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 168,
+    "httpMethod": "POST",
+    "path": "/api/v1/auth/verify-email-otp",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": "Logout all sessions for current user"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 191,
+    "httpMethod": "POST",
+    "path": "/api/v1/auth/resend-email-otp",
+    "authRequirement": "MfaRateLimiterGuard; [MfaRateLimiterGuard]",
+    "domain": "org members",
+    "summary": "Verify the emailed OTP code to activate the account and receive a session"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 212,
+    "httpMethod": "POST",
+    "path": "/api/v1/auth/mfa/challenge",
+    "authRequirement": "MfaRateLimiterGuard; [MfaRateLimiterGuard]",
+    "domain": "org members",
+    "summary": "Resend the email verification OTP (rate-limited, cooldown-gated)"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 228,
+    "httpMethod": "POST",
+    "path": "/api/v1/auth/mfa/verify",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "public",
+    "summary": "Create MFA challenge during login (deprecated — handled by /login)"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 259,
+    "httpMethod": "POST",
+    "path": "/api/v1/auth/mfa/setup",
+    "authRequirement": "MfaRateLimiterGuard; [MfaRateLimiterGuard]",
+    "domain": "org members",
+    "summary": "Verify MFA challenge after login"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 269,
+    "httpMethod": "POST",
+    "path": "/api/v1/auth/mfa/setup/verify",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": "Begin MFA setup — returns QR code and manual setup key"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 282,
+    "httpMethod": "POST",
+    "path": "/api/v1/auth/mfa/disable",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": "Verify TOTP code and activate MFA"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 295,
+    "httpMethod": "POST",
+    "path": "/api/v1/auth/mfa/recovery/regenerate",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": "Disable MFA after password and code verification"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 308,
+    "httpMethod": "GET",
+    "path": "/api/v1/auth/mfa/status",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": "Regenerate recovery codes (requires TOTP verification)"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 318,
+    "httpMethod": "GET",
+    "path": "/api/v1/auth/mfa/recovery/count",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": "Get current MFA status and recovery code count"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 332,
+    "httpMethod": "POST",
+    "path": "/api/v1/auth/step-up/challenge",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": "Get remaining recovery code count"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 350,
+    "httpMethod": "POST",
+    "path": "/api/v1/auth/step-up/verify",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": "Create a step-up MFA challenge for sensitive actions"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 375,
+    "httpMethod": "GET",
+    "path": "/api/v1/auth/sessions",
+    "authRequirement": "Bearer JWT; [MfaRateLimiterGuard]",
+    "domain": "org members",
+    "summary": "Verify step-up MFA challenge"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 384,
+    "httpMethod": "DELETE",
+    "path": "/api/v1/auth/sessions/:sessionId",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": "List all active sessions for current user"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 396,
+    "httpMethod": "POST",
+    "path": "/api/v1/auth/sessions/logout-others",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": "Revoke a specific session"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 410,
+    "httpMethod": "GET",
+    "path": "/api/v1/auth/devices",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": "Log out all other sessions except current"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 419,
+    "httpMethod": "POST",
+    "path": "/api/v1/auth/devices/:deviceId/trust",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": "List all recognized devices for current user"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 432,
+    "httpMethod": "DELETE",
+    "path": "/api/v1/auth/devices/:deviceId/trust",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": "Trust a device for 30 days (bypasses MFA on login)"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 444,
+    "httpMethod": "DELETE",
+    "path": "/api/v1/auth/devices/:deviceId",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": "Remove device trust"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 460,
+    "httpMethod": "GET",
+    "path": "/api/v1/auth/security-events",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": "Remove a device and revoke its associated sessions"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 481,
+    "httpMethod": "GET",
+    "path": "/api/v1/auth/organization/security-policy",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": "List security events (login history, MFA events, etc.)"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 493,
+    "httpMethod": "PUT",
+    "path": "/api/v1/auth/organization/security-policy",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": "Get organization security policy"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 514,
+    "httpMethod": "GET",
+    "path": "/api/v1/auth/organization/mfa-requirement",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": "Update organization security policy (requires OWNER or ADMIN role)"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 530,
+    "httpMethod": "POST",
+    "path": "/api/v1/auth/change-password",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": "Check if organization requires MFA for current user"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 543,
+    "httpMethod": "POST",
+    "path": "/api/v1/auth/forgot-password",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": "Change password (revokes all sessions)"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 552,
+    "httpMethod": "GET",
+    "path": "/api/v1/auth/verify-reset-token",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "public",
+    "summary": "Request password reset (timing-safe — always returns success)"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 560,
+    "httpMethod": "POST",
+    "path": "/api/v1/auth/reset-password",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "public",
+    "summary": "Verify password reset token validity"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 572,
+    "httpMethod": "GET",
+    "path": "/api/v1/auth/me",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "public",
+    "summary": "Reset password with secure token"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 586,
+    "httpMethod": "GET",
+    "path": "/api/v1/auth/google/status",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": "Get current user profile, memberships, and MFA status"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 593,
+    "httpMethod": "GET",
+    "path": "/api/v1/auth/google/authorize",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "public",
+    "summary": "Get Google OAuth configuration status"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 607,
+    "httpMethod": "GET",
+    "path": "/api/v1/auth/google/callback",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "public",
+    "summary": "Get Google OAuth authorization URL"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 653,
+    "httpMethod": "POST",
+    "path": "/api/v1/auth/google/token",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "public",
+    "summary": "Handle Google OAuth callback"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 677,
+    "httpMethod": "GET",
+    "path": "/api/v1/auth/identities",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "public",
+    "summary": "Exchange Google OAuth code for session tokens"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 686,
+    "httpMethod": "DELETE",
+    "path": "/api/v1/auth/identities/:identityId",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": "Get connected login methods"
+  },
+  {
+    "controller": "AuthController",
+    "file": "src/modules/auth/auth.controller.ts",
+    "line": 703,
+    "httpMethod": "POST",
+    "path": "/api/v1/auth/set-password",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": "Unlink an external identity provider"
+  },
+  {
+    "controller": "OAuthController",
+    "file": "src/modules/auth/oauth/oauth.controller.ts",
+    "line": 45,
+    "httpMethod": "GET",
+    "path": "/api/v1/auth/google",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "public",
+    "summary": ""
+  },
+  {
+    "controller": "OAuthController",
+    "file": "src/modules/auth/oauth/oauth.controller.ts",
+    "line": 71,
+    "httpMethod": "GET",
+    "path": "/api/v1/auth/google/authorize",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "public",
+    "summary": "Initiate Google OAuth 2.0 / OpenID Connect authorization"
+  },
+  {
+    "controller": "OAuthController",
+    "file": "src/modules/auth/oauth/oauth.controller.ts",
+    "line": 88,
+    "httpMethod": "GET",
+    "path": "/api/v1/auth/google/callback",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "public",
+    "summary": "Get Google authorization URL payload"
+  },
+  {
+    "controller": "OAuthController",
+    "file": "src/modules/auth/oauth/oauth.controller.ts",
+    "line": 133,
+    "httpMethod": "POST",
+    "path": "/api/v1/auth/google/token",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "public",
+    "summary": "Google OAuth callback handler"
+  },
+  {
+    "controller": "OAuthController",
+    "file": "src/modules/auth/oauth/oauth.controller.ts",
+    "line": 157,
+    "httpMethod": "GET",
+    "path": "/api/v1/auth/identities",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "public",
+    "summary": "Exchange Google authorization code for session tokens"
+  },
+  {
+    "controller": "OAuthController",
+    "file": "src/modules/auth/oauth/oauth.controller.ts",
+    "line": 165,
+    "httpMethod": "DELETE",
+    "path": "/api/v1/auth/identities/:identityId",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": "List connected login methods and password status for current user"
+  },
+  {
+    "controller": "OAuthController",
+    "file": "src/modules/auth/oauth/oauth.controller.ts",
+    "line": 183,
+    "httpMethod": "POST",
+    "path": "/api/v1/auth/set-password",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": "Disconnect an external identity provider (with lockout prevention)"
+  },
+  {
+    "controller": "OAuthController",
+    "file": "src/modules/auth/oauth/oauth.controller.ts",
+    "line": 202,
+    "httpMethod": "GET",
+    "path": "/api/v1/auth/google/status",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": "Configure a password for Google-authenticated users"
+  },
+  {
+    "controller": "EmailTemplateController",
+    "file": "src/modules/automations/templates/email-template.controller.ts",
+    "line": 29,
+    "httpMethod": "GET",
+    "path": "/api/v1/automations/email-templates",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "EmailTemplateController",
+    "file": "src/modules/automations/templates/email-template.controller.ts",
+    "line": 36,
+    "httpMethod": "POST",
+    "path": "/api/v1/automations/email-templates",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "EmailTemplateController",
+    "file": "src/modules/automations/templates/email-template.controller.ts",
+    "line": 43,
+    "httpMethod": "GET",
+    "path": "/api/v1/automations/email-templates/:id",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "EmailTemplateController",
+    "file": "src/modules/automations/templates/email-template.controller.ts",
+    "line": 50,
+    "httpMethod": "PATCH",
+    "path": "/api/v1/automations/email-templates/:id",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "EmailTemplateController",
+    "file": "src/modules/automations/templates/email-template.controller.ts",
+    "line": 61,
+    "httpMethod": "DELETE",
+    "path": "/api/v1/automations/email-templates/:id",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "EmailTemplateController",
+    "file": "src/modules/automations/templates/email-template.controller.ts",
+    "line": 68,
+    "httpMethod": "POST",
+    "path": "/api/v1/automations/email-templates/preview",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "EmailTemplateController",
+    "file": "src/modules/automations/templates/email-template.controller.ts",
+    "line": 74,
+    "httpMethod": "POST",
+    "path": "/api/v1/automations/email-templates/test",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "WorkflowController",
+    "file": "src/modules/automations/workflows/workflow.controller.ts",
+    "line": 28,
+    "httpMethod": "GET",
+    "path": "/api/v1/automations",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "WorkflowController",
+    "file": "src/modules/automations/workflows/workflow.controller.ts",
+    "line": 35,
+    "httpMethod": "POST",
+    "path": "/api/v1/automations",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "WorkflowController",
+    "file": "src/modules/automations/workflows/workflow.controller.ts",
+    "line": 42,
+    "httpMethod": "GET",
+    "path": "/api/v1/automations/templates",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "WorkflowController",
+    "file": "src/modules/automations/workflows/workflow.controller.ts",
+    "line": 48,
+    "httpMethod": "POST",
+    "path": "/api/v1/automations/templates/install",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "WorkflowController",
+    "file": "src/modules/automations/workflows/workflow.controller.ts",
+    "line": 55,
+    "httpMethod": "GET",
+    "path": "/api/v1/automations/:id",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "WorkflowController",
+    "file": "src/modules/automations/workflows/workflow.controller.ts",
+    "line": 62,
+    "httpMethod": "PATCH",
+    "path": "/api/v1/automations/:id",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "WorkflowController",
+    "file": "src/modules/automations/workflows/workflow.controller.ts",
+    "line": 73,
+    "httpMethod": "POST",
+    "path": "/api/v1/automations/:id/publish",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "WorkflowController",
+    "file": "src/modules/automations/workflows/workflow.controller.ts",
+    "line": 80,
+    "httpMethod": "POST",
+    "path": "/api/v1/automations/:id/pause",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "WorkflowController",
+    "file": "src/modules/automations/workflows/workflow.controller.ts",
+    "line": 87,
+    "httpMethod": "POST",
+    "path": "/api/v1/automations/:id/duplicate",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "WorkflowController",
+    "file": "src/modules/automations/workflows/workflow.controller.ts",
+    "line": 94,
+    "httpMethod": "DELETE",
+    "path": "/api/v1/automations/:id",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "WorkflowController",
+    "file": "src/modules/automations/workflows/workflow.controller.ts",
+    "line": 101,
+    "httpMethod": "GET",
+    "path": "/api/v1/automations/:id/executions",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "WorkflowController",
+    "file": "src/modules/automations/workflows/workflow.controller.ts",
+    "line": 108,
+    "httpMethod": "GET",
+    "path": "/api/v1/automations/:id/analytics",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "AdminBillingController",
+    "file": "src/modules/billing/controllers/admin-billing.controller.ts",
+    "line": 29,
+    "httpMethod": "GET",
+    "path": "/api/v1/admin/billing/overview",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]",
+    "domain": "billing",
+    "summary": ""
+  },
+  {
+    "controller": "AdminBillingController",
+    "file": "src/modules/billing/controllers/admin-billing.controller.ts",
+    "line": 35,
+    "httpMethod": "POST",
+    "path": "/api/v1/admin/billing/plans",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]",
+    "domain": "billing",
+    "summary": "Get platform billing analytics"
+  },
+  {
+    "controller": "AdminBillingController",
+    "file": "src/modules/billing/controllers/admin-billing.controller.ts",
+    "line": 41,
+    "httpMethod": "POST",
+    "path": "/api/v1/admin/billing/coupons",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]; Perms: 'billing.admin'",
+    "domain": "billing",
+    "summary": ""
+  },
+  {
+    "controller": "AdminBillingController",
+    "file": "src/modules/billing/controllers/admin-billing.controller.ts",
+    "line": 47,
+    "httpMethod": "GET",
+    "path": "/api/v1/admin/billing/coupons",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]; Perms: 'billing.coupons.create'",
+    "domain": "billing",
+    "summary": ""
+  },
+  {
+    "controller": "AdminBillingController",
+    "file": "src/modules/billing/controllers/admin-billing.controller.ts",
+    "line": 53,
+    "httpMethod": "GET",
+    "path": "/api/v1/admin/billing/coupons/:id",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]; Perms: 'billing.coupons.read'",
+    "domain": "billing",
+    "summary": ""
+  },
+  {
+    "controller": "AdminBillingController",
+    "file": "src/modules/billing/controllers/admin-billing.controller.ts",
+    "line": 59,
+    "httpMethod": "PATCH",
+    "path": "/api/v1/admin/billing/coupons/:id",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]; Perms: 'billing.coupons.read'",
+    "domain": "billing",
+    "summary": ""
+  },
+  {
+    "controller": "AdminBillingController",
+    "file": "src/modules/billing/controllers/admin-billing.controller.ts",
+    "line": 65,
+    "httpMethod": "POST",
+    "path": "/api/v1/admin/billing/coupons/:id/activate",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]; Perms: 'billing.coupons.update'",
+    "domain": "billing",
+    "summary": ""
+  },
+  {
+    "controller": "AdminBillingController",
+    "file": "src/modules/billing/controllers/admin-billing.controller.ts",
+    "line": 71,
+    "httpMethod": "POST",
+    "path": "/api/v1/admin/billing/coupons/:id/pause",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]; Perms: 'billing.coupons.activate'",
+    "domain": "billing",
+    "summary": ""
+  },
+  {
+    "controller": "AdminBillingController",
+    "file": "src/modules/billing/controllers/admin-billing.controller.ts",
+    "line": 77,
+    "httpMethod": "POST",
+    "path": "/api/v1/admin/billing/coupons/:id/archive",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]; Perms: 'billing.coupons.update'",
+    "domain": "billing",
+    "summary": ""
+  },
+  {
+    "controller": "AdminBillingController",
+    "file": "src/modules/billing/controllers/admin-billing.controller.ts",
+    "line": 83,
+    "httpMethod": "POST",
+    "path": "/api/v1/admin/billing/coupons/:id/duplicate",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]; Perms: 'billing.coupons.archive'",
+    "domain": "billing",
+    "summary": ""
+  },
+  {
+    "controller": "AdminBillingController",
+    "file": "src/modules/billing/controllers/admin-billing.controller.ts",
+    "line": 89,
+    "httpMethod": "GET",
+    "path": "/api/v1/admin/billing/coupons/:id/redemptions",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]; Perms: 'billing.coupons.create'",
+    "domain": "billing",
+    "summary": ""
+  },
+  {
+    "controller": "AdminBillingController",
+    "file": "src/modules/billing/controllers/admin-billing.controller.ts",
+    "line": 95,
+    "httpMethod": "GET",
+    "path": "/api/v1/admin/billing/coupons/:id/analytics",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]; Perms: 'billing.coupons.redemptions.read'",
+    "domain": "billing",
+    "summary": ""
+  },
+  {
+    "controller": "AdminBillingController",
+    "file": "src/modules/billing/controllers/admin-billing.controller.ts",
+    "line": 101,
+    "httpMethod": "POST",
+    "path": "/api/v1/admin/billing/coupons/preview",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]; Perms: 'billing.coupons.analytics.read'",
+    "domain": "billing",
+    "summary": ""
+  },
+  {
+    "controller": "AdminBillingController",
+    "file": "src/modules/billing/controllers/admin-billing.controller.ts",
+    "line": 107,
+    "httpMethod": "GET",
+    "path": "/api/v1/admin/billing/subscriptions",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]; Perms: 'billing.coupons.read'",
+    "domain": "billing",
+    "summary": ""
+  },
+  {
+    "controller": "AdminBillingController",
+    "file": "src/modules/billing/controllers/admin-billing.controller.ts",
+    "line": 112,
+    "httpMethod": "GET",
+    "path": "/api/v1/admin/billing/payments",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]",
+    "domain": "billing",
+    "summary": ""
+  },
+  {
+    "controller": "AdminBillingController",
+    "file": "src/modules/billing/controllers/admin-billing.controller.ts",
+    "line": 117,
+    "httpMethod": "POST",
+    "path": "/api/v1/admin/billing/refunds",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]",
+    "domain": "billing",
+    "summary": ""
+  },
+  {
+    "controller": "BillingController",
+    "file": "src/modules/billing/controllers/billing.controller.ts",
+    "line": 31,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/billing/trial",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]",
+    "domain": "billing",
+    "summary": ""
+  },
+  {
+    "controller": "BillingController",
+    "file": "src/modules/billing/controllers/billing.controller.ts",
+    "line": 38,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/billing/trial/start",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'billing.view'",
+    "domain": "billing",
+    "summary": "Get trial status and countdown"
+  },
+  {
+    "controller": "BillingController",
+    "file": "src/modules/billing/controllers/billing.controller.ts",
+    "line": 49,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/billing/trial/extend",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'billing.subscribe'",
+    "domain": "billing",
+    "summary": "Start 14-day free trial for organization"
+  },
+  {
+    "controller": "BillingController",
+    "file": "src/modules/billing/controllers/billing.controller.ts",
+    "line": 60,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/billing/subscription",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'billing.manage'",
+    "domain": "billing",
+    "summary": "Admin extension of trial"
+  },
+  {
+    "controller": "BillingController",
+    "file": "src/modules/billing/controllers/billing.controller.ts",
+    "line": 67,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/billing/checkout",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'billing.view'",
+    "domain": "billing",
+    "summary": "Get current organization subscription"
+  },
+  {
+    "controller": "BillingController",
+    "file": "src/modules/billing/controllers/billing.controller.ts",
+    "line": 79,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/billing/pricing/preview",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'billing.subscribe'",
+    "domain": "billing",
+    "summary": "Create a checkout session/order using server-side plan pricing"
+  },
+  {
+    "controller": "BillingController",
+    "file": "src/modules/billing/controllers/billing.controller.ts",
+    "line": 86,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/billing/coupons/validate",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'billing.view'",
+    "domain": "billing",
+    "summary": "Preview authoritative billing price with optional coupon"
+  },
+  {
+    "controller": "BillingController",
+    "file": "src/modules/billing/controllers/billing.controller.ts",
+    "line": 93,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/billing/verify",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'billing.view'",
+    "domain": "billing",
+    "summary": "Validate a PartnerIQ billing coupon and return a safe customer message"
+  },
+  {
+    "controller": "BillingController",
+    "file": "src/modules/billing/controllers/billing.controller.ts",
+    "line": 100,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/billing/payments",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'billing.subscribe'",
+    "domain": "billing",
+    "summary": "Verify Razorpay checkout signature"
+  },
+  {
+    "controller": "BillingController",
+    "file": "src/modules/billing/controllers/billing.controller.ts",
+    "line": 106,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/billing/invoices",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'billing.view'",
+    "domain": "billing",
+    "summary": ""
+  },
+  {
+    "controller": "BillingController",
+    "file": "src/modules/billing/controllers/billing.controller.ts",
+    "line": 112,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/billing/usage",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'billing.view'",
+    "domain": "billing",
+    "summary": ""
+  },
+  {
+    "controller": "PlansController",
+    "file": "src/modules/billing/controllers/plans.controller.ts",
+    "line": 11,
+    "httpMethod": "GET",
+    "path": "/api/v1/billing/plans",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "billing",
+    "summary": ""
+  },
+  {
+    "controller": "SubscriptionsController",
+    "file": "src/modules/billing/controllers/subscriptions.controller.ts",
+    "line": 19,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/billing/subscription/upgrade",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]",
+    "domain": "billing",
+    "summary": ""
+  },
+  {
+    "controller": "SubscriptionsController",
+    "file": "src/modules/billing/controllers/subscriptions.controller.ts",
+    "line": 30,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/billing/subscription/downgrade",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'billing.manage'",
+    "domain": "billing",
+    "summary": "Upgrade organization subscription immediately"
+  },
+  {
+    "controller": "SubscriptionsController",
+    "file": "src/modules/billing/controllers/subscriptions.controller.ts",
+    "line": 41,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/billing/subscription/cancel",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'billing.manage'",
+    "domain": "billing",
+    "summary": "Schedule organization subscription downgrade at period end"
+  },
+  {
+    "controller": "SubscriptionsController",
+    "file": "src/modules/billing/controllers/subscriptions.controller.ts",
+    "line": 52,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/billing/subscription/resume",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'billing.cancel'",
+    "domain": "billing",
+    "summary": "Cancel organization subscription"
+  },
+  {
+    "controller": "BillingWebhookController",
+    "file": "src/modules/billing/controllers/webhook.controller.ts",
+    "line": 13,
+    "httpMethod": "POST",
+    "path": "/api/v1/webhooks/payments/razorpay",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "webhooks",
+    "summary": ""
+  },
+  {
+    "controller": "BrandingController",
+    "file": "src/modules/branding/branding.controller.ts",
+    "line": 20,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/branding",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "org members",
+    "summary": ""
+  },
+  {
+    "controller": "BrandingController",
+    "file": "src/modules/branding/branding.controller.ts",
+    "line": 28,
+    "httpMethod": "PUT",
+    "path": "/api/v1/organizations/:organizationId/branding",
+    "authRequirement": "Bearer JWT; [OrganizationGuard]",
+    "domain": "org members",
+    "summary": "Get branding configuration for an organization"
+  },
+  {
+    "controller": "BrandingController",
+    "file": "src/modules/branding/branding.controller.ts",
+    "line": 39,
+    "httpMethod": "GET",
+    "path": "/api/v1/public/organizations/:slug/branding",
+    "authRequirement": "Bearer JWT; [OrganizationGuard]",
+    "domain": "org members",
+    "summary": "Update branding configuration for an organization"
+  },
+  {
+    "controller": "CommissionsController",
+    "file": "src/modules/commissions/commissions.controller.ts",
+    "line": 30,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/commissions",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, ProgramGuard, PermissionsGuard]",
+    "domain": "commissions",
+    "summary": ""
+  },
+  {
+    "controller": "CommissionsController",
+    "file": "src/modules/commissions/commissions.controller.ts",
+    "line": 40,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/commissions/rules",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, ProgramGuard, PermissionsGuard]; Perms: 'view.commissions'",
+    "domain": "commissions",
+    "summary": "List all commissions in organization or filtered by program"
+  },
+  {
+    "controller": "CommissionsController",
+    "file": "src/modules/commissions/commissions.controller.ts",
+    "line": 50,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/commissions/rules",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, ProgramGuard, PermissionsGuard]; Perms: 'manage.commissions'",
+    "domain": "commissions",
+    "summary": "Create a data-driven commission rule"
+  },
+  {
+    "controller": "CommissionsController",
+    "file": "src/modules/commissions/commissions.controller.ts",
+    "line": 57,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/commissions/programs/:programId/rules",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, ProgramGuard, PermissionsGuard]; Perms: 'view.commissions'",
+    "domain": "commissions",
+    "summary": "List commission rules"
+  },
+  {
+    "controller": "CommissionsController",
+    "file": "src/modules/commissions/commissions.controller.ts",
+    "line": 67,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/commissions/programs/:programId/rules",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, ProgramGuard, PermissionsGuard]; Perms: 'view.commissions'",
+    "domain": "commissions",
+    "summary": "List commission rules for a program"
+  },
+  {
+    "controller": "CommissionsController",
+    "file": "src/modules/commissions/commissions.controller.ts",
+    "line": 78,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/commissions/programs/:programId/rules/test",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, ProgramGuard, PermissionsGuard]; Perms: 'manage.commissions'",
+    "domain": "commissions",
+    "summary": "Create program-scoped commission rule"
+  },
+  {
+    "controller": "CommissionsController",
+    "file": "src/modules/commissions/commissions.controller.ts",
+    "line": 89,
+    "httpMethod": "PATCH",
+    "path": "/api/v1/organizations/:organizationId/commissions/rules/:ruleId",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, ProgramGuard, PermissionsGuard]; Perms: 'view.commissions'",
+    "domain": "commissions",
+    "summary": "Test program-scoped commission rules"
+  },
+  {
+    "controller": "CommissionsController",
+    "file": "src/modules/commissions/commissions.controller.ts",
+    "line": 101,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/commissions/rules/:ruleId/history",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, ProgramGuard, PermissionsGuard]; Perms: 'manage.commissions'",
+    "domain": "commissions",
+    "summary": "Update a commission rule (creates a new version)"
+  },
+  {
+    "controller": "CommissionsController",
+    "file": "src/modules/commissions/commissions.controller.ts",
+    "line": 111,
+    "httpMethod": "DELETE",
+    "path": "/api/v1/organizations/:organizationId/commissions/rules/:ruleId",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, ProgramGuard, PermissionsGuard]; Perms: 'view.commissions'",
+    "domain": "commissions",
+    "summary": "View a commission rule\\"
+  },
+  {
+    "controller": "ConversionsController",
+    "file": "src/modules/conversions/conversions.controller.ts",
+    "line": 32,
+    "httpMethod": "POST",
+    "path": "/api/v1/conversions",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "conversions",
+    "summary": ""
+  },
+  {
+    "controller": "ConversionsController",
+    "file": "src/modules/conversions/conversions.controller.ts",
+    "line": 49,
+    "httpMethod": "GET",
+    "path": "/api/v1/conversions/:id",
+    "authRequirement": "API Key (`x-api-key`); Scopes: 'conversions:write'",
+    "domain": "conversions",
+    "summary": "Create a conversion event (Server-to-Server API Key required)"
+  },
+  {
+    "controller": "ConversionsController",
+    "file": "src/modules/conversions/conversions.controller.ts",
+    "line": 58,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/conversions",
+    "authRequirement": "API Key (`x-api-key`); Scopes: 'conversions:read'",
+    "domain": "conversions",
+    "summary": "Get a conversion by PartnerIQ id or externalId"
+  },
+  {
+    "controller": "ConversionsController",
+    "file": "src/modules/conversions/conversions.controller.ts",
+    "line": 71,
+    "httpMethod": "POST",
+    "path": "/api/v1/conversions/:id/refund",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, EnvironmentGuard, ProgramGuard, PermissionsGuard]; Perms: 'view.conversions'",
+    "domain": "conversions",
+    "summary": "List conversions for organization or filtered by program"
+  },
+  {
+    "controller": "AffiliateCouponsController",
+    "file": "src/modules/coupons/affiliate-portal/affiliate-coupons.controller.ts",
+    "line": 13,
+    "httpMethod": "GET",
+    "path": "/api/v1/affiliate/me/assigned-coupons",
+    "authRequirement": "Bearer JWT",
+    "domain": "affiliates",
+    "summary": ""
+  },
+  {
+    "controller": "CouponsController",
+    "file": "src/modules/coupons/coupons.controller.ts",
+    "line": 25,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/coupons/settings",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]",
+    "domain": "affiliates",
+    "summary": ""
+  },
+  {
+    "controller": "CouponsController",
+    "file": "src/modules/coupons/coupons.controller.ts",
+    "line": 32,
+    "httpMethod": "PUT",
+    "path": "/api/v1/organizations/:organizationId/coupons/settings",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'coupons.view'",
+    "domain": "affiliates",
+    "summary": "Get whether coupons are enabled for this organization"
+  },
+  {
+    "controller": "CouponsController",
+    "file": "src/modules/coupons/coupons.controller.ts",
+    "line": 43,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/coupons",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'coupons.settings.update'",
+    "domain": "affiliates",
+    "summary": "Enable or disable coupon accessibility for this organization"
+  },
+  {
+    "controller": "CouponsController",
+    "file": "src/modules/coupons/coupons.controller.ts",
+    "line": 50,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/coupons",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'coupons.view'",
+    "domain": "affiliates",
+    "summary": "List coupons for this organization"
+  },
+  {
+    "controller": "CouponsController",
+    "file": "src/modules/coupons/coupons.controller.ts",
+    "line": 61,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/coupons/:couponId",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'coupons.create'",
+    "domain": "affiliates",
+    "summary": "Create a coupon"
+  },
+  {
+    "controller": "CouponsController",
+    "file": "src/modules/coupons/coupons.controller.ts",
+    "line": 68,
+    "httpMethod": "PUT",
+    "path": "/api/v1/organizations/:organizationId/coupons/:couponId",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'coupons.view'",
+    "domain": "affiliates",
+    "summary": "Get a single coupon with its assigned affiliates"
+  },
+  {
+    "controller": "CouponsController",
+    "file": "src/modules/coupons/coupons.controller.ts",
+    "line": 80,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/coupons/:couponId/status",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'coupons.edit'",
+    "domain": "affiliates",
+    "summary": "Update a coupon"
+  },
+  {
+    "controller": "CouponsController",
+    "file": "src/modules/coupons/coupons.controller.ts",
+    "line": 92,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/coupons/:couponId/assign",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'coupons.edit'",
+    "domain": "affiliates",
+    "summary": "Activate, pause, or archive a coupon"
+  },
+  {
+    "controller": "CouponsController",
+    "file": "src/modules/coupons/coupons.controller.ts",
+    "line": 104,
+    "httpMethod": "DELETE",
+    "path": "/api/v1/organizations/:organizationId/coupons/:couponId/assign/:affiliateId",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'coupons.assign'",
+    "domain": "affiliates",
+    "summary": "Assign a coupon to one or more affiliates"
+  },
+  {
+    "controller": "DemoBookingsController",
+    "file": "src/modules/demo-bookings/demo-bookings.controller.ts",
+    "line": 13,
+    "httpMethod": "POST",
+    "path": "/api/v1/demo-bookings",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "public",
+    "summary": ""
+  },
+  {
+    "controller": "DemoBookingsController",
+    "file": "src/modules/demo-bookings/demo-bookings.controller.ts",
+    "line": 19,
+    "httpMethod": "GET",
+    "path": "/api/v1/admin/demo-bookings",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "public",
+    "summary": "Create a public demo booking request"
+  },
+  {
+    "controller": "DemoBookingsController",
+    "file": "src/modules/demo-bookings/demo-bookings.controller.ts",
+    "line": 27,
+    "httpMethod": "PATCH",
+    "path": "/api/v1/admin/demo-bookings/:id/status",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]",
+    "domain": "org members",
+    "summary": "List demo bookings for the admin console"
+  },
+  {
+    "controller": "DeveloperPlatformController",
+    "file": "src/modules/developer-platform/developer-platform.controller.ts",
+    "line": 33,
+    "httpMethod": "GET",
+    "path": "/api/v1/programs",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "API keys",
+    "summary": ""
+  },
+  {
+    "controller": "DeveloperPlatformController",
+    "file": "src/modules/developer-platform/developer-platform.controller.ts",
+    "line": 41,
+    "httpMethod": "GET",
+    "path": "/api/v1/affiliates/:id",
+    "authRequirement": "API Key (`x-api-key`); Scopes: 'programs:read'",
+    "domain": "API keys",
+    "summary": "List programs visible to this API key organization"
+  },
+  {
+    "controller": "DeveloperPlatformController",
+    "file": "src/modules/developer-platform/developer-platform.controller.ts",
+    "line": 49,
+    "httpMethod": "POST",
+    "path": "/api/v1/customers/identify",
+    "authRequirement": "API Key (`x-api-key`); Scopes: 'affiliates:read'",
+    "domain": "API keys",
+    "summary": "Get affiliate details by id"
+  },
+  {
+    "controller": "DeveloperPlatformController",
+    "file": "src/modules/developer-platform/developer-platform.controller.ts",
+    "line": 57,
+    "httpMethod": "POST",
+    "path": "/api/v1/attributions/attach-order",
+    "authRequirement": "API Key (`x-api-key`); Scopes: 'customers:write'",
+    "domain": "API keys",
+    "summary": "Attach a customer external id to existing attribution records"
+  },
+  {
+    "controller": "DeveloperPlatformController",
+    "file": "src/modules/developer-platform/developer-platform.controller.ts",
+    "line": 65,
+    "httpMethod": "POST",
+    "path": "/api/v1/tracking-links",
+    "authRequirement": "API Key (`x-api-key`); Scopes: 'attributions:write'",
+    "domain": "API keys",
+    "summary": "Attach a payment-provider order to an attribution"
+  },
+  {
+    "controller": "DeveloperPlatformController",
+    "file": "src/modules/developer-platform/developer-platform.controller.ts",
+    "line": 73,
+    "httpMethod": "POST",
+    "path": "/api/v1/webhook-endpoints",
+    "authRequirement": "API Key (`x-api-key`); Scopes: 'tracking_links:write'",
+    "domain": "webhooks",
+    "summary": "Create a tracking link using a secret API key"
+  },
+  {
+    "controller": "DeveloperPlatformController",
+    "file": "src/modules/developer-platform/developer-platform.controller.ts",
+    "line": 81,
+    "httpMethod": "GET",
+    "path": "/api/v1/webhook-endpoints",
+    "authRequirement": "API Key (`x-api-key`); Scopes: 'webhooks:write'",
+    "domain": "webhooks",
+    "summary": "Create an outgoing webhook endpoint using a secret API key"
+  },
+  {
+    "controller": "DeveloperPlatformController",
+    "file": "src/modules/developer-platform/developer-platform.controller.ts",
+    "line": 89,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/public-browser-keys",
+    "authRequirement": "API Key (`x-api-key`); Scopes: 'webhooks:read'",
+    "domain": "API keys",
+    "summary": "List outgoing webhook endpoints using a secret API key"
+  },
+  {
+    "controller": "DeveloperPlatformController",
+    "file": "src/modules/developer-platform/developer-platform.controller.ts",
+    "line": 101,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/public-browser-keys",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'manage.api_keys'",
+    "domain": "API keys",
+    "summary": "Create a public browser key and allowed-domain policy"
+  },
+  {
+    "controller": "DeveloperPlatformController",
+    "file": "src/modules/developer-platform/developer-platform.controller.ts",
+    "line": 109,
+    "httpMethod": "POST",
+    "path": "/api/v1/browser/referrals",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'manage.api_keys'",
+    "domain": "API keys",
+    "summary": "List public browser keys"
+  },
+  {
+    "controller": "EmailDesignController",
+    "file": "src/modules/email-design/email-design.controller.ts",
+    "line": 30,
+    "httpMethod": "GET",
+    "path": "/api/v1/admin/email-design/session",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "EmailDesignController",
+    "file": "src/modules/email-design/email-design.controller.ts",
+    "line": 44,
+    "httpMethod": "POST",
+    "path": "/api/v1/admin/email-design/webhook",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "webhooks",
+    "summary": ""
+  },
+  {
+    "controller": "EmailDesignController",
+    "file": "src/modules/email-design/email-design.controller.ts",
+    "line": 56,
+    "httpMethod": "POST",
+    "path": "/api/v1/admin/email-design/provider-webhook/:provider",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "EmailDesignController",
+    "file": "src/modules/email-design/email-design.controller.ts",
+    "line": 61,
+    "httpMethod": "GET",
+    "path": "/api/v1/admin/email-design/health",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "EmailDesignController",
+    "file": "src/modules/email-design/email-design.controller.ts",
+    "line": 67,
+    "httpMethod": "GET",
+    "path": "/api/v1/admin/email-design/catalog",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "EmailDesignController",
+    "file": "src/modules/email-design/email-design.controller.ts",
+    "line": 73,
+    "httpMethod": "GET",
+    "path": "/api/v1/admin/email-design/templates",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "EmailDesignController",
+    "file": "src/modules/email-design/email-design.controller.ts",
+    "line": 79,
+    "httpMethod": "GET",
+    "path": "/api/v1/admin/email-design/settings",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "EmailDesignController",
+    "file": "src/modules/email-design/email-design.controller.ts",
+    "line": 85,
+    "httpMethod": "PUT",
+    "path": "/api/v1/admin/email-design/settings",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "EmailDesignController",
+    "file": "src/modules/email-design/email-design.controller.ts",
+    "line": 91,
+    "httpMethod": "POST",
+    "path": "/api/v1/admin/email-design/send-test",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "EmailDesignController",
+    "file": "src/modules/email-design/email-design.controller.ts",
+    "line": 97,
+    "httpMethod": "GET",
+    "path": "/api/v1/admin/email-design/delivery-logs",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "EmailDesignController",
+    "file": "src/modules/email-design/email-design.controller.ts",
+    "line": 103,
+    "httpMethod": "GET",
+    "path": "/api/v1/admin/email-design/suppressions",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "EmailDesignController",
+    "file": "src/modules/email-design/email-design.controller.ts",
+    "line": 109,
+    "httpMethod": "POST",
+    "path": "/api/v1/admin/email-design/suppressions",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "EmailDesignController",
+    "file": "src/modules/email-design/email-design.controller.ts",
+    "line": 119,
+    "httpMethod": "DELETE",
+    "path": "/api/v1/admin/email-design/suppressions/:email",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "EmailDesignController",
+    "file": "src/modules/email-design/email-design.controller.ts",
+    "line": 125,
+    "httpMethod": "PUT",
+    "path": "/api/v1/admin/email-design/overrides/:templateKey",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "EmailDesignController",
+    "file": "src/modules/email-design/email-design.controller.ts",
+    "line": 131,
+    "httpMethod": "DELETE",
+    "path": "/api/v1/admin/email-design/overrides/:templateKey",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "EmailDesignController",
+    "file": "src/modules/email-design/email-design.controller.ts",
+    "line": 137,
+    "httpMethod": "PUT",
+    "path": "/api/v1/admin/email-design/templates/:templateId",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "EmailDesignController",
+    "file": "src/modules/email-design/email-design.controller.ts",
+    "line": 143,
+    "httpMethod": "DELETE",
+    "path": "/api/v1/admin/email-design/templates/:templateId",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "EmailDesignController",
+    "file": "src/modules/email-design/email-design.controller.ts",
+    "line": 151,
+    "httpMethod": "GET",
+    "path": "/api/v1/admin/email-design/documents/catalog",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "EmailDesignController",
+    "file": "src/modules/email-design/email-design.controller.ts",
+    "line": 157,
+    "httpMethod": "GET",
+    "path": "/api/v1/admin/email-design/documents/templates",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "EmailDesignController",
+    "file": "src/modules/email-design/email-design.controller.ts",
+    "line": 163,
+    "httpMethod": "PUT",
+    "path": "/api/v1/admin/email-design/documents/templates/:templateKey",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "EmailDesignController",
+    "file": "src/modules/email-design/email-design.controller.ts",
+    "line": 169,
+    "httpMethod": "DELETE",
+    "path": "/api/v1/admin/email-design/documents/templates/:templateKey",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "EmailDesignController",
+    "file": "src/modules/email-design/email-design.controller.ts",
+    "line": 175,
+    "httpMethod": "POST",
+    "path": "/api/v1/admin/email-design/documents/render",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "EmailDesignController",
+    "file": "src/modules/email-design/email-design.controller.ts",
+    "line": 181,
+    "httpMethod": "POST",
+    "path": "/api/v1/admin/email-design/documents/generate-pdf",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "EmailDesignController",
+    "file": "src/modules/email-design/email-design.controller.ts",
+    "line": 190,
+    "httpMethod": "POST",
+    "path": "/api/v1/admin/email-design/documents/test-pdf",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "EmailDesignController",
+    "file": "src/modules/email-design/email-design.controller.ts",
+    "line": 196,
+    "httpMethod": "GET",
+    "path": "/api/v1/admin/email-design/documents/generated",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "EmailDesignController",
+    "file": "src/modules/email-design/email-design.controller.ts",
+    "line": 216,
+    "httpMethod": "GET",
+    "path": "/api/v1/admin/email-design/documents/generated/:id",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "EmailDesignController",
+    "file": "src/modules/email-design/email-design.controller.ts",
+    "line": 221,
+    "httpMethod": "GET",
+    "path": "/api/v1/admin/email-design/documents/generated/:id/preview-html",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "EmailDesignController",
+    "file": "src/modules/email-design/email-design.controller.ts",
+    "line": 229,
+    "httpMethod": "GET",
+    "path": "/api/v1/admin/email-design/documents/generated/:id/download",
+    "authRequirement": "Bearer JWT; [PlatformAdminGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "FraudController",
+    "file": "src/modules/fraud/fraud.controller.ts",
+    "line": 29,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/fraud/dashboard",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "FraudController",
+    "file": "src/modules/fraud/fraud.controller.ts",
+    "line": 36,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/fraud/reviews",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'fraud.read'",
+    "domain": "admin",
+    "summary": "Get organization fraud dashboard metrics and rollups"
+  },
+  {
+    "controller": "FraudController",
+    "file": "src/modules/fraud/fraud.controller.ts",
+    "line": 43,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/fraud/assessments/:assessmentId",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'fraud.read'",
+    "domain": "admin",
+    "summary": "List fraud reviews for organization"
+  },
+  {
+    "controller": "FraudController",
+    "file": "src/modules/fraud/fraud.controller.ts",
+    "line": 50,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/fraud/settings",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'fraud.read'",
+    "domain": "admin",
+    "summary": "Get explainable fraud assessment with signals"
+  },
+  {
+    "controller": "FraudController",
+    "file": "src/modules/fraud/fraud.controller.ts",
+    "line": 57,
+    "httpMethod": "PUT",
+    "path": "/api/v1/organizations/:organizationId/fraud/settings",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'fraud.read'",
+    "domain": "admin",
+    "summary": "Get organization or program fraud settings"
+  },
+  {
+    "controller": "FraudController",
+    "file": "src/modules/fraud/fraud.controller.ts",
+    "line": 68,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/fraud/reviews/:reviewId/assign",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'fraud.settings.update'",
+    "domain": "admin",
+    "summary": "Create or update fraud settings"
+  },
+  {
+    "controller": "FraudController",
+    "file": "src/modules/fraud/fraud.controller.ts",
+    "line": 81,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/fraud/reviews/:reviewId/resolve",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'fraud.review'",
+    "domain": "admin",
+    "summary": "Assign a fraud review to an analyst"
+  },
+  {
+    "controller": "FraudController",
+    "file": "src/modules/fraud/fraud.controller.ts",
+    "line": 96,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/fraud/affiliates/:affiliateId/trust",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'fraud.review'",
+    "domain": "affiliates",
+    "summary": "Approve, reject, or escalate a fraud review"
+  },
+  {
+    "controller": "AffiliateGamificationController",
+    "file": "src/modules/gamification/affiliate-portal/affiliate-gamification.controller.ts",
+    "line": 35,
+    "httpMethod": "GET",
+    "path": "/api/v1/affiliate/me/performance",
+    "authRequirement": "AuthGuard; [AuthGuard]",
+    "domain": "affiliates",
+    "summary": ""
+  },
+  {
+    "controller": "AffiliateGamificationController",
+    "file": "src/modules/gamification/affiliate-portal/affiliate-gamification.controller.ts",
+    "line": 41,
+    "httpMethod": "GET",
+    "path": "/api/v1/affiliate/me/tier-progress",
+    "authRequirement": "AuthGuard; [AuthGuard]",
+    "domain": "affiliates",
+    "summary": ""
+  },
+  {
+    "controller": "AffiliateGamificationController",
+    "file": "src/modules/gamification/affiliate-portal/affiliate-gamification.controller.ts",
+    "line": 48,
+    "httpMethod": "GET",
+    "path": "/api/v1/affiliate/me/milestones",
+    "authRequirement": "AuthGuard; [AuthGuard]",
+    "domain": "affiliates",
+    "summary": ""
+  },
+  {
+    "controller": "AffiliateGamificationController",
+    "file": "src/modules/gamification/affiliate-portal/affiliate-gamification.controller.ts",
+    "line": 55,
+    "httpMethod": "GET",
+    "path": "/api/v1/affiliate/me/journey",
+    "authRequirement": "AuthGuard; [AuthGuard]",
+    "domain": "affiliates",
+    "summary": ""
+  },
+  {
+    "controller": "MilestoneController",
+    "file": "src/modules/gamification/milestones/milestone.controller.ts",
+    "line": 24,
+    "httpMethod": "GET",
+    "path": "/api/v1/milestones",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "MilestoneController",
+    "file": "src/modules/gamification/milestones/milestone.controller.ts",
+    "line": 31,
+    "httpMethod": "POST",
+    "path": "/api/v1/milestones",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "MilestoneController",
+    "file": "src/modules/gamification/milestones/milestone.controller.ts",
+    "line": 38,
+    "httpMethod": "GET",
+    "path": "/api/v1/milestones/:id",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "MilestoneController",
+    "file": "src/modules/gamification/milestones/milestone.controller.ts",
+    "line": 45,
+    "httpMethod": "PATCH",
+    "path": "/api/v1/milestones/:id",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "MilestoneController",
+    "file": "src/modules/gamification/milestones/milestone.controller.ts",
+    "line": 56,
+    "httpMethod": "DELETE",
+    "path": "/api/v1/milestones/:id",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "MilestoneController",
+    "file": "src/modules/gamification/milestones/milestone.controller.ts",
+    "line": 63,
+    "httpMethod": "GET",
+    "path": "/api/v1/milestones/:id/achievements",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "PerformanceController",
+    "file": "src/modules/gamification/performance/performance.controller.ts",
+    "line": 27,
+    "httpMethod": "GET",
+    "path": "/api/v1/affiliate-performance/summary",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "affiliates",
+    "summary": ""
+  },
+  {
+    "controller": "PerformanceController",
+    "file": "src/modules/gamification/performance/performance.controller.ts",
+    "line": 34,
+    "httpMethod": "GET",
+    "path": "/api/v1/affiliate-performance/analytics/funnel",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "affiliates",
+    "summary": ""
+  },
+  {
+    "controller": "PerformanceController",
+    "file": "src/modules/gamification/performance/performance.controller.ts",
+    "line": 41,
+    "httpMethod": "GET",
+    "path": "/api/v1/affiliate-performance/leaderboard",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "affiliates",
+    "summary": ""
+  },
+  {
+    "controller": "PerformanceController",
+    "file": "src/modules/gamification/performance/performance.controller.ts",
+    "line": 48,
+    "httpMethod": "GET",
+    "path": "/api/v1/affiliate-performance/:affiliateId",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "affiliates",
+    "summary": ""
+  },
+  {
+    "controller": "PerformanceController",
+    "file": "src/modules/gamification/performance/performance.controller.ts",
+    "line": 58,
+    "httpMethod": "POST",
+    "path": "/api/v1/affiliate-performance/:affiliateId/change-tier",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "affiliates",
+    "summary": ""
+  },
+  {
+    "controller": "PerformanceController",
+    "file": "src/modules/gamification/performance/performance.controller.ts",
+    "line": 69,
+    "httpMethod": "POST",
+    "path": "/api/v1/affiliate-performance/:affiliateId/grant-reward",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "affiliates",
+    "summary": ""
+  },
+  {
+    "controller": "TierController",
+    "file": "src/modules/gamification/tiers/tier.controller.ts",
+    "line": 29,
+    "httpMethod": "GET",
+    "path": "/api/v1/partner-tiers",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "TierController",
+    "file": "src/modules/gamification/tiers/tier.controller.ts",
+    "line": 36,
+    "httpMethod": "POST",
+    "path": "/api/v1/partner-tiers",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "TierController",
+    "file": "src/modules/gamification/tiers/tier.controller.ts",
+    "line": 43,
+    "httpMethod": "GET",
+    "path": "/api/v1/partner-tiers/:id",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "TierController",
+    "file": "src/modules/gamification/tiers/tier.controller.ts",
+    "line": 50,
+    "httpMethod": "PATCH",
+    "path": "/api/v1/partner-tiers/:id",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "TierController",
+    "file": "src/modules/gamification/tiers/tier.controller.ts",
+    "line": 61,
+    "httpMethod": "DELETE",
+    "path": "/api/v1/partner-tiers/:id",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "TierController",
+    "file": "src/modules/gamification/tiers/tier.controller.ts",
+    "line": 68,
+    "httpMethod": "POST",
+    "path": "/api/v1/partner-tiers/reorder",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "TierController",
+    "file": "src/modules/gamification/tiers/tier.controller.ts",
+    "line": 75,
+    "httpMethod": "GET",
+    "path": "/api/v1/partner-tiers/assignments/all",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "TierController",
+    "file": "src/modules/gamification/tiers/tier.controller.ts",
+    "line": 82,
+    "httpMethod": "GET",
+    "path": "/api/v1/partner-tiers/:id/affiliates",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "TierController",
+    "file": "src/modules/gamification/tiers/tier.controller.ts",
+    "line": 89,
+    "httpMethod": "POST",
+    "path": "/api/v1/partner-tiers/:affiliateId/lock",
+    "authRequirement": "AuthGuard + RbacGuard; [AuthGuard, RbacGuard]",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "HubSpotWebhookController",
+    "file": "src/modules/integrations/hubspot/hubspot-webhook.controller.ts",
+    "line": 9,
+    "httpMethod": "POST",
+    "path": "/api/v1/integrations/hubspot/webhook",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "webhooks",
+    "summary": ""
+  },
+  {
+    "controller": "HubSpotController",
+    "file": "src/modules/integrations/hubspot/hubspot.controller.ts",
+    "line": 23,
+    "httpMethod": "GET",
+    "path": "/api/v1/admin/integrations/hubspot/config",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "integrations",
+    "summary": ""
+  },
+  {
+    "controller": "HubSpotController",
+    "file": "src/modules/integrations/hubspot/hubspot.controller.ts",
+    "line": 30,
+    "httpMethod": "PATCH",
+    "path": "/api/v1/admin/integrations/hubspot/config",
+    "authRequirement": "Bearer JWT",
+    "domain": "integrations",
+    "summary": ""
+  },
+  {
+    "controller": "HubSpotController",
+    "file": "src/modules/integrations/hubspot/hubspot.controller.ts",
+    "line": 37,
+    "httpMethod": "POST",
+    "path": "/api/v1/admin/integrations/hubspot/test",
+    "authRequirement": "Bearer JWT",
+    "domain": "integrations",
+    "summary": ""
+  },
+  {
+    "controller": "HubSpotController",
+    "file": "src/modules/integrations/hubspot/hubspot.controller.ts",
+    "line": 44,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/integrations",
+    "authRequirement": "Bearer JWT",
+    "domain": "integrations",
+    "summary": ""
+  },
+  {
+    "controller": "HubSpotController",
+    "file": "src/modules/integrations/hubspot/hubspot.controller.ts",
+    "line": 52,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/integrations/hubspot",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'integrations.view'",
+    "domain": "integrations",
+    "summary": ""
+  },
+  {
+    "controller": "HubSpotController",
+    "file": "src/modules/integrations/hubspot/hubspot.controller.ts",
+    "line": 60,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/integrations/hubspot/connect",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'integrations.view'",
+    "domain": "integrations",
+    "summary": ""
+  },
+  {
+    "controller": "HubSpotController",
+    "file": "src/modules/integrations/hubspot/hubspot.controller.ts",
+    "line": 72,
+    "httpMethod": "GET",
+    "path": "/api/v1/integrations/hubspot/oauth/callback",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'integrations.connect'",
+    "domain": "integrations",
+    "summary": ""
+  },
+  {
+    "controller": "HubSpotController",
+    "file": "src/modules/integrations/hubspot/hubspot.controller.ts",
+    "line": 105,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/integrations/hubspot/test",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "integrations",
+    "summary": ""
+  },
+  {
+    "controller": "HubSpotController",
+    "file": "src/modules/integrations/hubspot/hubspot.controller.ts",
+    "line": 113,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/integrations/hubspot/sync",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'integrations.test'",
+    "domain": "integrations",
+    "summary": ""
+  },
+  {
+    "controller": "HubSpotController",
+    "file": "src/modules/integrations/hubspot/hubspot.controller.ts",
+    "line": 121,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/integrations/hubspot/disconnect",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'integrations.sync'",
+    "domain": "integrations",
+    "summary": ""
+  },
+  {
+    "controller": "HubSpotController",
+    "file": "src/modules/integrations/hubspot/hubspot.controller.ts",
+    "line": 129,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/integrations/hubspot/pipelines",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'integrations.disconnect'",
+    "domain": "integrations",
+    "summary": ""
+  },
+  {
+    "controller": "HubSpotController",
+    "file": "src/modules/integrations/hubspot/hubspot.controller.ts",
+    "line": 137,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/integrations/hubspot/pipelines/:pipelineId/stages",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'integrations.configure'",
+    "domain": "integrations",
+    "summary": ""
+  },
+  {
+    "controller": "HubSpotController",
+    "file": "src/modules/integrations/hubspot/hubspot.controller.ts",
+    "line": 145,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/integrations/hubspot/pipeline-mapping",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'integrations.configure'",
+    "domain": "integrations",
+    "summary": ""
+  },
+  {
+    "controller": "HubSpotController",
+    "file": "src/modules/integrations/hubspot/hubspot.controller.ts",
+    "line": 153,
+    "httpMethod": "PATCH",
+    "path": "/api/v1/organizations/:organizationId/integrations/hubspot/pipeline-mapping",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'integrations.view'",
+    "domain": "integrations",
+    "summary": ""
+  },
+  {
+    "controller": "HubSpotController",
+    "file": "src/modules/integrations/hubspot/hubspot.controller.ts",
+    "line": 161,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/integrations/hubspot/field-mappings",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'integrations.configure'",
+    "domain": "integrations",
+    "summary": ""
+  },
+  {
+    "controller": "HubSpotController",
+    "file": "src/modules/integrations/hubspot/hubspot.controller.ts",
+    "line": 169,
+    "httpMethod": "PATCH",
+    "path": "/api/v1/organizations/:organizationId/integrations/hubspot/field-mappings",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'integrations.configure'",
+    "domain": "integrations",
+    "summary": ""
+  },
+  {
+    "controller": "HubSpotController",
+    "file": "src/modules/integrations/hubspot/hubspot.controller.ts",
+    "line": 177,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/integrations/hubspot/sync-logs",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'integrations.configure'",
+    "domain": "integrations",
+    "summary": ""
+  },
+  {
+    "controller": "IntegrationsController",
+    "file": "src/modules/integrations/integrations.controller.ts",
+    "line": 23,
+    "httpMethod": "GET",
+    "path": "/api/v1/admin/integrations",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "integrations",
+    "summary": ""
+  },
+  {
+    "controller": "IntegrationsController",
+    "file": "src/modules/integrations/integrations.controller.ts",
+    "line": 31,
+    "httpMethod": "GET",
+    "path": "/api/v1/admin/integrations/metrics",
+    "authRequirement": "Bearer JWT",
+    "domain": "integrations",
+    "summary": "List platform integrations with DB connection counts and health"
+  },
+  {
+    "controller": "IntegrationsController",
+    "file": "src/modules/integrations/integrations.controller.ts",
+    "line": 39,
+    "httpMethod": "GET",
+    "path": "/api/v1/admin/integrations/health",
+    "authRequirement": "Bearer JWT",
+    "domain": "integrations",
+    "summary": "Get aggregate metrics for all integrations"
+  },
+  {
+    "controller": "IntegrationsController",
+    "file": "src/modules/integrations/integrations.controller.ts",
+    "line": 47,
+    "httpMethod": "GET",
+    "path": "/api/v1/admin/integrations/:slugOrId",
+    "authRequirement": "Bearer JWT",
+    "domain": "integrations",
+    "summary": "Get platform-wide integration health rollup"
+  },
+  {
+    "controller": "IntegrationsController",
+    "file": "src/modules/integrations/integrations.controller.ts",
+    "line": 55,
+    "httpMethod": "PATCH",
+    "path": "/api/v1/admin/integrations/:slugOrId/status",
+    "authRequirement": "Bearer JWT",
+    "domain": "integrations",
+    "summary": "Get admin integration details with connected organizations"
+  },
+  {
+    "controller": "IntegrationsController",
+    "file": "src/modules/integrations/integrations.controller.ts",
+    "line": 67,
+    "httpMethod": "GET",
+    "path": "/api/v1/admin/integrations/:slugOrId/config",
+    "authRequirement": "Bearer JWT",
+    "domain": "integrations",
+    "summary": "Update integration status (ACTIVE, INACTIVE, COMING_SOON)"
+  },
+  {
+    "controller": "IntegrationsController",
+    "file": "src/modules/integrations/integrations.controller.ts",
+    "line": 75,
+    "httpMethod": "PATCH",
+    "path": "/api/v1/admin/integrations/:slugOrId/config",
+    "authRequirement": "Bearer JWT",
+    "domain": "integrations",
+    "summary": "Get integration platform OAuth & API configuration"
+  },
+  {
+    "controller": "IntegrationsController",
+    "file": "src/modules/integrations/integrations.controller.ts",
+    "line": 87,
+    "httpMethod": "POST",
+    "path": "/api/v1/admin/integrations/:slugOrId/test",
+    "authRequirement": "Bearer JWT",
+    "domain": "integrations",
+    "summary": "Save integration platform OAuth & API configuration"
+  },
+  {
+    "controller": "IntegrationsController",
+    "file": "src/modules/integrations/integrations.controller.ts",
+    "line": 99,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/integrations",
+    "authRequirement": "Bearer JWT",
+    "domain": "integrations",
+    "summary": "Test integration platform OAuth app credentials"
+  },
+  {
+    "controller": "IntegrationsController",
+    "file": "src/modules/integrations/integrations.controller.ts",
+    "line": 108,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/integrations/:slugOrId",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'view.integrations'",
+    "domain": "integrations",
+    "summary": "List published integration marketplace with real connection state"
+  },
+  {
+    "controller": "IntegrationsController",
+    "file": "src/modules/integrations/integrations.controller.ts",
+    "line": 120,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/integrations/:slugOrId/connect",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'view.integrations'",
+    "domain": "integrations",
+    "summary": "Get integration details and organization connection state"
+  },
+  {
+    "controller": "IntegrationsController",
+    "file": "src/modules/integrations/integrations.controller.ts",
+    "line": 134,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/integrations/:slugOrId/oauth/connect",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'manage.integrations'",
+    "domain": "integrations",
+    "summary": "Connect an integration with credentials (validates before saving)"
+  },
+  {
+    "controller": "IntegrationsController",
+    "file": "src/modules/integrations/integrations.controller.ts",
+    "line": 149,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/integrations/:slugOrId/test",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'manage.integrations'",
+    "domain": "integrations",
+    "summary": "Initiate OAuth connection flow for an organization"
+  },
+  {
+    "controller": "IntegrationsController",
+    "file": "src/modules/integrations/integrations.controller.ts",
+    "line": 162,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/integrations/:slugOrId/disconnect",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'manage.integrations'",
+    "domain": "integrations",
+    "summary": "Test credentials (either new or existing stored connection)"
+  },
+  {
+    "controller": "IntegrationsController",
+    "file": "src/modules/integrations/integrations.controller.ts",
+    "line": 175,
+    "httpMethod": "DELETE",
+    "path": "/api/v1/organizations/:organizationId/integrations/:slugOrId",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'manage.integrations'",
+    "domain": "integrations",
+    "summary": "Disconnect an integration for this organization"
+  },
+  {
+    "controller": "IntegrationsController",
+    "file": "src/modules/integrations/integrations.controller.ts",
+    "line": 197,
+    "httpMethod": "GET",
+    "path": "/api/v1/integrations/razorpay/oauth/callback",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'manage.integrations'",
+    "domain": "integrations",
+    "summary": "Disconnect an integration for this organization (DELETE)"
+  },
+  {
+    "controller": "IntegrationsController",
+    "file": "src/modules/integrations/integrations.controller.ts",
+    "line": 219,
+    "httpMethod": "GET",
+    "path": "/api/v1/integrations/cashfree/oauth/callback",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "integrations",
+    "summary": "Razorpay Partner OAuth redirect target"
+  },
+  {
+    "controller": "IntegrationsController",
+    "file": "src/modules/integrations/integrations.controller.ts",
+    "line": 251,
+    "httpMethod": "GET",
+    "path": "/api/v1/integrations/zoho-crm/oauth/callback",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "integrations",
+    "summary": "Cashfree Partner OAuth redirect target"
+  },
+  {
+    "controller": "IntegrationsController",
+    "file": "src/modules/integrations/integrations.controller.ts",
+    "line": 268,
+    "httpMethod": "POST",
+    "path": "/api/v1/integrations/:provider/webhooks/:publicConnectionId",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "webhooks",
+    "summary": "Zoho CRM OAuth redirect target"
+  },
+  {
+    "controller": "InternalOpsController",
+    "file": "src/modules/internal-ops/internal-ops.controller.ts",
+    "line": 49,
+    "httpMethod": "POST",
+    "path": "/api/v1/internal/superadmins",
+    "authRequirement": "Internal Ops Key (`x-internal-key`)",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "InternalOpsController",
+    "file": "src/modules/internal-ops/internal-ops.controller.ts",
+    "line": 61,
+    "httpMethod": "GET",
+    "path": "/api/v1/internal/superadmins",
+    "authRequirement": "Internal Ops Key (`x-internal-key`)",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "InternalOpsController",
+    "file": "src/modules/internal-ops/internal-ops.controller.ts",
+    "line": 70,
+    "httpMethod": "GET",
+    "path": "/api/v1/internal/superadmins/:id",
+    "authRequirement": "Internal Ops Key (`x-internal-key`)",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "InternalOpsController",
+    "file": "src/modules/internal-ops/internal-ops.controller.ts",
+    "line": 77,
+    "httpMethod": "PATCH",
+    "path": "/api/v1/internal/superadmins/:id",
+    "authRequirement": "Internal Ops Key (`x-internal-key`)",
+    "domain": "admin",
+    "summary": "Get details of a specific superadmin"
+  },
+  {
+    "controller": "InternalOpsController",
+    "file": "src/modules/internal-ops/internal-ops.controller.ts",
+    "line": 87,
+    "httpMethod": "DELETE",
+    "path": "/api/v1/internal/superadmins/:id",
+    "authRequirement": "Internal Ops Key (`x-internal-key`)",
+    "domain": "admin",
+    "summary": "Update superadmin profile, status, or reset password"
+  },
+  {
+    "controller": "InternalOpsController",
+    "file": "src/modules/internal-ops/internal-ops.controller.ts",
+    "line": 106,
+    "httpMethod": "POST",
+    "path": "/api/v1/internal/test-data/emails/trigger",
+    "authRequirement": "Internal Ops Key (`x-internal-key`)",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "InternalOpsController",
+    "file": "src/modules/internal-ops/internal-ops.controller.ts",
+    "line": 117,
+    "httpMethod": "POST",
+    "path": "/api/v1/internal/test-data/documents",
+    "authRequirement": "Internal Ops Key (`x-internal-key`)",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "InternalOpsController",
+    "file": "src/modules/internal-ops/internal-ops.controller.ts",
+    "line": 128,
+    "httpMethod": "POST",
+    "path": "/api/v1/internal/test-data/sandbox-org",
+    "authRequirement": "Internal Ops Key (`x-internal-key`)",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "InternalOpsController",
+    "file": "src/modules/internal-ops/internal-ops.controller.ts",
+    "line": 136,
+    "httpMethod": "POST",
+    "path": "/api/v1/internal/test-data/seed-full",
+    "authRequirement": "Internal Ops Key (`x-internal-key`)",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "InternalOpsController",
+    "file": "src/modules/internal-ops/internal-ops.controller.ts",
+    "line": 145,
+    "httpMethod": "DELETE",
+    "path": "/api/v1/internal/test-data/purge-all-demo-data",
+    "authRequirement": "Internal Ops Key (`x-internal-key`)",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "InternalOpsController",
+    "file": "src/modules/internal-ops/internal-ops.controller.ts",
+    "line": 159,
+    "httpMethod": "GET",
+    "path": "/api/v1/internal/system/stats",
+    "authRequirement": "Internal Ops Key (`x-internal-key`)",
+    "domain": "admin",
+    "summary": ""
+  },
+  {
+    "controller": "MediaController",
+    "file": "src/modules/media/media.controller.ts",
+    "line": 17,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/media/images",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]",
+    "domain": "other",
+    "summary": ""
+  },
+  {
+    "controller": "InvitationsController",
+    "file": "src/modules/memberships/invitations.controller.ts",
+    "line": 44,
+    "httpMethod": "GET",
+    "path": "/api/v1/invitations/:token",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "org members",
+    "summary": ""
+  },
+  {
+    "controller": "InvitationsController",
+    "file": "src/modules/memberships/invitations.controller.ts",
+    "line": 50,
+    "httpMethod": "POST",
+    "path": "/api/v1/invitations/:token/register",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "org members",
+    "summary": "Get invitation details"
+  },
+  {
+    "controller": "InvitationsController",
+    "file": "src/modules/memberships/invitations.controller.ts",
+    "line": 82,
+    "httpMethod": "POST",
+    "path": "/api/v1/invitations/:token/accept",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "org members",
+    "summary": "Create account and accept invitation"
+  },
+  {
+    "controller": "MembershipsController",
+    "file": "src/modules/memberships/memberships.controller.ts",
+    "line": 28,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/members",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]",
+    "domain": "org members",
+    "summary": ""
+  },
+  {
+    "controller": "MembershipsController",
+    "file": "src/modules/memberships/memberships.controller.ts",
+    "line": 35,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/members",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'view.organization'",
+    "domain": "org members",
+    "summary": "List all organization members"
+  },
+  {
+    "controller": "MembershipsController",
+    "file": "src/modules/memberships/memberships.controller.ts",
+    "line": 46,
+    "httpMethod": "PATCH",
+    "path": "/api/v1/organizations/:organizationId/members/:memberId",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'manage.organization'",
+    "domain": "org members",
+    "summary": "Invite new member to organization"
+  },
+  {
+    "controller": "MembershipsController",
+    "file": "src/modules/memberships/memberships.controller.ts",
+    "line": 58,
+    "httpMethod": "DELETE",
+    "path": "/api/v1/organizations/:organizationId/members/:memberId",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'manage.organization'",
+    "domain": "org members",
+    "summary": "Update member role"
+  },
+  {
+    "controller": "NotificationsController",
+    "file": "src/modules/notifications/notifications.controller.ts",
+    "line": 11,
+    "httpMethod": "GET",
+    "path": "/api/v1/notifications",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "org members",
+    "summary": ""
+  },
+  {
+    "controller": "NotificationsController",
+    "file": "src/modules/notifications/notifications.controller.ts",
+    "line": 20,
+    "httpMethod": "PATCH",
+    "path": "/api/v1/notifications/:id/read",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": ""
+  },
+  {
+    "controller": "NotificationsController",
+    "file": "src/modules/notifications/notifications.controller.ts",
+    "line": 29,
+    "httpMethod": "POST",
+    "path": "/api/v1/notifications/read-all",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": ""
+  },
+  {
+    "controller": "NotificationsController",
+    "file": "src/modules/notifications/notifications.controller.ts",
+    "line": 35,
+    "httpMethod": "GET",
+    "path": "/api/v1/notifications/preferences",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": ""
+  },
+  {
+    "controller": "NotificationsController",
+    "file": "src/modules/notifications/notifications.controller.ts",
+    "line": 44,
+    "httpMethod": "PATCH",
+    "path": "/api/v1/notifications/preferences",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": ""
+  },
+  {
+    "controller": "OrganizationsController",
+    "file": "src/modules/organizations/organizations.controller.ts",
+    "line": 30,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "org members",
+    "summary": ""
+  },
+  {
+    "controller": "OrganizationsController",
+    "file": "src/modules/organizations/organizations.controller.ts",
+    "line": 41,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": "Create a new organization"
+  },
+  {
+    "controller": "OrganizationsController",
+    "file": "src/modules/organizations/organizations.controller.ts",
+    "line": 49,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": "List all organizations for authenticated user"
+  },
+  {
+    "controller": "OrganizationsController",
+    "file": "src/modules/organizations/organizations.controller.ts",
+    "line": 57,
+    "httpMethod": "PATCH",
+    "path": "/api/v1/organizations/:organizationId",
+    "authRequirement": "Bearer JWT; [OrganizationGuard]",
+    "domain": "org members",
+    "summary": "Get details for a specific organization"
+  },
+  {
+    "controller": "OrganizationsController",
+    "file": "src/modules/organizations/organizations.controller.ts",
+    "line": 70,
+    "httpMethod": "POST",
+    "path": "/api/v1/onboarding/organization",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'manage.organization'",
+    "domain": "org members",
+    "summary": "Update organization settings"
+  },
+  {
+    "controller": "OrganizationsController",
+    "file": "src/modules/organizations/organizations.controller.ts",
+    "line": 81,
+    "httpMethod": "POST",
+    "path": "/api/v1/onboarding/program",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": "Onboarding Step 1: Create Organization"
+  },
+  {
+    "controller": "OrganizationsController",
+    "file": "src/modules/organizations/organizations.controller.ts",
+    "line": 92,
+    "httpMethod": "POST",
+    "path": "/api/v1/onboarding/complete",
+    "authRequirement": "Bearer JWT",
+    "domain": "org members",
+    "summary": "Onboarding Step: Create Initial Partner Program"
+  },
+  {
+    "controller": "PartnerDealsController",
+    "file": "src/modules/partner-deals/partner-deals.controller.ts",
+    "line": 19,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/partner-deals",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]",
+    "domain": "affiliates",
+    "summary": ""
+  },
+  {
+    "controller": "PartnerDealsController",
+    "file": "src/modules/partner-deals/partner-deals.controller.ts",
+    "line": 25,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/partner-deals",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'deals.create'",
+    "domain": "affiliates",
+    "summary": ""
+  },
+  {
+    "controller": "PartnerDealsController",
+    "file": "src/modules/partner-deals/partner-deals.controller.ts",
+    "line": 31,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/partner-deals/sync-now",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'deals.view'",
+    "domain": "affiliates",
+    "summary": ""
+  },
+  {
+    "controller": "PartnerDealsController",
+    "file": "src/modules/partner-deals/partner-deals.controller.ts",
+    "line": 37,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/partner-deals/:dealId",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'deals.sync'",
+    "domain": "affiliates",
+    "summary": ""
+  },
+  {
+    "controller": "PartnerDealsController",
+    "file": "src/modules/partner-deals/partner-deals.controller.ts",
+    "line": 43,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/partner-deals/:dealId/approve",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'deals.view'",
+    "domain": "affiliates",
+    "summary": ""
+  },
+  {
+    "controller": "PartnerDealsController",
+    "file": "src/modules/partner-deals/partner-deals.controller.ts",
+    "line": 49,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/partner-deals/:dealId/reject",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'deals.approve'",
+    "domain": "affiliates",
+    "summary": ""
+  },
+  {
+    "controller": "PartnerDealsController",
+    "file": "src/modules/partner-deals/partner-deals.controller.ts",
+    "line": 60,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/partner-deals/:dealId/sync",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'deals.reject'",
+    "domain": "affiliates",
+    "summary": ""
+  },
+  {
+    "controller": "PartnerDealsController",
+    "file": "src/modules/partner-deals/partner-deals.controller.ts",
+    "line": 66,
+    "httpMethod": "PATCH",
+    "path": "/api/v1/organizations/:organizationId/partner-deals/:dealId/stage",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'deals.sync'",
+    "domain": "affiliates",
+    "summary": ""
+  },
+  {
+    "controller": "PartnerDealsController",
+    "file": "src/modules/partner-deals/partner-deals.controller.ts",
+    "line": 77,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/partner-deals/:dealId/sync-history",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'deals.edit'",
+    "domain": "affiliates",
+    "summary": ""
+  },
+  {
+    "controller": "PayoutsController",
+    "file": "src/modules/payouts/payouts.controller.ts",
+    "line": 32,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/payouts",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]",
+    "domain": "payouts",
+    "summary": ""
+  },
+  {
+    "controller": "PayoutsController",
+    "file": "src/modules/payouts/payouts.controller.ts",
+    "line": 42,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/payouts/items",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'view.payouts'",
+    "domain": "payouts",
+    "summary": "List payout batches for organization in current environment"
+  },
+  {
+    "controller": "PayoutsController",
+    "file": "src/modules/payouts/payouts.controller.ts",
+    "line": 52,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/payouts/batches",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'view.payouts'",
+    "domain": "payouts",
+    "summary": "List all payout items for organization in current environment"
+  },
+  {
+    "controller": "PayoutsController",
+    "file": "src/modules/payouts/payouts.controller.ts",
+    "line": 64,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/payouts/batches/:batchId/process",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'manage.payouts'",
+    "domain": "payouts",
+    "summary": "Create a new payout batch from current affiliate balances"
+  },
+  {
+    "controller": "PayoutsController",
+    "file": "src/modules/payouts/payouts.controller.ts",
+    "line": 78,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/payouts/batches/:batchId/csv",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'manage.payouts'",
+    "domain": "payouts",
+    "summary": "Process/complete a payout batch (simulated in test mode)"
+  },
+  {
+    "controller": "ProgramsController",
+    "file": "src/modules/programs/programs.controller.ts",
+    "line": 33,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/programs",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, ProgramGuard, PermissionsGuard]",
+    "domain": "programs",
+    "summary": ""
+  },
+  {
+    "controller": "ProgramsController",
+    "file": "src/modules/programs/programs.controller.ts",
+    "line": 45,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/programs",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, ProgramGuard, PermissionsGuard]; Perms: 'manage.programs'",
+    "domain": "programs",
+    "summary": "Create a new partner program"
+  },
+  {
+    "controller": "ProgramsController",
+    "file": "src/modules/programs/programs.controller.ts",
+    "line": 55,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/programs/:programId",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, ProgramGuard, PermissionsGuard]; Perms: 'manage.programs'",
+    "domain": "programs",
+    "summary": "List all partner programs in organization for current environment"
+  },
+  {
+    "controller": "ProgramsController",
+    "file": "src/modules/programs/programs.controller.ts",
+    "line": 66,
+    "httpMethod": "PATCH",
+    "path": "/api/v1/organizations/:organizationId/programs/:programId",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, ProgramGuard, PermissionsGuard]; Perms: 'manage.programs'",
+    "domain": "programs",
+    "summary": "Get specific partner program details in current environment"
+  },
+  {
+    "controller": "ProgramsController",
+    "file": "src/modules/programs/programs.controller.ts",
+    "line": 79,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/programs/:programId/copy-to-live",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, ProgramGuard, PermissionsGuard]; Perms: 'manage.programs'",
+    "domain": "programs",
+    "summary": "Update partner program configuration"
+  },
+  {
+    "controller": "ProgramsController",
+    "file": "src/modules/programs/programs.controller.ts",
+    "line": 92,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/programs/:programId/pause",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, ProgramGuard, PermissionsGuard]; Perms: 'manage.programs'",
+    "domain": "programs",
+    "summary": "Clone test program configuration to live environment"
+  },
+  {
+    "controller": "ProgramsController",
+    "file": "src/modules/programs/programs.controller.ts",
+    "line": 105,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/programs/:programId/activate",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, ProgramGuard, PermissionsGuard]; Perms: 'manage.programs'",
+    "domain": "programs",
+    "summary": "Pause partner program"
+  },
+  {
+    "controller": "ProgramsController",
+    "file": "src/modules/programs/programs.controller.ts",
+    "line": 118,
+    "httpMethod": "DELETE",
+    "path": "/api/v1/organizations/:organizationId/programs/:programId",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, ProgramGuard, PermissionsGuard]; Perms: 'manage.programs'",
+    "domain": "programs",
+    "summary": "Activate partner program"
+  },
+  {
+    "controller": "TrackingController",
+    "file": "src/modules/tracking/tracking.controller.ts",
+    "line": 33,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/tracking-links",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "tracking",
+    "summary": ""
+  },
+  {
+    "controller": "TrackingController",
+    "file": "src/modules/tracking/tracking.controller.ts",
+    "line": 47,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/tracking-links",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, EnvironmentGuard, ProgramGuard, PermissionsGuard]; Perms: 'manage.links'",
+    "domain": "tracking",
+    "summary": "Create a new tracking link for an affiliate"
+  },
+  {
+    "controller": "TrackingController",
+    "file": "src/modules/tracking/tracking.controller.ts",
+    "line": 60,
+    "httpMethod": "GET",
+    "path": "/r/:shortCode",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, EnvironmentGuard, ProgramGuard, PermissionsGuard]; Perms: 'manage.links'",
+    "domain": "tracking",
+    "summary": "List tracking links for organization or filtered by program"
+  },
+  {
+    "controller": "TrackingController",
+    "file": "src/modules/tracking/tracking.controller.ts",
+    "line": 90,
+    "httpMethod": "POST",
+    "path": "/api/v1/tracking/click",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "tracking",
+    "summary": "High-performance referral tracking redirect"
+  },
+  {
+    "controller": "TrackingController",
+    "file": "src/modules/tracking/tracking.controller.ts",
+    "line": 99,
+    "httpMethod": "POST",
+    "path": "/api/v1/tracking/identify",
+    "authRequirement": "None declared (Unauthenticated / Open)",
+    "domain": "tracking",
+    "summary": "Browser SDK click tracking endpoint"
+  },
+  {
+    "controller": "WebhooksController",
+    "file": "src/modules/webhooks/webhooks.controller.ts",
+    "line": 26,
+    "httpMethod": "POST",
+    "path": "/api/v1/organizations/:organizationId/webhooks",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]",
+    "domain": "webhooks",
+    "summary": ""
+  },
+  {
+    "controller": "WebhooksController",
+    "file": "src/modules/webhooks/webhooks.controller.ts",
+    "line": 37,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/webhooks",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'manage.webhooks'",
+    "domain": "webhooks",
+    "summary": "Register a new webhook endpoint"
+  },
+  {
+    "controller": "WebhooksController",
+    "file": "src/modules/webhooks/webhooks.controller.ts",
+    "line": 44,
+    "httpMethod": "GET",
+    "path": "/api/v1/organizations/:organizationId/webhooks/deliveries",
+    "authRequirement": "Bearer JWT; [OrganizationGuard, PermissionsGuard]; Perms: 'manage.webhooks'",
+    "domain": "webhooks",
+    "summary": "List webhook endpoints"
+  }
+]

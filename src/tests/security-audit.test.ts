@@ -186,7 +186,7 @@ async function runSecurityAuditTests() {
 
   const payoutsService = new PayoutsService(new LedgerService(), {
     evaluatePayout: async () => ({ decision: 'APPROVE', score: 0 } as any),
-  } as any);
+  } as any, { triggerEvent: async () => {} } as any);
 
   // Seed malicious affiliate company name with spreadsheet formula trigger
   const maliciousAffiliate = {
@@ -257,6 +257,7 @@ async function runSecurityAuditTests() {
     { evaluateConversion: async () => ({ decision: 'APPROVE', score: 0 } as any) } as any,
     { calculateAndRecordCommission: async () => null } as any,
     new LedgerService(),
+    { triggerEvent: async () => {} } as any,
     { recordApprovedConversion: async () => {} } as any,
     { handleEvent: async () => {} } as any,
   );

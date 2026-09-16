@@ -1,4 +1,7 @@
-import { IsEmail, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import { IsEmail, IsIn, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import { DEAL_BOARD_COLUMNS } from '../deal-stage.constants';
+import type { DealBoardColumn } from '../deal-stage.constants';
+import { PLATFORM_CURRENCY } from '../../../common/constants/currency';
 
 export class CreatePartnerDealDto {
   @IsUUID()
@@ -44,6 +47,7 @@ export class CreatePartnerDealDto {
 
   @IsOptional()
   @IsString()
+  @IsIn([PLATFORM_CURRENCY], { message: `Only ${PLATFORM_CURRENCY} is supported.` })
   currency?: string;
 
   @IsOptional()
@@ -63,4 +67,14 @@ export class RejectPartnerDealDto {
   @IsOptional()
   @IsString()
   reason?: string;
+}
+
+export class UpdateDealStageDto {
+  @IsIn(DEAL_BOARD_COLUMNS)
+  column!: DealBoardColumn;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  actualValue?: number;
 }

@@ -1,6 +1,7 @@
-import { IsString, IsOptional, IsEnum, IsUrl, IsNumber } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsUrl, IsNumber, IsIn } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { OrganizationStatus } from '../../../common/enums';
+import { PLATFORM_CURRENCY } from '../../../common/constants/currency';
 
 export class CreateOrganizationDto {
   @ApiProperty({ example: 'Acme SaaS' })
@@ -32,9 +33,10 @@ export class CreateOrganizationDto {
   @IsString()
   country?: string;
 
-  @ApiPropertyOptional({ example: 'USD' })
+  @ApiPropertyOptional({ example: PLATFORM_CURRENCY, description: 'Must be INR — PartnerIQ processes INR only.' })
   @IsOptional()
   @IsString()
+  @IsIn([PLATFORM_CURRENCY], { message: `Only ${PLATFORM_CURRENCY} is supported.` })
   defaultCurrency?: string;
 }
 

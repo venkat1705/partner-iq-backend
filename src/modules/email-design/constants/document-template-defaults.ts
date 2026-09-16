@@ -1,4 +1,5 @@
 import { DocumentType, PageSize, PageOrientation, TemplateStatus } from '../../../common/enums';
+import { PLATFORM_CURRENCY } from '../../../common/constants/currency';
 
 export interface DocumentVariableDefinition {
   key: string;
@@ -380,7 +381,7 @@ export const DEFAULT_DOCUMENT_TEMPLATES: Record<string, DefaultDocumentTemplate>
       { key: 'invoice.number', label: 'Invoice Number', type: 'string', defaultValue: 'PIQ-INV-2026-0892' },
       { key: 'invoice.date', label: 'Invoice Date', type: 'string', defaultValue: '05 Sep 2026' },
       { key: 'invoice.billingPeriod', label: 'Billing Period', type: 'string', defaultValue: '05 Sep 2026 – 05 Oct 2026' },
-      { key: 'invoice.currency', label: 'Currency', type: 'string', defaultValue: 'USD' },
+      { key: 'invoice.currency', label: 'Currency', type: 'string', defaultValue: PLATFORM_CURRENCY },
       { key: 'invoice.paymentMethod', label: 'Payment Method', type: 'string', defaultValue: 'Visa ending in 4242 (Stripe)' },
       { key: 'invoice.transactionId', label: 'Payment Reference / Transaction ID', type: 'string', defaultValue: 'ch_3Mtx7aLkdIwHu7ix08Wk7Z3q' },
       { key: 'invoice.paymentDate', label: 'Payment Timestamp', type: 'string', defaultValue: '05 Sep 2026, 12:44 UTC' },
@@ -419,7 +420,7 @@ export const DEFAULT_DOCUMENT_TEMPLATES: Record<string, DefaultDocumentTemplate>
         number: 'PIQ-INV-2026-0892',
         date: '05 Sep 2026',
         billingPeriod: '05 Sep 2026 – 05 Oct 2026',
-        currency: 'USD',
+        currency: PLATFORM_CURRENCY,
         paymentMethod: 'Visa ending in •••• 4242 (Stripe)',
         transactionId: 'ch_3Mtx7aLkdIwHu7ix08Wk7Z3q',
         paymentDate: '05 Sep 2026, 12:44 UTC',

@@ -1,6 +1,7 @@
-import { IsString, IsEnum, IsNumber, IsOptional, Min, Max, IsArray, IsObject, IsUrl } from 'class-validator';
+import { IsString, IsEnum, IsNumber, IsOptional, Min, Max, IsArray, IsObject, IsUrl, IsIn } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ProgramType, ProgramStatus, CommissionType, AttributionModel } from '../../../common/enums';
+import { PLATFORM_CURRENCY } from '../../../common/constants/currency';
 
 export class CreateProgramDto {
   @ApiProperty({ example: 'Acme Affiliate Program' })
@@ -15,9 +16,10 @@ export class CreateProgramDto {
   @IsEnum(ProgramType)
   type!: ProgramType;
 
-  @ApiPropertyOptional({ example: 'USD' })
+  @ApiPropertyOptional({ example: PLATFORM_CURRENCY, description: 'Must be INR — PartnerIQ processes INR only.' })
   @IsOptional()
   @IsString()
+  @IsIn([PLATFORM_CURRENCY], { message: `Only ${PLATFORM_CURRENCY} is supported.` })
   currency?: string;
 
   @ApiPropertyOptional({ enum: ProgramStatus, example: ProgramStatus.DRAFT })

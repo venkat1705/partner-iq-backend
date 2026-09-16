@@ -108,13 +108,45 @@ export enum AffiliateStatus {
   REJECTED = 'REJECTED',
 }
 
+/**
+ * Lifecycle of an affiliate invitation.
+ *
+ * Terms acceptance and joining are deliberately separate states. An invitation
+ * token proves only that an email address was invited — it is not
+ * authentication. The affiliate must register or sign in through the Affiliate
+ * Portal before any organization/program membership is created, so an
+ * invitation moves PENDING -> TERMS_ACCEPTED -> JOINED rather than jumping
+ * straight to joined when the link is clicked.
+ */
 export enum AffiliateInvitationStatus {
+  /** Sent, not yet opened or acted on. */
   PENDING = 'PENDING',
+  /** Terms reviewed and accepted; awaiting Affiliate Portal registration/login. */
+  TERMS_ACCEPTED = 'TERMS_ACCEPTED',
+  /** Affiliate authenticated and the program membership now exists. */
+  JOINED = 'JOINED',
+  /**
+   * Legacy terminal state, equivalent to JOINED. Retained so invitations
+   * completed before the portal registration step existed still resolve.
+   */
   ACCEPTED = 'ACCEPTED',
   DECLINED = 'DECLINED',
   EXPIRED = 'EXPIRED',
   REVOKED = 'REVOKED',
+  CANCELLED = 'CANCELLED',
 }
+
+/** Statuses meaning the invitation has been fully completed. */
+export const AFFILIATE_INVITATION_COMPLETED_STATUSES: AffiliateInvitationStatus[] = [
+  AffiliateInvitationStatus.JOINED,
+  AffiliateInvitationStatus.ACCEPTED,
+];
+
+/** Statuses from which an affiliate may still act on the invitation. */
+export const AFFILIATE_INVITATION_OPEN_STATUSES: AffiliateInvitationStatus[] = [
+  AffiliateInvitationStatus.PENDING,
+  AffiliateInvitationStatus.TERMS_ACCEPTED,
+];
 
 export enum ApplicationStatus {
   PENDING = 'PENDING',
@@ -126,6 +158,7 @@ export enum ConversionStatus {
   PENDING = 'PENDING',
   APPROVED = 'APPROVED',
   REJECTED = 'REJECTED',
+  PARTIALLY_REFUNDED = 'PARTIALLY_REFUNDED',
   REFUNDED = 'REFUNDED',
   CHARGEBACK = 'CHARGEBACK',
 }
@@ -218,6 +251,7 @@ export enum AffiliateTrustSource {
 
 export enum PayoutStatus {
   DRAFT = 'DRAFT',
+  HELD = 'HELD',
   PROCESSING = 'PROCESSING',
   COMPLETED = 'COMPLETED',
   PARTIALLY_FAILED = 'PARTIALLY_FAILED',
@@ -263,6 +297,9 @@ export enum AuditAction {
   PAYOUT_CREATED = 'PAYOUT_CREATED',
   PAYOUT_APPROVED = 'PAYOUT_APPROVED',
   PAYOUT_COMPLETED = 'PAYOUT_COMPLETED',
+  PAYOUT_HELD_FOR_RISK = 'PAYOUT_HELD_FOR_RISK',
+  PAYOUT_RELEASED_FROM_HOLD = 'PAYOUT_RELEASED_FROM_HOLD',
+  PAYOUT_CANCELLED = 'PAYOUT_CANCELLED',
   API_KEY_CREATED = 'API_KEY_CREATED',
   API_KEY_REVOKED = 'API_KEY_REVOKED',
   WEBHOOK_CREATED = 'WEBHOOK_CREATED',
@@ -297,6 +334,16 @@ export enum AuditAction {
   AUTOMATION_PAUSED = 'AUTOMATION_PAUSED',
   AUTOMATION_ARCHIVED = 'AUTOMATION_ARCHIVED',
   AUTOMATION_EXECUTED = 'AUTOMATION_EXECUTED',
+  CLICK_CREATED = 'CLICK_CREATED',
+  CLICK_REJECTED = 'CLICK_REJECTED',
+  ATTRIBUTION_CREATED = 'ATTRIBUTION_CREATED',
+  ATTRIBUTION_UPDATED = 'ATTRIBUTION_UPDATED',
+  CUSTOMER_IDENTITY_LINKED = 'CUSTOMER_IDENTITY_LINKED',
+  CUSTOMER_IDENTITY_LINK_REJECTED = 'CUSTOMER_IDENTITY_LINK_REJECTED',
+  CONVERSION_ATTRIBUTED = 'CONVERSION_ATTRIBUTED',
+  CONVERSION_NO_ATTRIBUTION = 'CONVERSION_NO_ATTRIBUTION',
+  CONVERSION_REVERSED = 'CONVERSION_REVERSED',
+  TRACKING_CONFIG_CHANGED = 'TRACKING_CONFIG_CHANGED',
 }
 
 export enum AssetType {
@@ -379,6 +426,8 @@ export enum WebhookEvent {
   PAYOUT_CREATED = 'payout.created',
   PAYOUT_COMPLETED = 'payout.completed',
   PAYOUT_FAILED = 'payout.failed',
+  PAYOUT_HELD = 'payout.held',
+  PAYOUT_RELEASED = 'payout.released',
 }
 
 export enum IntegrationCategory {
@@ -393,6 +442,7 @@ export enum IntegrationCategory {
 
 export enum IntegrationStatus {
   ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
   DISABLED = 'DISABLED',
   BETA = 'BETA',
   COMING_SOON = 'COMING_SOON',
@@ -512,6 +562,7 @@ export enum GamificationMetric {
   TRACKING_LINK_CLICKS = 'TRACKING_LINK_CLICKS',
   NEW_CUSTOMERS = 'NEW_CUSTOMERS',
   RECURRING_REVENUE = 'RECURRING_REVENUE',
+  CONVERSION_RATE = 'CONVERSION_RATE',
   CUSTOM_EVENT = 'CUSTOM_EVENT',
 }
 
@@ -631,6 +682,10 @@ export enum SecurityEventType {
   MFA_FAILED = 'MFA_FAILED',
   MFA_ENABLED = 'MFA_ENABLED',
   MFA_DISABLED = 'MFA_DISABLED',
+  EMAIL_OTP_CHALLENGE_CREATED = 'EMAIL_OTP_CHALLENGE_CREATED',
+  EMAIL_OTP_VERIFIED = 'EMAIL_OTP_VERIFIED',
+  EMAIL_OTP_FAILED = 'EMAIL_OTP_FAILED',
+  EMAIL_VERIFIED = 'EMAIL_VERIFIED',
   RECOVERY_CODE_USED = 'RECOVERY_CODE_USED',
   RECOVERY_CODES_GENERATED = 'RECOVERY_CODES_GENERATED',
   NEW_DEVICE_LOGIN = 'NEW_DEVICE_LOGIN',

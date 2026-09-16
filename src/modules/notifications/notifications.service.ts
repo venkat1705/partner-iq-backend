@@ -113,6 +113,10 @@ export class NotificationsService {
       this.logger.debug(`Skipping realtime broadcast for ${notification.userId} because in-app notifications are disabled`);
       return notification;
     }
+    if (preferences.categories && notification.type in preferences.categories && !preferences.categories[notification.type]) {
+      this.logger.debug(`Skipping realtime broadcast for ${notification.userId} because category [${notification.type}] is muted`);
+      return notification;
+    }
 
     this.gateway.broadcastToUser(notification.userId, {
       type: 'notification.created',

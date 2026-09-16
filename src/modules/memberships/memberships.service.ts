@@ -14,10 +14,20 @@ import { SecurityUtils } from '../../common/utils/security.utils';
 import { getAppConfig } from '../../config/app.config';
 import { BrevoEmailService } from './brevo-email.service';
 import { assertUserEligibleForOrganization } from '../affiliates/affiliate-eligibility.policy';
+import { SystemEmailDispatchService } from '../email-design/services/system-email-dispatch.service';
+import { SystemTemplateKey } from '../email-design/constants/email-template-keys';
+import { NotificationsService } from '../notifications/notifications.service';
+import { SubscriptionLimitService } from '../billing/services/subscription-limit.service';
+import { BillingResourceType } from '../billing/enums/billing.enums';
 
 @Injectable()
 export class MembershipsService {
-  constructor(private readonly brevoEmail: BrevoEmailService) { }
+  constructor(
+    private readonly brevoEmail: BrevoEmailService,
+    private readonly emailDispatch?: SystemEmailDispatchService,
+    private readonly notificationsService?: NotificationsService,
+    private readonly subscriptionLimits?: SubscriptionLimitService,
+  ) { }
 
   async getMembers(organizationId: string) {
     const memberships = dbStore.organizationMemberships.filter(
@@ -49,6 +59,7 @@ export class MembershipsService {
       )
       .map((invite) => ({
         id: invite.id,
+        organizationId: invite.organizationId,
         userId: undefined,
         email: invite.email,
         firstName: undefined,
@@ -63,7 +74,27 @@ export class MembershipsService {
     return [...pendingInvites, ...activeMembers];
   }
 
+  /**
+   * Invites an internal team member.
+   *
+   * Member seats are counted per *person* across the whole account: someone who
+   * administers three organizations holds one seat, and a live invitation
+   * reserves one so an admin cannot invite past the limit and only discover it
+   * when everyone accepts. Route-level RBAC (`manage.organization`) already
+   * restricts this to owners and admins.
+   */
   async inviteMember(organizationId: string, invitedByUserId: string, dto: InviteMemberDto) {
+    if (!this.subscriptionLimits) {
+      return this.createMemberInvitation(organizationId, invitedByUserId, dto);
+    }
+    return this.subscriptionLimits.reserveForOrganization(
+      organizationId,
+      BillingResourceType.MEMBER,
+      () => this.createMemberInvitation(organizationId, invitedByUserId, dto),
+    );
+  }
+
+  private async createMemberInvitation(organizationId: string, invitedByUserId: string, dto: InviteMemberDto) {
     const email = dto.email.toLowerCase().trim();
     assertUserEligibleForOrganization(email);
     const organization = dbStore.organizations.find((item) => item.id === organizationId && !item.deletedAt);
@@ -71,14 +102,24 @@ export class MembershipsService {
       throw new NotFoundException('Organization not found');
     }
 
-    const user = dbStore.users.find((u) => u.email === email && !u.deletedAt);
+    const user = dbStore.users.find((u) => u.email.toLowerCase().trim() === email && !u.deletedAt);
+
+    // Inviting yourself is always redundant — you're already an active member by definition.
+    const inviter = dbStore.users.find((u) => u.id === invitedByUserId);
+    if (inviter && inviter.email.toLowerCase().trim() === email) {
+      throw new BadRequestException('You cannot invite yourself — you already have access to this organization.');
+    }
 
     const existingMembership = user && dbStore.organizationMemberships.find(
       (m) => m.organizationId === organizationId && m.userId === user.id && m.status === MembershipStatus.ACTIVE,
     );
 
     if (existingMembership) {
-      throw new BadRequestException('User is already a member of this organization');
+      throw new BadRequestException(
+        existingMembership.role === Role.OWNER
+          ? 'This person is already the owner of this organization.'
+          : `This person is already a ${this.formatRoleLabel(existingMembership.role)} in this organization.`,
+      );
     }
 
     const existingInvite = dbStore.organizationInvitations.find(
@@ -90,8 +131,13 @@ export class MembershipsService {
         new Date(invite.expiresAt) > new Date(),
     );
     if (existingInvite) {
-      throw new BadRequestException('An active invitation already exists for this email');
+      throw new BadRequestException('An active invitation is already pending for this email address.');
     }
+
+    // Not a hard block — a person can belong to multiple PartnerIQ organizations —
+    // but useful context for the inviting admin: this email already has an account
+    // elsewhere, so they'll join by signing in rather than by registering.
+    const hasExistingAccount = Boolean(user);
 
     const role = this.normalizeRole(dto.role);
     const roleDefinition = dbStore.roles.find((item) => item.code === role && !item.organizationId);
@@ -118,16 +164,18 @@ export class MembershipsService {
     this.audit(organizationId, invitedByUserId, 'MEMBER_INVITED', 'organization_invitation', invitation.id, {
       email,
       role,
+      hasExistingAccount,
     });
 
-    const inviter = dbStore.users.find((item) => item.id === invitedByUserId);
     try {
       await this.brevoEmail.sendInvitationEmail({
         toEmail: email,
         organizationName: organization.name,
         inviterEmail: inviter?.email,
+        invitedByName: inviter ? `${inviter.firstName} ${inviter.lastName || ''}`.trim() : undefined,
         role,
         inviteUrl,
+        expiresIn: '7 days',
       });
     } catch {
       // Non-blocking email dispatch
@@ -143,7 +191,16 @@ export class MembershipsService {
       invitedAt: invitation.createdAt,
       expiresAt: invitation.expiresAt,
       inviteUrl,
+      hasExistingAccount,
     };
+  }
+
+  private formatRoleLabel(role: string) {
+    return (role || '')
+      .toLowerCase()
+      .split('_')
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ') || 'member';
   }
 
   async revokeInvitation(organizationId: string, invitationId: string, actorId?: string) {
@@ -222,16 +279,75 @@ export class MembershipsService {
       role: membership.role,
       invitedBy: invitation.invitedBy,
     });
+
+    this.notifyInviterOfAcceptedMembership(invitation, membership, user).catch(() => undefined);
+
     return membership;
   }
 
-  async updateMemberRole(organizationId: string, memberId: string, dto: UpdateMemberRoleDto, actorId?: string) {
+  private async notifyInviterOfAcceptedMembership(
+    invitation: ReturnType<typeof this.findValidInvitation>,
+    membership: OrganizationMembershipEntity,
+    newMember: User,
+  ) {
+    if (!invitation.invitedBy) return;
+    const dataSource = await initializeDataSource();
+    const inviter = await dataSource.getRepository(User).findOne({ where: { id: invitation.invitedBy } });
+    if (!inviter?.email) return;
+
+    const organization = dbStore.organizations.find((item) => item.id === invitation.organizationId);
+    const dashboardUrl = `${getAppConfig().frontendUrl.replace(/\/$/, '')}/organizations/${invitation.organizationId}/team`;
+
+    await this.emailDispatch?.send(
+      SystemTemplateKey.ORGANIZATION_MEMBER_JOINED,
+      inviter.email,
+      {
+        user: { firstName: inviter.firstName },
+        member: { name: `${newMember.firstName} ${newMember.lastName || ''}`.trim(), email: newMember.email, role: membership.role },
+        organization: { name: organization?.name || 'Your organization' },
+        links: { dashboardUrl },
+      },
+      { organizationId: invitation.organizationId, userId: inviter.id },
+    );
+
+    this.notificationsService?.createNotification({
+      userId: inviter.id,
+      organizationId: invitation.organizationId,
+      type: 'team',
+      title: 'Team invitation accepted',
+      body: `${newMember.firstName} ${newMember.lastName || ''}`.trim() + ` joined as ${membership.role}.`,
+      channel: 'in_app',
+      priority: 'normal',
+      actionUrl: `/organizations/${invitation.organizationId}/team`,
+    }).catch(() => undefined);
+  }
+
+  async updateMemberRole(
+    organizationId: string,
+    memberId: string,
+    dto: UpdateMemberRoleDto,
+    actorId?: string,
+    actorRole?: Role,
+  ) {
     const membership = dbStore.organizationMemberships.find(
       (m) => m.id === memberId && m.organizationId === organizationId,
     );
 
     if (!membership) {
       throw new NotFoundException('Member not found');
+    }
+
+    // Only an OWNER (or platform SUPER_ADMIN) may grant or revoke the OWNER role — otherwise
+    // an ADMIN with 'manage.organization' could promote themselves to OWNER and demote the
+    // real owner, taking full control of the organization.
+    const isPrivilegedActor = actorRole === Role.OWNER || actorRole === Role.SUPER_ADMIN;
+    if ((dto.role === Role.OWNER || membership.role === Role.OWNER) && !isPrivilegedActor) {
+      throw new BadRequestException('Only an organization owner can assign or change the OWNER role.');
+    }
+
+    // Prevent a user from editing their own membership role (self-promotion/demotion).
+    if (actorId && membership.userId === actorId) {
+      throw new BadRequestException('You cannot change your own membership role.');
     }
 
     const previousRole = membership.role;

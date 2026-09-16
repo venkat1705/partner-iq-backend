@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { dbStore } from '../../database/store';
 import {
@@ -6,6 +6,8 @@ import {
   FraudAssessmentType,
   FraudDecision,
   FraudReviewStatus,
+  FraudSignalCode,
+  PlatformRole,
   Role,
 } from '../../common/enums';
 import { MembershipStatus } from '../../common/enums/rbac';
@@ -15,6 +17,8 @@ import { FraudDecisionService } from './fraud-decision.service';
 import { FraudPolicyService } from './fraud-policy.service';
 import { FraudScoreService } from './fraud-score.service';
 import { FraudSignalRegistry } from './fraud-signal-registry';
+import { FRAUD_MODEL_PROVIDER } from './model/fraud-model.provider';
+import type { FraudModelProvider } from './model/fraud-model.provider';
 
 @Injectable()
 export class FraudEngineService {
@@ -24,6 +28,7 @@ export class FraudEngineService {
     private readonly scoreService: FraudScoreService,
     private readonly decisionService: FraudDecisionService,
     private readonly notificationsService: NotificationsService,
+    @Optional() @Inject(FRAUD_MODEL_PROVIDER) private readonly modelProvider?: FraudModelProvider,
   ) {}
 
   async assess(context: FraudContext, assessmentType = FraudAssessmentType.INITIAL): Promise<FraudAssessmentResult> {
@@ -47,7 +52,8 @@ export class FraudEngineService {
       }
     }
 
-    const aggregate = this.scoreService.aggregate(signals, policy);
+    const ruleAggregate = this.scoreService.aggregate(signals, policy);
+    const aggregate = await this.blendModelPrediction(ruleAggregate, signals);
     const decision = this.decisionService.decide(context, aggregate.score, policy);
 
     const assessment = {
@@ -102,6 +108,45 @@ export class FraudEngineService {
       assessmentType,
       categoryScores: aggregate.categoryScores,
       signals,
+    };
+  }
+
+  private async blendModelPrediction(
+    ruleAggregate: { score: number; confidence: number; riskLevel: any; categoryScores: Record<string, number> },
+    signals: Array<{ code: FraudSignalCode; detected: boolean; metadata?: Record<string, unknown> }>,
+  ) {
+    if (!this.modelProvider) return ruleAggregate;
+
+    const trustSignal = signals.find((signal) => signal.code === FraudSignalCode.AFFILIATE_LOW_TRUST);
+    const featureVector = {
+      score: ruleAggregate.score,
+      confidence: ruleAggregate.confidence,
+      categoryScores: ruleAggregate.categoryScores,
+      signalCodes: signals.filter((signal) => signal.detected).map((signal) => signal.code),
+      affiliateTrustScore: trustSignal?.metadata?.trustScore as number | undefined,
+    };
+
+    let prediction;
+    try {
+      prediction = await this.modelProvider.predict(featureVector);
+    } catch {
+      return ruleAggregate;
+    }
+
+    // A no-op/unconfigured model provider reports confidence 0, so the rule-based score is
+    // used unchanged (current behavior is preserved). Once a real model is plugged in, its
+    // prediction is blended in proportion to its own confidence, capped so the fully
+    // explainable rule engine always keeps the majority say in the final decision.
+    if (!prediction || prediction.confidence <= 0) return ruleAggregate;
+
+    const modelScore = Math.max(0, Math.min(100, Math.round(prediction.probability * 100)));
+    const blendWeight = Math.min(0.4, Math.max(0, prediction.confidence) / 100);
+    const blendedScore = Math.max(0, Math.min(100, Math.round(ruleAggregate.score * (1 - blendWeight) + modelScore * blendWeight)));
+
+    return {
+      ...ruleAggregate,
+      score: blendedScore,
+      riskLevel: this.scoreService.riskLevel(blendedScore),
     };
   }
 
@@ -214,6 +259,17 @@ export class FraudEngineService {
         : 'Fraud blocked';
     const body = `${entityLabel} flagged with risk score ${score}${topSignal?.reason ? `: ${topSignal.reason}` : '.'}`;
 
+    const metadata = {
+      assessmentId,
+      decision,
+      score,
+      entityType: context.entityType,
+      entityId: context.entityId,
+      programId: context.programId,
+      affiliateId: context.affiliateId,
+      topSignal: topSignal?.code,
+    };
+
     await Promise.allSettled(
       recipients.map((recipient) =>
         this.notificationsService.createNotification({
@@ -225,19 +281,30 @@ export class FraudEngineService {
           channel: 'in_app',
           priority: decision === FraudDecision.REVIEW ? 'high' : 'urgent',
           actionUrl: '/app/fraud',
-          metadata: {
-            assessmentId,
-            decision,
-            score,
-            entityType: context.entityType,
-            entityId: context.entityId,
-            programId: context.programId,
-            affiliateId: context.affiliateId,
-            topSignal: topSignal?.code,
-          },
+          metadata,
         }),
       ),
     );
+
+    // Platform visibility: severe decisions also surface to super admins.
+    if (decision === FraudDecision.HOLD || decision === FraudDecision.BLOCK) {
+      const organization = dbStore.organizations.find((o) => o.id === context.organizationId);
+      const superAdmins = dbStore.users.filter((u) => u.platformRole === PlatformRole.SUPER_ADMIN);
+      await Promise.allSettled(
+        superAdmins.map((admin) =>
+          this.notificationsService.createNotification({
+            userId: admin.id,
+            type: 'fraud',
+            title: `${title} — ${organization?.name || 'an organization'}`,
+            body,
+            channel: 'in_app',
+            priority: 'urgent',
+            actionUrl: '/admin/fraud',
+            metadata,
+          }),
+        ),
+      );
+    }
   }
 
   private sanitizeMetadata(metadata?: Record<string, unknown>) {

@@ -180,14 +180,15 @@ export class PerformanceService {
       return {
         rank: index + 1,
         affiliateId: s.affiliateId,
-        displayName,
+        affiliateName: displayName,
         avatar: `https://avatar.vercel.sh/${s.affiliateId}.svg?text=${encodeURIComponent((rawName[0] || 'P').toUpperCase())}`,
         tierName: tier?.name || 'Bronze',
-        tierColorToken: tier?.colorToken || 'blue',
+        tierColor: tier?.colorToken || 'blue',
         conversions: s.approvedConversions,
         revenue: Math.round(s.revenue / 100),
-        commission: Math.round(s.commissionEarned / 100),
+        commissionEarned: Math.round(s.commissionEarned / 100),
         closedWonDeals: s.closedWonDeals,
+        score: Math.round(s.revenue / 100),
       };
     });
   }

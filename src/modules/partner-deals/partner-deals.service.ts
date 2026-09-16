@@ -16,7 +16,12 @@ import { ConversionsService } from '../conversions/conversions.service';
 import { HubSpotApiClient } from '../integrations/hubspot/hubspot-api.client';
 import { HubSpotService } from '../integrations/hubspot/hubspot.service';
 import { HUBSPOT_PROVIDER } from '../integrations/hubspot/hubspot.constants';
-import { CreatePartnerDealDto, RejectPartnerDealDto } from './dto/partner-deal.dto';
+import { CreatePartnerDealDto, RejectPartnerDealDto, UpdateDealStageDto } from './dto/partner-deal.dto';
+import { PLATFORM_CURRENCY } from '../../common/constants/currency';
+import { NotificationsService } from '../notifications/notifications.service';
+import { DealsGateway } from '../realtime/deals.gateway';
+import type { DealRealtimeSource } from '../realtime/deals.gateway';
+import { targetStatusForColumn } from './deal-stage.constants';
 
 @Injectable()
 export class PartnerDealsService {
@@ -24,6 +29,8 @@ export class PartnerDealsService {
     private readonly hubSpot: HubSpotService,
     private readonly hubSpotApi: HubSpotApiClient,
     private readonly conversions: ConversionsService,
+    private readonly dealsGateway: DealsGateway,
+    private readonly notificationsService?: NotificationsService,
   ) {}
 
   async create(organizationId: string, user: AuthUserPayload, dto: CreatePartnerDealDto) {
@@ -46,7 +53,7 @@ export class PartnerDealsService {
       contactPhone: dto.contactPhone,
       contactJobTitle: dto.contactJobTitle,
       estimatedValue: Math.round(dto.estimatedValue),
-      currency: dto.currency || program.currency || 'USD',
+      currency: dto.currency || program.currency || PLATFORM_CURRENCY,
       expectedCloseDate: dto.expectedCloseDate ? new Date(dto.expectedCloseDate) : undefined,
       status: duplicateSignals.potentialDuplicate ? PartnerDealStatus.UNDER_REVIEW : PartnerDealStatus.SUBMITTED,
       commissionStatus: PartnerDealCommissionStatus.NOT_ELIGIBLE,
@@ -62,13 +69,14 @@ export class PartnerDealsService {
     dbStore.partnerDeals.push(deal);
     this.audit(organizationId, user.userId, 'DEAL_REGISTERED', deal.id, { dealRegistrationNumber: deal.dealRegistrationNumber, duplicateSignals });
     this.notifyOrganizationAdmins(organizationId, 'New deal registration', `${affiliate.displayName} registered ${deal.companyName}.`);
+    this.dealsGateway.emitDealCreated(organizationId, this.publicDeal(deal, true));
     return { deal, duplicateSignals };
   }
 
-  list(organizationId: string, user: AuthUserPayload) {
+  list(organizationId: string, user: AuthUserPayload, options?: { crmOnly?: boolean }) {
     const affiliateId = user.affiliateId;
     return dbStore.partnerDeals
-      .filter((deal) => deal.organizationId === organizationId && (!affiliateId || deal.affiliateId === affiliateId))
+      .filter((deal) => deal.organizationId === organizationId && (!affiliateId || deal.affiliateId === affiliateId) && (!options?.crmOnly || Boolean(deal.crmProvider)))
       .map((deal) => this.publicDeal(deal, !affiliateId));
   }
 
@@ -88,7 +96,9 @@ export class PartnerDealsService {
     this.ensureB2BAttribution(deal);
     await this.syncToHubSpot(organizationId, deal);
     this.audit(organizationId, user.userId, 'DEAL_APPROVED', deal.id, { crmDealId: deal.crmDealId });
-    return this.publicDeal(deal, true);
+    const publicDeal = this.publicDeal(deal, true);
+    this.dealsGateway.emitDealUpdated(organizationId, publicDeal);
+    return publicDeal;
   }
 
   reject(organizationId: string, user: AuthUserPayload, id: string, dto: RejectPartnerDealDto) {
@@ -97,14 +107,78 @@ export class PartnerDealsService {
     deal.rejectedAt = new Date();
     deal.rejectionReason = dto.reason;
     this.audit(organizationId, user.userId, 'DEAL_REJECTED', deal.id, { reason: dto.reason });
-    return this.publicDeal(deal, true);
+    const publicDeal = this.publicDeal(deal, true);
+    this.dealsGateway.emitDealUpdated(organizationId, publicDeal);
+    return publicDeal;
   }
 
   async sync(organizationId: string, user: AuthUserPayload, id: string) {
     const deal = this.requireDeal(organizationId, id);
     await this.syncToHubSpot(organizationId, deal);
     this.audit(organizationId, user.userId, 'DEAL_SYNCED', deal.id, { crmDealId: deal.crmDealId });
-    return this.publicDeal(deal, true);
+    const publicDeal = this.publicDeal(deal, true);
+    this.dealsGateway.emitDealUpdated(organizationId, publicDeal);
+    return publicDeal;
+  }
+
+  async updateStage(organizationId: string, user: AuthUserPayload, id: string, dto: UpdateDealStageDto) {
+    const deal = this.requireDeal(organizationId, id);
+    const targetStatus = targetStatusForColumn(dto.column, deal);
+
+    if (dto.column === 'WON') {
+      await this.closeWon(deal, dto.actualValue);
+    } else if (dto.column === 'LOST') {
+      deal.status = PartnerDealStatus.CLOSED_LOST;
+      deal.closedAt = new Date();
+    } else {
+      deal.status = targetStatus;
+    }
+
+    if (deal.crmProvider === HUBSPOT_PROVIDER) {
+      await this.pushStageToHubSpot(organizationId, deal, targetStatus);
+    }
+
+    this.audit(organizationId, user.userId, 'DEAL_STAGE_CHANGED', deal.id, { column: dto.column, status: deal.status });
+    const publicDeal = this.publicDeal(deal, true);
+    this.dealsGateway.emitDealUpdated(organizationId, publicDeal);
+    return publicDeal;
+  }
+
+  async syncAllFromHubSpot(organizationId: string, user: AuthUserPayload) {
+    const connection = this.hubSpot.requireConnection(organizationId);
+    const mappings = dbStore.crmEntityMappings.filter(
+      (item) => item.organizationIntegrationId === connection.id && item.entityType === 'DEAL',
+    );
+    const started = Date.now();
+    let scanned = 0;
+    let updated = 0;
+    let unchanged = 0;
+    let errors = 0;
+
+    for (const mapping of mappings) {
+      scanned += 1;
+      try {
+        const response = await this.hubSpotApi.get(connection.id, `/crm/v3/objects/deals/${mapping.externalEntityId}?properties=dealstage,amount`);
+        const stageId = response?.properties?.dealstage;
+        const amount = response?.properties?.amount ? Number(response.properties.amount) : undefined;
+        const deal = dbStore.partnerDeals.find((item) => item.organizationId === organizationId && item.crmDealId === mapping.externalEntityId);
+        if (!deal || !stageId || deal.crmStageId === stageId) {
+          unchanged += 1;
+          continue;
+        }
+        await this.handleHubSpotDealStage(organizationId, mapping.externalEntityId, stageId, amount, 'HUBSPOT_SYNC');
+        updated += 1;
+      } catch {
+        errors += 1;
+      }
+    }
+
+    connection.lastSyncAt = new Date();
+    connection.config = { ...(connection.config || {}), lastSuccessfulSyncAt: new Date() };
+    const summary = { scanned, updated, unchanged, errors };
+    this.hubSpot.syncLog(connection, 'deal_import', 'DEAL', 'INBOUND', errors ? 'FAILED' : 'SUCCEEDED', { durationMs: Date.now() - started, ...summary });
+    this.audit(organizationId, user.userId, 'DEALS_SYNC_NOW', connection.id, summary);
+    return summary;
   }
 
   syncHistory(organizationId: string, id: string) {
@@ -114,7 +188,7 @@ export class PartnerDealsService {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
-  async handleHubSpotDealStage(organizationId: string, externalDealId: string, stageId: string, amount?: number) {
+  async handleHubSpotDealStage(organizationId: string, externalDealId: string, stageId: string, amount?: number, source: DealRealtimeSource = 'HUBSPOT_WEBHOOK') {
     const deal = dbStore.partnerDeals.find((item) => item.organizationId === organizationId && item.crmDealId === externalDealId);
     if (!deal) return { ignored: true, reason: 'No PartnerIQ deal mapping found' };
     const connection = this.hubSpot.requireConnection(organizationId);
@@ -123,15 +197,51 @@ export class PartnerDealsService {
     deal.crmStageId = stageId;
     deal.status = mappedStatus || deal.status;
     if (mapping?.closedWonStageId === stageId || mappedStatus === PartnerDealStatus.CLOSED_WON) {
-      return this.closeWon(deal, amount);
+      const result = await this.closeWon(deal, amount);
+      this.dealsGateway.emitDealUpdated(organizationId, this.publicDeal(deal, true), source);
+      return result;
     }
     if (mapping?.closedLostStageId === stageId || mappedStatus === PartnerDealStatus.CLOSED_LOST) {
       deal.status = PartnerDealStatus.CLOSED_LOST;
       deal.closedAt = new Date();
       this.audit(organizationId, 'system', 'DEAL_CLOSED_LOST', deal.id, { externalDealId });
-      return { deal: this.publicDeal(deal, true), conversion: null };
+      const publicDeal = this.publicDeal(deal, true);
+      this.dealsGateway.emitDealUpdated(organizationId, publicDeal, source);
+      return { deal: publicDeal, conversion: null };
     }
-    return { deal: this.publicDeal(deal, true), conversion: null };
+    const publicDeal = this.publicDeal(deal, true);
+    this.dealsGateway.emitDealUpdated(organizationId, publicDeal, source);
+    return { deal: publicDeal, conversion: null };
+  }
+
+  private async pushStageToHubSpot(organizationId: string, deal: PartnerDealEntity, targetStatus: PartnerDealStatus) {
+    if (!deal.crmDealId) return;
+    const connection = this.hubSpot.requireConnection(organizationId);
+    const mapping = dbStore.crmPipelineMappings.find((item) => item.organizationIntegrationId === connection.id && item.isActive && (!deal.crmPipelineId || item.externalPipelineId === deal.crmPipelineId));
+    if (!mapping) return;
+    const externalStageId =
+      targetStatus === PartnerDealStatus.CLOSED_WON ? mapping.closedWonStageId :
+      targetStatus === PartnerDealStatus.CLOSED_LOST ? mapping.closedLostStageId :
+      Object.entries(mapping.stageMappings || {}).find(([, status]) => status === targetStatus)?.[0];
+    if (!externalStageId) return;
+
+    const started = Date.now();
+    try {
+      await this.hubSpotApi.patch(connection.id, `/crm/v3/objects/deals/${deal.crmDealId}`, {
+        properties: {
+          dealstage: externalStageId,
+          ...(deal.actualValue ? { amount: String(deal.actualValue) } : {}),
+        },
+      });
+      deal.crmStageId = externalStageId;
+      connection.lastSyncAt = new Date();
+      this.hubSpot.syncLog(connection, 'deal_stage_update', 'DEAL', 'OUTBOUND', 'SUCCEEDED', { durationMs: Date.now() - started }, deal.id, deal.crmDealId);
+    } catch {
+      deal.status = PartnerDealStatus.SYNC_ERROR;
+      connection.status = OrganizationIntegrationStatus.SYNC_ERROR;
+      connection.lastError = 'HubSpot deal stage sync failed';
+      this.hubSpot.syncLog(connection, 'deal_stage_update', 'DEAL', 'OUTBOUND', 'FAILED', { durationMs: Date.now() - started, errorCode: 'HUBSPOT_STAGE_SYNC_FAILED', errorMessage: 'HubSpot deal stage sync failed' }, deal.id, deal.crmDealId);
+    }
   }
 
   private async syncToHubSpot(organizationId: string, deal: PartnerDealEntity) {
@@ -374,26 +484,56 @@ export class PartnerDealsService {
   }
 
   private notifyOrganizationAdmins(organizationId: string, title: string, body: string) {
-    dbStore.organizationMemberships
-      .filter((item) => item.organizationId === organizationId && ['OWNER', 'ADMIN'].includes(item.role))
-      .forEach((membership) => dbStore.notifications.unshift({
-        id: uuidv4(),
-        userId: membership.userId,
-        organizationId,
-        type: 'program',
-        title,
-        body,
-        channel: 'in_app',
-        priority: 'normal',
-        isRead: false,
-        metadata: {},
-        createdAt: new Date().toISOString(),
-      }));
+    const admins = dbStore.organizationMemberships.filter(
+      (item) => item.organizationId === organizationId && ['OWNER', 'ADMIN'].includes(item.role),
+    );
+    for (const membership of admins) {
+      if (this.notificationsService) {
+        this.notificationsService.createNotification({
+          userId: membership.userId,
+          organizationId,
+          type: 'program',
+          title,
+          body,
+          channel: 'in_app',
+          priority: 'normal',
+        }).catch(() => undefined);
+      } else {
+        dbStore.notifications.unshift({
+          id: uuidv4(),
+          userId: membership.userId,
+          organizationId,
+          type: 'program',
+          title,
+          body,
+          channel: 'in_app',
+          priority: 'normal',
+          isRead: false,
+          metadata: {},
+          createdAt: new Date().toISOString(),
+        });
+      }
+    }
   }
 
   private notifyAffiliate(deal: PartnerDealEntity, title: string, body: string) {
     const affiliate = dbStore.affiliates.find((item) => item.id === deal.affiliateId);
     if (!affiliate?.userId) return;
+
+    if (this.notificationsService) {
+      this.notificationsService.createNotification({
+        userId: affiliate.userId,
+        organizationId: deal.organizationId,
+        type: 'commission',
+        title,
+        body,
+        channel: 'in_app',
+        priority: 'high',
+        metadata: { partnerDealId: deal.id },
+      }).catch(() => undefined);
+      return;
+    }
+
     dbStore.notifications.unshift({
       id: uuidv4(),
       userId: affiliate.userId,

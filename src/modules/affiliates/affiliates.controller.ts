@@ -10,6 +10,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { AffiliatesService } from './affiliates.service';
 import { AcceptAffiliateInvitationDto, BulkUploadAffiliateInvitationsDto, CreateAffiliateDto, CreateAffiliateInvitationDto, PublicApplyDto } from './dto/affiliate.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -150,22 +151,51 @@ export class AffiliatesController {
   }
 
   @Get('api/v1/public/affiliate-invitations/:token')
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @ApiOperation({ summary: 'Get public affiliate invitation details' })
   async getPublicInvitation(@Param('token') token: string) {
     return this.affiliatesService.getPublicInvitation(token);
   }
 
+  /**
+   * Records terms acceptance and returns where the partner must authenticate.
+   *
+   * Creates no affiliate and no membership: an invitation token proves an email
+   * was invited, not that the holder owns it. Membership is created only by
+   * `POST /affiliate/invitations/:token/complete`, which requires an
+   * authenticated Affiliate Portal session.
+   */
   @Post('api/v1/public/affiliate-invitations/:token/accept')
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Accept affiliate invitation' })
-  async acceptPublicInvitation(
+  @ApiOperation({ summary: 'Accept invitation terms and get the Affiliate Portal next step' })
+  async acceptPublicInvitationTerms(
     @Param('token') token: string,
     @Body() dto: AcceptAffiliateInvitationDto,
   ) {
-    return this.affiliatesService.acceptAffiliateInvitation(token, dto);
+    return this.affiliatesService.acceptAffiliateInvitationTerms(token, dto);
+  }
+
+  /**
+   * Completes the invitation for the signed-in affiliate, creating the
+   * organization/program membership. The authenticated email must match the
+   * invited address.
+   */
+  @Post('api/v1/affiliate/invitations/:token/complete')
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Join the invited program as the authenticated affiliate' })
+  async completeInvitation(
+    @Param('token') token: string,
+    @CurrentUser() user: AuthUserPayload,
+  ) {
+    return this.affiliatesService.completeAffiliateInvitation(token, user.userId);
   }
 
   @Post('api/v1/affiliate-applications/apply')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({ summary: 'Public endpoint for affiliates to apply to a program' })
   async publicApply(@Body() dto: PublicApplyDto) {
     return this.affiliatesService.submitApplication(dto);

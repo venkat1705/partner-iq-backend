@@ -1,11 +1,11 @@
 import { IntegrationAdapter } from './integration-adapter';
-import { HubSpotAdapter } from './provider-adapters';
+import { HubSpotAdapter, RazorpayAdapter, CashfreeAdapter } from './provider-adapters';
 
 export class IntegrationAdapterRegistry {
   private readonly adapters = new Map<string, IntegrationAdapter>();
 
   constructor() {
-    [new HubSpotAdapter()].forEach((adapter) => this.adapters.set(adapter.code, adapter));
+    [new HubSpotAdapter(), new RazorpayAdapter(), new CashfreeAdapter()].forEach((adapter) => this.adapters.set(adapter.code, adapter));
   }
 
   get(code: string) {

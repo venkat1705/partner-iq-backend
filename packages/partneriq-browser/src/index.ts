@@ -1,8 +1,9 @@
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 
 export interface PartnerIQBrowserOptions {
   publicKey: string;
   apiUrl?: string;
+  /** Query params on the merchant's own page that carry a PartnerIQ short code, e.g. https://merchant.com/?pi_ref=sarah */
   referralParams?: string[];
   cookieDays?: number;
 }
@@ -11,63 +12,75 @@ export interface IdentifyOptions {
   customerId: string;
 }
 
-export interface TrackOptions {
-  event: string;
-  customerId?: string;
-  metadata?: Record<string, unknown>;
-}
-
 type State = Required<Pick<PartnerIQBrowserOptions, 'publicKey' | 'apiUrl' | 'referralParams' | 'cookieDays'>>;
 
-const ANON_KEY = 'pi_anonymous_id';
-const ATTR_KEY = 'pi_attribution_id';
+// Same cookie name the backend sets on GET /r/:shortCode (tracking.controller.ts) - the browser
+// SDK reads/writes this same cookie so both entry points (a direct /r/:shortCode click and an
+// in-page click captured via captureReferral()) converge on one anonymous id.
+const ANON_KEY = 'pi_anon_id';
+const CLICK_KEY = 'pi_click_id';
 
 let state: State | null = null;
 
 export const PartnerIQ = {
   init(options: PartnerIQBrowserOptions) {
     if (!options.publicKey) throw new Error('PartnerIQ publicKey is required');
-    if (/^pi_(test|live)_sk_/.test(options.publicKey)) {
-      throw new Error('Secret API keys cannot be used with @partneriq-io/browser');
-    }
-    if (!/^pi_(test|live)_pk_/.test(options.publicKey)) {
-      throw new Error('Use a public browser key with pi_test_pk_ or pi_live_pk_ prefix');
+    if (/^(pi_|sk_)(test|live)_/.test(options.publicKey) && !/pk_/.test(options.publicKey)) {
+      throw new Error('Secret API keys cannot be used with @partneriq-io/browser - use a public tracking key');
     }
     state = {
       publicKey: options.publicKey,
       apiUrl: (options.apiUrl || 'http://localhost:3000').replace(/\/$/, ''),
-      referralParams: options.referralParams || ['ref', 'via', 'partner', 'affiliate'],
+      referralParams: options.referralParams || ['pi_ref', 'ref', 'via'],
       cookieDays: options.cookieDays || 30,
     };
     return PartnerIQ;
   },
 
-  async trackReferral() {
+  /**
+   * Call once per page load. If the current page URL carries one of `referralParams`
+   * (e.g. a merchant embeds the short code directly rather than routing through /r/:shortCode),
+   * this records the click against the real backend and persists the resulting Click ID -
+   * the durable, server-side attribution identifier - alongside the anonymous id.
+   * If no referral param is present, it just returns whatever attribution state already exists
+   * (e.g. set previously by a /r/:shortCode redirect).
+   */
+  async captureReferral() {
     const cfg = requireState();
-    if (!isBrowser()) return null;
+    if (!isBrowser()) return PartnerIQ.getAttribution();
     const url = new URL(window.location.href);
-    const ref = cfg.referralParams.map((param) => url.searchParams.get(param)).find(Boolean);
-    if (!ref) return PartnerIQ.getAttribution();
+    const shortCode = cfg.referralParams.map((param) => url.searchParams.get(param)).find(Boolean);
+    if (!shortCode) return PartnerIQ.getAttribution();
 
-    const anonymousId = getOrCreateAnonymousId(cfg.cookieDays);
-    const response = await request('/api/v1/browser/referrals', {
+    const response = await request('/api/v1/tracking/click', {
       publicKey: cfg.publicKey,
-      ref,
-      anonymousId,
-      landingPageUrl: window.location.href,
-    });
-    if (response?.attributionId) {
-      writeValue(ATTR_KEY, response.attributionId, cfg.cookieDays);
-    }
-    if (response?.anonymousId) {
-      writeValue(ANON_KEY, response.anonymousId, cfg.cookieDays);
+      shortCode,
+      landingUrl: window.location.href,
+      utmSource: url.searchParams.get('utm_source') || undefined,
+      utmMedium: url.searchParams.get('utm_medium') || undefined,
+      utmCampaign: url.searchParams.get('utm_campaign') || undefined,
+      utmTerm: url.searchParams.get('utm_term') || undefined,
+      utmContent: url.searchParams.get('utm_content') || undefined,
+    }) as { anonymousId?: string; clickId?: string; cookieMaxAgeMs?: number; tracked?: boolean } | null;
+
+    if (response?.tracked && response.anonymousId) {
+      const days = response.cookieMaxAgeMs ? response.cookieMaxAgeMs / 86400000 : cfg.cookieDays;
+      writeValue(ANON_KEY, response.anonymousId, days);
+      if (response.clickId) writeValue(CLICK_KEY, response.clickId, days);
     }
     return PartnerIQ.getAttribution();
   },
 
+  /**
+   * Links the current anonymous click to a real customer id (call at signup/login/checkout).
+   * This is what makes attribution survive a later cookie deletion, or a purchase completed on a
+   * different device - the backend durably associates customerExternalId with the click's
+   * attribution record server-side.
+   */
   async identify(options: IdentifyOptions) {
     const cfg = requireState();
     const attribution = PartnerIQ.getAttribution();
+    if (!attribution.anonymousId) return null;
     return request('/api/v1/tracking/identify', {
       publicKey: cfg.publicKey,
       anonymousId: attribution.anonymousId,
@@ -77,40 +90,29 @@ export const PartnerIQ = {
 
   getAttribution() {
     return {
-      anonymousId: readValue(ANON_KEY) || getOrCreateAnonymousId(requireState().cookieDays),
-      attributionId: readValue(ATTR_KEY),
+      anonymousId: readValue(ANON_KEY),
+      clickId: readValue(CLICK_KEY),
     };
+  },
+
+  /** The Click ID is the primary attribution identifier - pass it to your server (e.g. as a hidden
+   * checkout field or a Cashfree/Razorpay order tag) so a server-to-server conversion call or
+   * payment webhook can resolve attribution deterministically instead of by customer/anon matching. */
+  getClickId() {
+    return readValue(CLICK_KEY);
   },
 
   clearAttribution() {
     clearValue(ANON_KEY);
-    clearValue(ATTR_KEY);
-  },
-
-  async track(options: TrackOptions) {
-    const cfg = requireState();
-    const attribution = PartnerIQ.getAttribution();
-    return request('/api/v1/browser/events', {
-      publicKey: cfg.publicKey,
-      anonymousId: attribution.anonymousId,
-      attributionId: attribution.attributionId,
-      event: options.event,
-      customerId: options.customerId,
-      metadata: options.metadata,
-    });
+    clearValue(CLICK_KEY);
   },
 };
 
 type PartnerIQApiPayload = {
   success?: boolean;
-  data?: {
-    anonymousId?: string;
-    attributionId?: string;
-    [key: string]: unknown;
-  };
-  anonymousId?: string;
-  attributionId?: string;
+  data?: Record<string, unknown>;
   error?: { message?: string };
+  [key: string]: unknown;
 };
 
 async function request(path: string, body: unknown) {
@@ -141,34 +143,16 @@ function isBrowser() {
   return typeof window !== 'undefined' && typeof document !== 'undefined';
 }
 
-function getOrCreateAnonymousId(days: number) {
-  const existing = readValue(ANON_KEY);
-  if (existing) return existing;
-  const anon = `anon_${randomId()}`;
-  writeValue(ANON_KEY, anon, days);
-  return anon;
-}
-
-function randomId() {
-  const cryptoApi = isBrowser() ? window.crypto : undefined;
-  if (cryptoApi?.getRandomValues) {
-    const bytes = new Uint8Array(16);
-    cryptoApi.getRandomValues(bytes);
-    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
-  }
-  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
-}
-
 function readValue(key: string) {
   if (!isBrowser()) return null;
-  return localStorage.getItem(key) || readCookie(key);
+  return readCookie(key) || localStorage.getItem(key);
 }
 
 function writeValue(key: string, value: string, days: number) {
   if (!isBrowser()) return;
   localStorage.setItem(key, value);
   const secure = window.location.protocol === 'https:' ? '; Secure' : '';
-  document.cookie = `${key}=${encodeURIComponent(value)}; Max-Age=${days * 86400}; Path=/; SameSite=Lax${secure}`;
+  document.cookie = `${key}=${encodeURIComponent(value)}; Max-Age=${Math.round(days * 86400)}; Path=/; SameSite=Lax${secure}`;
 }
 
 function clearValue(key: string) {

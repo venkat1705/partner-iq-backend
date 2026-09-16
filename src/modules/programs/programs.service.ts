@@ -6,16 +6,111 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import { dbStore, ProgramEntity } from '../../database/store';
 import { ProgramStatus, AuditAction, EnvironmentType, AffiliateStatus } from '../../common/enums';
+import { PLATFORM_CURRENCY } from '../../common/constants/currency';
 import { CreateProgramDto, UpdateProgramDto } from './dto/program.dto';
 import { EnvironmentUtils } from '../../common/utils/environment.utils';
+import { getAppConfig } from '../../config/app.config';
+import { User } from '../../database/schema';
+import { initializeDataSource } from '../../database/data-source';
+import { SystemEmailDispatchService } from '../email-design/services/system-email-dispatch.service';
+import { SystemTemplateKey } from '../email-design/constants/email-template-keys';
+import { NotificationsService } from '../notifications/notifications.service';
+import { SubscriptionLimitService } from '../billing/services/subscription-limit.service';
+import { BillingResourceType } from '../billing/enums/billing.enums';
 
 @Injectable()
 export class ProgramsService {
+  constructor(
+    private readonly emailDispatch?: SystemEmailDispatchService,
+    private readonly notificationsService?: NotificationsService,
+    private readonly subscriptionLimits?: SubscriptionLimitService,
+  ) { }
+
+  private formatCommissionStructure(program: Pick<ProgramEntity, 'commissionType' | 'defaultCommissionValue'>): string {
+    const value = program.defaultCommissionValue ?? 0;
+    if (program.commissionType === 'FIXED_AMOUNT') {
+      return `${(value / 100).toFixed(2)} Fixed per Conversion`;
+    }
+    const isRecurring = String(program.commissionType || '').toUpperCase().includes('RECURRING');
+    return `${(value / 100).toFixed(1)}%${isRecurring ? ' Recurring' : ''}`;
+  }
+
+  private async notifyProgramCreated(organizationId: string, createdByUserId: string, program: ProgramEntity) {
+    let creator = dbStore.users.find((u) => u.id === createdByUserId) as User | undefined;
+    if (!creator) {
+      try {
+        const dataSource = await initializeDataSource();
+        creator = (await dataSource.getRepository(User).findOne({ where: { id: createdByUserId } })) ?? undefined;
+      } catch { }
+    }
+    if (!creator?.email) return;
+
+    const organization = dbStore.organizations.find((o) => o.id === organizationId);
+    const dashboardUrl = `${getAppConfig().frontendUrl.replace(/\/$/, '')}/organizations/${organizationId}/programs`;
+    const landingPageUrl = program.landingUrl || program.websiteUrl || dashboardUrl;
+
+    await this.emailDispatch?.send(
+      SystemTemplateKey.ORGANIZATION_PROGRAM_CREATED,
+      creator.email,
+      {
+        user: { firstName: creator.firstName },
+        organization: { name: organization?.name || 'Your organization' },
+        program: { name: program.name },
+        // Flat fields — these match the email-design "program-created" template's own
+        // variables (programName/commissionStructure/cookieDuration/landingPageUrl/
+        // manageProgramUrl), since the resolver renders the actual seeded email-design
+        // template, not a generic dot-path fallback body.
+        programName: program.name,
+        commissionStructure: this.formatCommissionStructure(program),
+        cookieDuration: `${program.cookieDurationDays ?? program.attributionWindowDays ?? 30} Days`,
+        landingPageUrl,
+        manageProgramUrl: dashboardUrl,
+        links: { dashboardUrl },
+      },
+      { organizationId, userId: creator.id },
+    );
+
+    this.notificationsService?.createNotification({
+      userId: creator.id,
+      organizationId,
+      type: 'program',
+      title: 'Program created',
+      body: `"${program.name}" is live and ready to accept affiliates.`,
+      channel: 'in_app',
+      priority: 'normal',
+      actionUrl: `/organizations/${organizationId}/programs`,
+    }).catch(() => undefined);
+  }
+
+  /**
+   * Creates a program.
+   *
+   * The program allowance is counted across the whole customer account, so four
+   * programs spread over three organizations still count as four. Only LIVE
+   * programs consume capacity — TEST-environment programs are sandbox
+   * scaffolding and are not billed, so they skip the check entirely.
+   */
   async create(
     organizationId: string,
     createdByUserId: string,
     dto: CreateProgramDto,
     environment: EnvironmentType = EnvironmentType.LIVE,
+  ) {
+    if (this.subscriptionLimits && environment === EnvironmentType.LIVE) {
+      return this.subscriptionLimits.reserveForOrganization(
+        organizationId,
+        BillingResourceType.PROGRAM,
+        () => this.createProgramRecord(organizationId, createdByUserId, dto, environment),
+      );
+    }
+    return this.createProgramRecord(organizationId, createdByUserId, dto, environment);
+  }
+
+  private async createProgramRecord(
+    organizationId: string,
+    createdByUserId: string,
+    dto: CreateProgramDto,
+    environment: EnvironmentType,
   ) {
     const slug = dto.slug.toLowerCase().trim();
     const payoutPolicy = (dto.policy?.payout || {}) as {
@@ -45,7 +140,7 @@ export class ProgramsService {
       slug,
       type: dto.type,
       status: dto.status || ProgramStatus.ACTIVE,
-      currency: dto.currency || 'INR',
+      currency: dto.currency || PLATFORM_CURRENCY,
       commissionType: dto.commissionType,
       defaultCommissionValue: dto.defaultCommissionValue ?? (dto.defaultCommissionRate || 10) * 100,
       attributionModel: dto.attributionModel,
@@ -73,6 +168,8 @@ export class ProgramsService {
     };
 
     dbStore.programs.push(program);
+
+    this.notifyProgramCreated(organizationId, createdByUserId, program).catch(() => undefined);
 
     dbStore.auditLogs.push({
       id: uuidv4(),
@@ -173,10 +270,25 @@ export class ProgramsService {
     }
     const previous = { ...rawProgram };
 
-    // Prevent edits if any affiliates have already joined this program
+    // Once affiliates have joined, the economic terms of the program (commission
+    // structure, attribution model/window) can no longer be changed retroactively —
+    // that would silently alter what already-enrolled affiliates agreed to. Cosmetic
+    // and operational fields (name, description, branding, payout logistics, etc.)
+    // remain freely editable at any time.
     const hasAffiliates = dbStore.programAffiliates.some((pa) => pa.programId === programId && pa.status !== AffiliateStatus.REJECTED);
-    if (hasAffiliates) {
-      throw new BadRequestException('Cannot edit program after affiliates have joined');
+    const ECONOMIC_TERM_FIELDS: (keyof UpdateProgramDto)[] = [
+      'commissionType',
+      'defaultCommissionValue',
+      'attributionModel',
+      'attributionWindowDays',
+      'cookieDurationDays',
+      'couponAttributionPriority',
+      'attributionConfig',
+    ];
+    if (hasAffiliates && ECONOMIC_TERM_FIELDS.some((field) => dto[field] !== undefined)) {
+      throw new BadRequestException(
+        'Commission structure and attribution settings cannot be changed after affiliates have joined this program. Create a new commission rule instead to adjust rates going forward.',
+      );
     }
 
     if (dto.name) rawProgram.name = dto.name;

@@ -12,7 +12,7 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { PayoutsService } from './payouts.service';
-import { CreatePayoutBatchDto } from './dto/payout.dto';
+import { CreatePayoutBatchDto, ProcessPayoutBatchDto } from './dto/payout.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { OrganizationGuard } from '../../common/guards/organization.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
@@ -70,8 +70,9 @@ export class PayoutsController {
     @Param('batchId') batchId: string,
     @CurrentUser() user: AuthUserPayload,
     @CurrentEnvironment() environment: EnvironmentType,
+    @Body() dto?: ProcessPayoutBatchDto,
   ) {
-    return this.payoutsService.processBatch(organizationId, batchId, user.userId, environment);
+    return this.payoutsService.processBatch(organizationId, batchId, user.userId, environment, dto);
   }
 
   @Get('batches/:batchId/csv')

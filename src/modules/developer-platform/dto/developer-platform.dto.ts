@@ -1,5 +1,6 @@
 import { IsArray, IsIn, IsNumber, IsOptional, IsString, IsUrl, Min } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { PLATFORM_CURRENCY } from '../../../common/constants/currency';
 
 export class PublicIdentifyCustomerDto {
   @ApiProperty({ example: 'CUS-102' })
@@ -35,8 +36,9 @@ export class AttachOrderDto {
   @Min(1)
   amount!: number;
 
-  @ApiProperty({ example: 'INR' })
+  @ApiProperty({ example: PLATFORM_CURRENCY })
   @IsString()
+  @IsIn([PLATFORM_CURRENCY], { message: `Only ${PLATFORM_CURRENCY} is supported.` })
   currency!: string;
 }
 

@@ -14,10 +14,19 @@ export class NotificationGateway {
       return;
     }
 
-    this.server = new WebSocketServer({
-      server: httpServer,
-      path: '/notifications',
-      clientTracking: true,
+    // noServer + a manually-gated 'upgrade' listener lets this gateway coexist with other
+    // WebSocketServer instances on the same http.Server: a `{server, path}`-mode instance
+    // aborts (HTTP 400) any upgrade whose path doesn't match *before* other listeners run,
+    // which breaks multiplexing. Checking the pathname ourselves and returning early instead
+    // of aborting leaves the socket alone for the next listener to claim.
+    this.server = new WebSocketServer({ noServer: true, clientTracking: true });
+
+    httpServer.on('upgrade', (request, socket, head) => {
+      const { pathname } = new URL(request.url || '', 'http://localhost');
+      if (pathname !== '/notifications') return;
+      this.server!.handleUpgrade(request, socket as any, head, (client) => {
+        this.server!.emit('connection', client, request);
+      });
     });
 
     this.server.on('connection', (socket: WebSocket, request) => {

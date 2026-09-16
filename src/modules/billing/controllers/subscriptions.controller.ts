@@ -8,13 +8,19 @@ import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import type { AuthUserPayload } from '../../../common/interfaces/request-with-user.interface';
 import { CancelSubscriptionDto, ChangeSubscriptionDto } from '../dto/billing.dto';
 import { SubscriptionService } from '../services/subscription.service';
+import { SubscriptionLimitService } from '../services/subscription-limit.service';
+import { BillingAccountService } from '../services/billing-account.service';
 
 @ApiTags('Billing Subscriptions')
 @Controller('api/v1/organizations/:organizationId/billing/subscription')
 @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
 @ApiBearerAuth()
 export class SubscriptionsController {
-  constructor(private readonly subscriptions: SubscriptionService) {}
+  constructor(
+    private readonly subscriptions: SubscriptionService,
+    private readonly limits: SubscriptionLimitService,
+    private readonly accounts: BillingAccountService,
+  ) {}
 
   @Post('upgrade')
   @RequirePermissions('billing.manage')
@@ -53,5 +59,20 @@ export class SubscriptionsController {
   @RequirePermissions('billing.manage')
   resume() {
     return { resumed: true };
+  }
+
+  /**
+   * Dry run of a plan change. Returns which resources current usage would put
+   * over the target plan, so the customer sees it before anything changes.
+   */
+  @Post('preview')
+  @RequirePermissions('billing.view')
+  @ApiOperation({ summary: 'Check current usage against a target plan' })
+  async preview(
+    @Param('organizationId') organizationId: string,
+    @Body() dto: ChangeSubscriptionDto,
+  ) {
+    const account = await this.accounts.resolveForOrganization(organizationId);
+    return this.limits.previewPlanChange(account.id, dto.planId);
   }
 }

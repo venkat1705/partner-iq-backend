@@ -8,7 +8,13 @@ import { FraudScoreService } from './fraud-score.service';
 import { FraudService } from './fraud.service';
 import { FraudSignalRegistry } from './fraud-signal-registry';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { WebhooksModule } from '../webhooks/webhooks.module';
+import { CommissionsModule } from '../commissions/commissions.module';
+import { LedgerModule } from '../ledger/ledger.module';
+import { IP_REPUTATION_PROVIDER, NoOpIpReputationProvider } from './reputation/ip-reputation.service';
+import { FRAUD_MODEL_PROVIDER, NoOpFraudModelProvider } from './model/fraud-model.provider';
 import {
+  AffiliateHighChargebackRateSignal,
   AffiliateHighRefundRateSignal,
   AffiliateTrustSignal,
   AffiliateVelocitySignal,
@@ -21,6 +27,7 @@ import {
   IpReputationSignal,
   IpVelocitySignal,
   PayoutAmountAnomalySignal,
+  PayoutTrustDropSignal,
   SelfReferralSignal,
   UserAgentRiskSignal,
 } from './signals/phase-one-signals';
@@ -40,11 +47,13 @@ const signalProviders = [
   AmountAnomalySignal,
   AffiliateTrustSignal,
   AffiliateHighRefundRateSignal,
+  AffiliateHighChargebackRateSignal,
   PayoutAmountAnomalySignal,
+  PayoutTrustDropSignal,
 ];
 
 @Module({
-  imports: [NotificationsModule],
+  imports: [NotificationsModule, WebhooksModule, CommissionsModule, LedgerModule],
   controllers: [FraudController],
   providers: [
     FraudService,
@@ -55,6 +64,11 @@ const signalProviders = [
     FraudContextFactory,
     FraudSignalRegistry,
     FraudVelocityService,
+    // Pluggable, swappable integrations. Both default to a no-op implementation so behavior
+    // is unchanged until a real provider (external IP reputation API, ML fraud model) is
+    // configured — swap the `useClass` below to point at a real implementation.
+    { provide: IP_REPUTATION_PROVIDER, useClass: NoOpIpReputationProvider },
+    { provide: FRAUD_MODEL_PROVIDER, useClass: NoOpFraudModelProvider },
     ...signalProviders,
   ],
   exports: [FraudService, FraudEngineService, FraudVelocityService],
@@ -75,7 +89,9 @@ export class FraudModule implements OnModuleInit {
     private readonly amountAnomaly: AmountAnomalySignal,
     private readonly affiliateTrust: AffiliateTrustSignal,
     private readonly refundRate: AffiliateHighRefundRateSignal,
+    private readonly chargebackRate: AffiliateHighChargebackRateSignal,
     private readonly payoutAmount: PayoutAmountAnomalySignal,
+    private readonly payoutTrustDrop: PayoutTrustDropSignal,
   ) {}
 
   onModuleInit() {
@@ -93,7 +109,9 @@ export class FraudModule implements OnModuleInit {
       this.amountAnomaly,
       this.affiliateTrust,
       this.refundRate,
+      this.chargebackRate,
       this.payoutAmount,
+      this.payoutTrustDrop,
     ].forEach((signal) => this.registry.register(signal));
   }
 }

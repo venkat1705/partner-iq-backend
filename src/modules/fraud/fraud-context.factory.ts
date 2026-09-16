@@ -35,6 +35,13 @@ export class FraudContextFactory {
     );
     const click = attribution ? dbStore.clicks.find((item) => item.id === attribution.clickId) : undefined;
 
+    // Integrators may pass a billing/payment country on the conversion payload's free-form
+    // `metadata` field (e.g. from a Stripe/Shopify webhook's billing address) — surface it
+    // here so GeoMismatchSignal has real data to compare against the click's country instead
+    // of always short-circuiting to "insufficient data".
+    const conversionMetadata = (conversion.metadata && typeof conversion.metadata === 'object' ? conversion.metadata : {}) as Record<string, unknown>;
+    const paymentCountry = conversionMetadata.billingCountry || conversionMetadata.paymentCountry || conversionMetadata.country;
+
     return {
       organizationId: conversion.organizationId,
       programId: conversion.programId,
@@ -55,7 +62,11 @@ export class FraudContextFactory {
       clickedAt: click?.createdAt,
       convertedAt: conversion.occurredAt,
       occurredAt: conversion.occurredAt || conversion.createdAt,
-      metadata: { externalId: conversion.externalId, productId: conversion.productId },
+      metadata: {
+        externalId: conversion.externalId,
+        productId: conversion.productId,
+        ...(paymentCountry ? { paymentCountry } : {}),
+      },
     };
   }
 

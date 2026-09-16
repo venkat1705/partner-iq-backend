@@ -1,10 +1,15 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import Redis from 'ioredis';
 
 @Injectable()
 export class FraudVelocityService {
+  private readonly logger = new Logger(FraudVelocityService.name);
   private redis?: Redis;
   private readonly fallbackCounters = new Map<string, { count: number; expiresAt: number }>();
+  // Logged once, not per-request — Redis being unreachable degrades velocity signals for the
+  // life of the process (each instance only sees its own slice of traffic in multi-instance
+  // deployments), which would otherwise fail completely silently.
+  private hasWarnedFallback = false;
 
   private getClient() {
     if (!this.redis) {
@@ -24,13 +29,24 @@ export class FraudVelocityService {
     return this.redis;
   }
 
+  private warnFallback(error: unknown) {
+    if (this.hasWarnedFallback) return;
+    this.hasWarnedFallback = true;
+    const message = error instanceof Error ? error.message : String(error);
+    this.logger.warn(
+      `Redis is unreachable for fraud velocity tracking; falling back to in-process counters. ` +
+      `In a multi-instance deployment this undercounts velocity (each instance only sees its own traffic), weakening IP/affiliate/device velocity signals. (${message})`,
+    );
+  }
+
   async increment(key: string, ttlSeconds: number) {
     try {
       const client = this.getClient();
       if (client.status === 'wait') await client.connect();
       const results = await client.multi().incr(key).expire(key, ttlSeconds, 'NX').exec();
       return Number(results?.[0]?.[1] || 0);
-    } catch {
+    } catch (error) {
+      this.warnFallback(error);
       const now = Date.now();
       const current = this.fallbackCounters.get(key);
       if (!current || current.expiresAt < now) {
@@ -47,7 +63,8 @@ export class FraudVelocityService {
       const client = this.getClient();
       if (client.status === 'wait') await client.connect();
       return Number(await client.get(key) || 0);
-    } catch {
+    } catch (error) {
+      this.warnFallback(error);
       const current = this.fallbackCounters.get(key);
       return current && current.expiresAt > Date.now() ? current.count : 0;
     }

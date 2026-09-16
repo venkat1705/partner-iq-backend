@@ -11,6 +11,8 @@ export interface OAuthStateRecord {
   frontendOrigin?: string;
   invitationToken?: string;
   currentUserId?: string;
+  /** Consent ticked on the signup form before redirecting to the provider. */
+  acceptedTerms?: boolean;
   codeVerifier: string;
   codeChallenge: string;
   nonce: string;
@@ -24,6 +26,7 @@ export interface CreateStateOptions {
   frontendOrigin?: string;
   invitationToken?: string;
   currentUserId?: string;
+  acceptedTerms?: boolean;
 }
 
 @Injectable()
@@ -58,6 +61,7 @@ export class OAuthStateService {
       frontendOrigin,
       invitationToken: options.invitationToken,
       currentUserId: options.currentUserId,
+      acceptedTerms: options.acceptedTerms,
       codeVerifier,
       codeChallenge,
       nonce,

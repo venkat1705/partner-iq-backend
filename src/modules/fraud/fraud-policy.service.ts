@@ -20,6 +20,36 @@ export const DEFAULT_ENABLED_SIGNALS = [
   FraudSignalCode.PAYOUT_AMOUNT_ANOMALY,
 ];
 
+export const DEFAULT_SIGNAL_WEIGHTS: Record<string, number> = {
+  NETWORK: 20,
+  DEVICE: 20,
+  TRAFFIC: 20,
+  CONVERSION: 20,
+  AFFILIATE: 20,
+  IDENTITY: 15,
+  BEHAVIOR: 15,
+  PAYMENT: 15,
+  PAYOUT: 30,
+};
+
+export interface FraudScoreThresholds {
+  allowMaxScore: number;
+  reviewMaxScore: number;
+  blockMinScore: number;
+  payoutHoldScore: number;
+}
+
+// Sensitivity presets applied when an org selects a sensitivity level without overriding
+// individual thresholds — this is what makes the `sensitivity` setting (LOW/BALANCED/STRICT)
+// actually change scoring behavior instead of being stored but never read. CUSTOM implies the
+// admin supplies explicit thresholds; the BALANCED numbers are only a fallback for any they omit.
+export const SENSITIVITY_THRESHOLD_PRESETS: Record<FraudSensitivity, FraudScoreThresholds> = {
+  [FraudSensitivity.STRICT]: { allowMaxScore: 15, reviewMaxScore: 40, blockMinScore: 41, payoutHoldScore: 41 },
+  [FraudSensitivity.BALANCED]: { allowMaxScore: 30, reviewMaxScore: 70, blockMinScore: 71, payoutHoldScore: 71 },
+  [FraudSensitivity.LOW]: { allowMaxScore: 50, reviewMaxScore: 85, blockMinScore: 86, payoutHoldScore: 86 },
+  [FraudSensitivity.CUSTOM]: { allowMaxScore: 30, reviewMaxScore: 70, blockMinScore: 71, payoutHoldScore: 71 },
+};
+
 @Injectable()
 export class FraudPolicyService {
   resolvePolicy(organizationId: string, programId?: string): FraudPolicy {
@@ -55,16 +85,6 @@ export class FraudPolicyService {
   }
 
   defaultWeights() {
-    return {
-      NETWORK: 20,
-      DEVICE: 20,
-      TRAFFIC: 20,
-      CONVERSION: 20,
-      AFFILIATE: 20,
-      IDENTITY: 15,
-      BEHAVIOR: 15,
-      PAYMENT: 15,
-      PAYOUT: 30,
-    };
+    return { ...DEFAULT_SIGNAL_WEIGHTS };
   }
 }

@@ -29,6 +29,7 @@ import {
 import { FraudVelocityService } from '../modules/fraud/velocity/fraud-velocity.service';
 import { CommissionsService } from '../modules/commissions/commissions.service';
 import { LedgerService } from '../modules/ledger/ledger.service';
+import { WebhooksService } from '../modules/webhooks/webhooks.service';
 import { runSeed } from '../database/seeds/run-seed';
 import { SecurityUtils } from '../common/utils/security.utils';
 import { AssetManagementService } from '../modules/asset-management/asset-management.service';
@@ -51,7 +52,7 @@ async function runTestSuite() {
     }
   }
 
-  function createFraudService() {
+  function createFraudService(commissionsService: CommissionsService) {
     const velocity = new FraudVelocityService();
     const registry = new FraudSignalRegistry();
     [
@@ -78,8 +79,15 @@ async function runTestSuite() {
         new FraudDecisionService(),
         { createNotification: async () => ({}) } as any,
       ),
+      commissionsService,
+      new LedgerService(),
     );
   }
+
+  // Shared ledger/commissions instances used by both the fraud/tracking smoke test
+  // below and the full conversions test further down.
+  const sharedLedgerService = new LedgerService();
+  const sharedCommissionsService = new CommissionsService(sharedLedgerService);
 
   // 1. Database Seed Verification
   const { admin, org, seedPrograms, affiliate } = await runSeed();
@@ -212,28 +220,35 @@ async function runTestSuite() {
   }
 
   // 5. Tracking Redirect & Click Capture Test
-  const trackingService = new TrackingService(createFraudService());
-  const redirectRes = await trackingService.handleRedirect('sarah', 'TestBrowser/1.0', '192.168.1.10');
+  const trackingService = new TrackingService(createFraudService(sharedCommissionsService));
+  const redirectRes = await trackingService.handleRedirect('k8s-deepdive', 'TestBrowser/1.0', '192.168.1.10');
   assert(!!redirectRes.destinationUrl && !!redirectRes.anonymousId, 'High performance 302 redirect & click logged');
 
+  // Backdate the click so the conversion below simulates a customer who browsed for a while before
+  // buying, rather than an instant click-to-purchase (which the fraud engine correctly flags as
+  // suspiciously fast - that signal is working as intended, so the fix belongs in the test data).
+  const backdatedClick = dbStore.clicks.find((c) => c.id === redirectRes.clickId);
+  if (backdatedClick) backdatedClick.createdAt = new Date(Date.now() - 15 * 60 * 1000);
+
   // 6. Conversions, Idempotency & Financial Ledger Test
-  const ledgerService = new LedgerService();
-  const fraudService = createFraudService();
-  const commissionsService = new CommissionsService(ledgerService);
-  const conversionsService = new ConversionsService(fraudService, commissionsService, ledgerService);
+  const ledgerService = sharedLedgerService;
+  const commissionsService = sharedCommissionsService;
+  const fraudService = createFraudService(commissionsService);
+  const webhooksService = new WebhooksService();
+  const conversionsService = new ConversionsService(fraudService, commissionsService, ledgerService, webhooksService);
 
   const convRes = await conversionsService.createConversion(
     org.id,
     {
       externalId: 'ORD-99001',
       customerExternalId: redirectRes.anonymousId,
-      amount: 20000, // $200.00 in cents
+      amount: 2500, // $25.00 in cents
       currency: 'USD',
     },
     'idempotency_key_test_123',
   );
 
-  assert(!!convRes.conversion && convRes.conversion.amount === 20000, 'Conversion Created with Cents Precision');
+  assert(!!convRes.conversion && convRes.conversion.amount === 2500, 'Conversion Created with Cents Precision');
 
   // Repeat same conversion with same idempotency key
   const repeatedConv = await conversionsService.createConversion(
@@ -241,7 +256,7 @@ async function runTestSuite() {
     {
       externalId: 'ORD-99001',
       customerExternalId: redirectRes.anonymousId,
-      amount: 20000,
+      amount: 2500,
       currency: 'USD',
     },
     'idempotency_key_test_123',
@@ -308,9 +323,7 @@ async function runTestSuite() {
   if (failed > 0) process.exit(1);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
-  runTestSuite().catch((err) => {
-    console.error('Test suite failed:', err);
-    process.exit(1);
-  });
-}
+runTestSuite().catch((err) => {
+  console.error('Test suite failed:', err);
+  process.exit(1);
+});

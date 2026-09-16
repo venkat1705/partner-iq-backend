@@ -13,6 +13,10 @@ export interface ConversionCreateRequest {
   currency: string;
   type?: 'PURCHASE' | 'SUBSCRIPTION_RENEWAL' | string;
   occurredAt?: string;
+  /** Preferred: the Click ID returned by /r/:shortCode or /api/v1/tracking/click - the primary,
+   * durable attribution identifier. Resolves deterministically without customer-matching. */
+  clickId?: string;
+  /** Legacy: an explicit attribution record id. Prefer clickId. */
   attributionId?: string;
   metadata?: Record<string, unknown>;
 }
@@ -26,19 +30,15 @@ export interface RefundCreateRequest {
 
 export interface IdentifyCustomerRequest {
   customerId: string;
-  attributionId?: string;
-  anonymousId?: string;
-}
-
-export interface AttachOrderRequest {
-  attributionId: string;
-  provider: 'RAZORPAY' | 'CASHFREE' | 'JUSPAY' | 'CUSTOM';
-  externalOrderId: string;
-  amount: number;
-  currency: string;
+  anonymousId: string;
+  /** The org's public tracking key (pi_pub_...), not the secret API key used to authenticate this
+   * SDK - /api/v1/tracking/identify is intentionally gated by the public key so it can also be
+   * called directly from client-side JS. */
+  publicKey: string;
 }
 
 export interface TrackingLinkCreateRequest {
+  organizationId: string;
   programId: string;
   affiliateId: string;
   destinationUrl: string;
@@ -103,22 +103,24 @@ export class PartnerIQ {
   };
 
   readonly customers = {
+    /** Durably links a customer to their anonymous click's attribution - call this at
+     * signup/login/checkout so attribution survives cookie deletion or a purchase from
+     * another device. Maps to the real POST /api/v1/tracking/identify endpoint. */
     identify: (body: IdentifyCustomerRequest) =>
-      this.request('/api/v1/customers/identify', { method: 'POST', body: JSON.stringify(body) }),
-  };
-
-  readonly attributions = {
-    attachOrder: (body: AttachOrderRequest, options?: PartnerIQRequestOptions) =>
-      this.request('/api/v1/attributions/attach-order', {
+      this.request('/api/v1/tracking/identify', {
         method: 'POST',
-        body: JSON.stringify(body),
-        idempotencyKey: options?.idempotencyKey || `order:${body.provider}:${body.externalOrderId}`,
+        body: JSON.stringify({ publicKey: body.publicKey, anonymousId: body.anonymousId, customerExternalId: body.customerId }),
       }),
   };
 
   readonly trackingLinks = {
     create: (body: TrackingLinkCreateRequest) =>
-      this.request('/api/v1/tracking-links', { method: 'POST', body: JSON.stringify(body) }),
+      this.request(`/api/v1/organizations/${encodeURIComponent(body.organizationId)}/tracking-links`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    list: (organizationId: string, params?: { programId?: string }) =>
+      this.request(`/api/v1/organizations/${encodeURIComponent(organizationId)}/tracking-links${this.query(params)}`),
   };
 
   readonly programs = {

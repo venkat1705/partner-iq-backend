@@ -1,5 +1,19 @@
 import * as crypto from 'crypto';
 
+/**
+ * @deprecated This package (backend/sdk, "@partneriq-io/sdk") is a superseded, unmaintained SDK.
+ * It targets several backend routes that do not exist (e.g. /api/v1/customers/identify,
+ * /api/v1/attributions/attach-order) and paths that are missing required segments
+ * (/api/v1/tracking-links instead of /api/v1/organizations/:organizationId/tracking-links).
+ * It is not part of the build (no `build:sdk` script) and nothing outside its own self-test
+ * imports it.
+ *
+ * Use instead:
+ *  - Server-to-server: `@partneriq-io/node` (backend/packages/partneriq-node)
+ *  - Browser/client-side: `@partneriq-io/browser` (backend/packages/partneriq-browser)
+ *
+ * This package is kept only for reference and will be removed in a future cleanup.
+ */
 export interface PartnerIQOptions {
   apiKey: string;
   baseUrl?: string;
@@ -281,6 +295,14 @@ export class PartnerIQ {
   constructor(options: PartnerIQOptions) {
     if (!options || !options.apiKey) {
       throw new PartnerIQError('PartnerIQ SDK requires an "apiKey" option');
+    }
+
+    if (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production') {
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[DEPRECATED] @partneriq-io/sdk is superseded and targets several routes that no longer ' +
+        'exist. Use @partneriq-io/node (server) or @partneriq-io/browser (client) instead.',
+      );
     }
 
     this.apiKey = options.apiKey;

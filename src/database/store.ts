@@ -68,15 +68,23 @@ import {
   IntegrationSyncLog,
   PartnerDeal,
   OrganizationTrial,
+  BillingAccount,
+  UserLegalAcceptance,
   BillingPlan,
   BillingPlanProviderMapping,
   BillingPlanFeature,
+  BillingPlanLimit,
+  BillingAddon,
+  BillingAddonPurchase,
   BillingPromotion,
   BillingCoupon,
   BillingCouponPlan,
   BillingCouponOrganization,
   BillingCouponRedemption,
   BillingSubscriptionDiscount,
+  OrganizationCoupon,
+  OrganizationCouponAssignment,
+  OrganizationCouponSettings,
   BillingSubscription,
   BillingPayment,
   BillingPaymentEvent,
@@ -169,7 +177,12 @@ export type CrmEntityMappingEntity = CrmEntityMapping;
 export type IntegrationSyncLogEntity = IntegrationSyncLog;
 export type PartnerDealEntity = PartnerDeal;
 export type OrganizationTrialEntity = OrganizationTrial;
+export type UserLegalAcceptanceEntity = UserLegalAcceptance;
+export type BillingAccountEntity = BillingAccount;
 export type BillingPlanEntity = BillingPlan;
+export type BillingPlanLimitEntity = BillingPlanLimit;
+export type BillingAddonEntity = BillingAddon;
+export type BillingAddonPurchaseEntity = BillingAddonPurchase;
 export type BillingPlanProviderMappingEntity = BillingPlanProviderMapping;
 export type BillingPlanFeatureEntity = BillingPlanFeature;
 export type BillingPromotionEntity = BillingPromotion;
@@ -178,6 +191,9 @@ export type BillingCouponPlanEntity = BillingCouponPlan;
 export type BillingCouponOrganizationEntity = BillingCouponOrganization;
 export type BillingCouponRedemptionEntity = BillingCouponRedemption;
 export type BillingSubscriptionDiscountEntity = BillingSubscriptionDiscount;
+export type OrganizationCouponEntity = OrganizationCoupon;
+export type OrganizationCouponAssignmentEntity = OrganizationCouponAssignment;
+export type OrganizationCouponSettingsEntity = OrganizationCouponSettings;
 export type BillingSubscriptionEntity = BillingSubscription;
 export type BillingPaymentEntity = BillingPayment;
 export type BillingPaymentEventEntity = BillingPaymentEvent;
@@ -475,7 +491,12 @@ export class InMemoryDataStore {
   integrationSyncLogs: IntegrationSyncLogEntity[] = [];
   partnerDeals: PartnerDealEntity[] = [];
   organizationTrials: OrganizationTrialEntity[] = [];
+  userLegalAcceptances: UserLegalAcceptanceEntity[] = [];
+  billingAccounts: BillingAccountEntity[] = [];
   billingPlans: BillingPlanEntity[] = [];
+  billingPlanLimits: BillingPlanLimitEntity[] = [];
+  billingAddons: BillingAddonEntity[] = [];
+  billingAddonPurchases: BillingAddonPurchaseEntity[] = [];
   billingPlanProviderMappings: BillingPlanProviderMappingEntity[] = [];
   billingPlanFeatures: BillingPlanFeatureEntity[] = [];
   billingPromotions: BillingPromotionEntity[] = [];
@@ -484,6 +505,9 @@ export class InMemoryDataStore {
   billingCouponOrganizations: BillingCouponOrganizationEntity[] = [];
   billingCouponRedemptions: BillingCouponRedemptionEntity[] = [];
   billingSubscriptionDiscounts: BillingSubscriptionDiscountEntity[] = [];
+  organizationCoupons: OrganizationCouponEntity[] = [];
+  organizationCouponAssignments: OrganizationCouponAssignmentEntity[] = [];
+  organizationCouponSettings: OrganizationCouponSettingsEntity[] = [];
   billingSubscriptions: BillingSubscriptionEntity[] = [];
   billingPayments: BillingPaymentEntity[] = [];
   billingPaymentEvents: BillingPaymentEventEntity[] = [];
@@ -674,7 +698,27 @@ export class InMemoryDataStore {
       AppDataSource.getRepository(OrganizationTrial),
       await AppDataSource.getRepository(OrganizationTrial).find(),
     );
+    this.userLegalAcceptances = new DBBackedArray(
+      AppDataSource.getRepository(UserLegalAcceptance),
+      await AppDataSource.getRepository(UserLegalAcceptance).find(),
+    );
+    this.billingAccounts = new DBBackedArray(
+      AppDataSource.getRepository(BillingAccount),
+      await AppDataSource.getRepository(BillingAccount).find(),
+    );
     this.billingPlans = new DBBackedArray(AppDataSource.getRepository(BillingPlan), await AppDataSource.getRepository(BillingPlan).find());
+    this.billingPlanLimits = new DBBackedArray(
+      AppDataSource.getRepository(BillingPlanLimit),
+      await AppDataSource.getRepository(BillingPlanLimit).find(),
+    );
+    this.billingAddons = new DBBackedArray(
+      AppDataSource.getRepository(BillingAddon),
+      await AppDataSource.getRepository(BillingAddon).find(),
+    );
+    this.billingAddonPurchases = new DBBackedArray(
+      AppDataSource.getRepository(BillingAddonPurchase),
+      await AppDataSource.getRepository(BillingAddonPurchase).find(),
+    );
     this.billingPlanProviderMappings = new DBBackedArray(
       AppDataSource.getRepository(BillingPlanProviderMapping),
       await AppDataSource.getRepository(BillingPlanProviderMapping).find(),
@@ -706,6 +750,18 @@ export class InMemoryDataStore {
     this.billingSubscriptionDiscounts = new DBBackedArray(
       AppDataSource.getRepository(BillingSubscriptionDiscount),
       await AppDataSource.getRepository(BillingSubscriptionDiscount).find(),
+    );
+    this.organizationCoupons = new DBBackedArray(
+      AppDataSource.getRepository(OrganizationCoupon),
+      await AppDataSource.getRepository(OrganizationCoupon).find(),
+    );
+    this.organizationCouponAssignments = new DBBackedArray(
+      AppDataSource.getRepository(OrganizationCouponAssignment),
+      await AppDataSource.getRepository(OrganizationCouponAssignment).find(),
+    );
+    this.organizationCouponSettings = new DBBackedArray(
+      AppDataSource.getRepository(OrganizationCouponSettings),
+      await AppDataSource.getRepository(OrganizationCouponSettings).find(),
     );
     this.billingSubscriptions = new DBBackedArray(
       AppDataSource.getRepository(BillingSubscription),

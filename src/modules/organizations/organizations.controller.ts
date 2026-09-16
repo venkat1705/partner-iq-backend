@@ -79,7 +79,8 @@ export class OrganizationsController {
   }
 
   @Post('api/v1/onboarding/program')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+  @RequirePermissions('manage.organization')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Onboarding Step: Create Initial Partner Program' })
   async onboardingProgram(
@@ -90,7 +91,8 @@ export class OrganizationsController {
   }
 
   @Post('api/v1/onboarding/complete')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+  @RequirePermissions('manage.organization')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Onboarding Step: Complete Onboarding' })
   async completeOnboarding(@Body('organizationId') organizationId: string) {

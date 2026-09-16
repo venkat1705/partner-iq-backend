@@ -114,20 +114,34 @@ export class TrialSchedulerService implements OnModuleInit, OnModuleDestroy {
     );
 
     for (const member of orgMembers) {
-      dbStore.notifications.push({
-        id: uuidv4(),
-        userId: member.userId,
-        organizationId,
-        type: 'system',
-        title,
-        body,
-        channel: 'in_app',
-        priority: 'high',
-        isRead: false,
-        actionUrl: '/app/settings?tab=billing',
-        metadata: { idempotencyKey },
-        createdAt: new Date().toISOString(),
-      });
+      if (this.notificationsService) {
+        await this.notificationsService.createNotification({
+          userId: member.userId,
+          organizationId,
+          type: 'system',
+          title,
+          body,
+          channel: 'in_app',
+          priority: 'high',
+          actionUrl: '/app/settings?tab=billing',
+          metadata: { idempotencyKey },
+        });
+      } else {
+        dbStore.notifications.push({
+          id: uuidv4(),
+          userId: member.userId,
+          organizationId,
+          type: 'system',
+          title,
+          body,
+          channel: 'in_app',
+          priority: 'high',
+          isRead: false,
+          actionUrl: '/app/settings?tab=billing',
+          metadata: { idempotencyKey },
+          createdAt: new Date().toISOString(),
+        });
+      }
     }
   }
 }

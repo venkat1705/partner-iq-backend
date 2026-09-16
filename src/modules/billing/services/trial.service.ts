@@ -35,7 +35,7 @@ export class TrialService {
   async startTrial(
     organizationId: string,
     userId: string,
-    planCode = 'PRO',
+    planCode = 'GROWTH',
   ): Promise<TrialStatusResult> {
     await this.planService.ensureDefaultPlans();
 
@@ -78,7 +78,7 @@ export class TrialService {
     // 3. Resolve target plan (e.g. STARTER / PRO / ENTERPRISE)
     const plan =
       dbStore.billingPlans.find((p) => p.code === planCode && p.billingInterval === 'MONTHLY') ||
-      dbStore.billingPlans.find((p) => p.code === 'PRO' && p.billingInterval === 'MONTHLY') ||
+      dbStore.billingPlans.find((p) => p.code === 'GROWTH' && p.billingInterval === 'MONTHLY') ||
       dbStore.billingPlans[0];
 
     if (!plan) {
@@ -131,6 +131,9 @@ export class TrialService {
       subscription = {
         id: uuidv4(),
         organizationId,
+        // Bind the trial to the customer account so its allowances apply across
+        // every organization the customer owns, not only this one.
+        accountId: org.accountId,
         planId: plan.id,
         provider: 'INTERNAL',
         status: SubscriptionStatus.TRIALING,
@@ -219,7 +222,7 @@ export class TrialService {
         }
 
         const proPlan =
-          dbStore.billingPlans.find((p) => p.code === 'PRO' && p.billingInterval === 'MONTHLY') ||
+          dbStore.billingPlans.find((p) => p.code === 'GROWTH' && p.billingInterval === 'MONTHLY') ||
           dbStore.billingPlans[0];
 
         const now = new Date();

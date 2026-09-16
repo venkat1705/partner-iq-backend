@@ -8,11 +8,32 @@ export interface NormalizedIntegrationEvent {
   data: Record<string, any>;
 }
 
+/**
+ * What a payment-provider webhook needs to hand PartnerIQ in order to create/refund a
+ * Conversion. clickId/attributionId are the trusted attribution identifiers a merchant's
+ * checkout can stash on the order (e.g. Cashfree order_tags) at the moment the customer pays -
+ * this is what lets a webhook-driven conversion resolve attribution the same way a
+ * server-to-server /api/v1/conversions call would.
+ */
+export interface ConversionWebhookInput {
+  kind: 'PAYMENT_SUCCESS' | 'REFUND';
+  externalId: string;
+  customerExternalId?: string;
+  amount: number;
+  currency: string;
+  clickId?: string;
+  attributionId?: string;
+  refundExternalId?: string;
+  refundAmount?: number;
+  occurredAt?: Date;
+}
+
 export interface IntegrationAdapter {
   code: string;
   implementationStatus: 'ACTIVE' | 'BETA' | 'COMING_SOON';
   verifyWebhookSignature(rawBody: Buffer, headers: Record<string, any>, secret?: string): boolean;
   normalizeWebhookEvent(payload: any): NormalizedIntegrationEvent;
+  extractConversionInput?(payload: any): ConversionWebhookInput | null;
 }
 
 export abstract class BaseIntegrationAdapter implements IntegrationAdapter {

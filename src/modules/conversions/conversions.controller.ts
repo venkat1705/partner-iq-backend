@@ -72,12 +72,17 @@ export class ConversionsController {
   @UseGuards(ApiKeyGuard)
   @RequireApiScopes('refunds:write')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Process a conversion refund and clawback commission' })
+  @ApiHeader({ name: 'Idempotency-Key', required: false, description: 'Unique key to guarantee a retried refund is applied only once' })
+  @ApiOperation({ summary: 'Process a full or partial conversion refund and proportionally clawback commission' })
   async refundConversion(
     @Param('id') conversionId: string,
     @CurrentUser() user: AuthUserPayload,
     @Body() dto: RefundConversionDto,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ) {
-    return this.conversionsService.refundConversion(user.organizationId!, conversionId, dto, user.apiKeyEnvironment as EnvironmentType);
+    return this.conversionsService.refundConversion(user.organizationId!, conversionId, dto, user.apiKeyEnvironment as EnvironmentType, {
+      apiKeyId: user.apiKeyId,
+      idempotencyKey,
+    });
   }
 }

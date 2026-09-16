@@ -6,6 +6,7 @@ import { PaymentEventStatus, PaymentProviderType, PaymentStatus, SubscriptionSta
 import { PaymentProviderFactory } from '../providers/payment-provider.factory';
 import { SubscriptionService } from './subscription.service';
 import { BillingCouponService } from './billing-coupon.service';
+import { AddonService } from './addon.service';
 
 @Injectable()
 export class BillingWebhookService {
@@ -13,6 +14,7 @@ export class BillingWebhookService {
     private readonly providerFactory: PaymentProviderFactory,
     private readonly subscriptions: SubscriptionService,
     private readonly coupons: BillingCouponService,
+    private readonly addons: AddonService,
   ) {}
 
   async handleRazorpay(payload: Buffer, signature: string) {
@@ -77,7 +79,16 @@ export class BillingWebhookService {
 
   private async handlePaymentCaptured(payload: any) {
     const entity = payload?.payload?.payment?.entity;
-    if (!entity?.id || dbStore.billingPayments.some((item) => item.providerPaymentId === entity.id)) return;
+    if (!entity?.id) return;
+
+    // An add-on order attaches capacity to an existing subscription instead of
+    // activating one. `activatePurchases` is idempotent, so this is safe even
+    // when the customer's own verify call already ran.
+    if (entity.notes?.kind === 'ADDON') {
+      return this.handleAddonPaymentCaptured(entity);
+    }
+
+    if (dbStore.billingPayments.some((item) => item.providerPaymentId === entity.id)) return;
     const subscriptionId = entity.subscription_id;
     const subscription = subscriptionId
       ? dbStore.billingSubscriptions.find((item) => item.providerSubscriptionId === subscriptionId)
@@ -111,9 +122,44 @@ export class BillingWebhookService {
     }
   }
 
+  /** Records the payment and switches the order's add-on purchases to ACTIVE. */
+  private handleAddonPaymentCaptured(entity: any) {
+    if (!dbStore.billingPayments.some((item) => item.providerPaymentId === entity.id)) {
+      dbStore.billingPayments.push({
+        id: uuidv4(),
+        organizationId: entity.notes?.organizationId,
+        provider: PaymentProviderType.RAZORPAY,
+        providerPaymentId: entity.id,
+        providerOrderId: entity.order_id,
+        amount: entity.amount,
+        currency: entity.currency,
+        status: PaymentStatus.CAPTURED,
+        paymentMethod: entity.method,
+        paidAt: new Date((entity.created_at || Math.floor(Date.now() / 1000)) * 1000),
+        createdDate: new Date(),
+        modifiedDate: new Date(),
+      } as any);
+    }
+
+    this.addons.activatePurchases({
+      providerOrderId: entity.order_id,
+      providerPaymentId: entity.id,
+      purchaseIds: entity.notes?.purchaseIds
+        ? String(entity.notes.purchaseIds).split(',').filter(Boolean)
+        : undefined,
+    });
+  }
+
   private async handlePaymentFailed(payload: any) {
     const entity = payload?.payload?.payment?.entity;
-    if (!entity?.id || dbStore.billingPayments.some((item) => item.providerPaymentId === entity.id)) return;
+    if (!entity?.id) return;
+
+    if (entity.notes?.kind === 'ADDON') {
+      // Never grants capacity; simply closes out the pending purchases.
+      this.addons.failPurchases(entity.order_id);
+    }
+
+    if (dbStore.billingPayments.some((item) => item.providerPaymentId === entity.id)) return;
     const subscription = entity.subscription_id
       ? dbStore.billingSubscriptions.find((item) => item.providerSubscriptionId === entity.subscription_id)
       : undefined;

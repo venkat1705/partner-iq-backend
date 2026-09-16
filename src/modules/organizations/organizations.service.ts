@@ -11,6 +11,7 @@ import { AppDataSource } from '../../database/data-source';
 import { Organization, OrganizationMembership, Program } from '../../database/schema';
 import { OrganizationStatus, Role, ProgramType, ProgramStatus, CommissionType, AttributionModel, AuditAction, EnvironmentType } from '../../common/enums';
 import { MembershipStatus, ProgramAccessType } from '../../common/enums/rbac';
+import { PLATFORM_CURRENCY } from '../../common/constants/currency';
 import {
   CreateOrganizationDto,
   UpdateOrganizationDto,
@@ -18,14 +19,59 @@ import {
   OnboardingProgramDto,
 } from './dto/organization.dto';
 import { TrialService } from '../billing/services/trial.service';
+import { BillingAccountService } from '../billing/services/billing-account.service';
+import { SubscriptionLimitService } from '../billing/services/subscription-limit.service';
+import { BillingResourceType } from '../billing/enums/billing.enums';
 import { assertUserEligibleForOrganization } from '../affiliates/affiliate-eligibility.policy';
+import { User } from '../../database/schema';
+import { getAppConfig } from '../../config/app.config';
+import { SystemEmailDispatchService } from '../email-design/services/system-email-dispatch.service';
+import { SystemTemplateKey } from '../email-design/constants/email-template-keys';
+import { NotificationsService } from '../notifications/notifications.service';
+import { PlatformRole } from '../../common/enums';
+import { CommissionsService } from '../commissions/commissions.service';
+import { TierService } from '../gamification/tiers/tier.service';
 
 @Injectable()
 export class OrganizationsService {
-  constructor(private readonly trialService?: TrialService) { }
+  constructor(
+    private readonly trialService?: TrialService,
+    private readonly emailDispatch?: SystemEmailDispatchService,
+    private readonly notificationsService?: NotificationsService,
+    private readonly commissionsService?: CommissionsService,
+    private readonly tierService?: TierService,
+    private readonly billingAccounts?: BillingAccountService,
+    private readonly subscriptionLimits?: SubscriptionLimitService,
+  ) { }
 
+  /**
+   * Creates an organization under the acting user's customer account.
+   *
+   * The organization allowance is account-wide, so the check runs against every
+   * organization the user already owns — not against this one. The check and
+   * the insert share a lock, so two tabs racing for the last slot cannot both
+   * succeed.
+   */
   async create(userId: string, dto: CreateOrganizationDto) {
     assertUserEligibleForOrganization(userId);
+
+    if (this.billingAccounts && this.subscriptionLimits) {
+      const account = await this.billingAccounts.resolveForUser(userId);
+      return this.subscriptionLimits.reserve(
+        account.id,
+        BillingResourceType.ORGANIZATION,
+        () => this.createOrganizationRecord(userId, dto, account.id),
+      );
+    }
+
+    return this.createOrganizationRecord(userId, dto);
+  }
+
+  private async createOrganizationRecord(
+    userId: string,
+    dto: CreateOrganizationDto,
+    accountId?: string,
+  ) {
     let slug = this.slugify(dto.slug || dto.name);
 
     if (AppDataSource.isInitialized) {
@@ -45,13 +91,14 @@ export class OrganizationsService {
 
     const org: OrganizationEntity = {
       id: uuidv4(),
+      accountId,
       name: dto.name,
       slug,
       website: dto.website,
       industry: dto.industry,
       companySize: dto.companySize,
       country: dto.country || 'US',
-      defaultCurrency: dto.defaultCurrency || 'USD',
+      defaultCurrency: dto.defaultCurrency || PLATFORM_CURRENCY,
       status: OrganizationStatus.ACTIVE,
       onboardingCompleted: false,
       createdBy: userId,
@@ -85,11 +132,38 @@ export class OrganizationsService {
       dbStore.organizationMemberships.push(membership);
     }
 
-    // Start 14-day free trial for new organization
+    // Start the 14-day free trial on GROWTH rather than PRO: PRO is unlimited,
+    // so trialling on it would leave every allowance unenforced for 14 days and
+    // then collapse hard at conversion. GROWTH gives a realistic, enforced set
+    // of limits during the trial.
     try {
-      await this.trialService?.startTrial(org.id, userId, 'PRO');
+      await this.trialService?.startTrial(org.id, userId, 'GROWTH');
     } catch (err) {
       // Non-blocking if trial already exists or fails
+    }
+
+    // Seed a default organization-wide commission rule so the org isn't left with
+    // an empty commission structure before any program-specific rules are configured.
+    try {
+      await this.commissionsService?.createRule(org.id, {
+        name: 'Default Commission Rate',
+        priority: 0,
+        commissionType: CommissionType.PERCENTAGE,
+        commissionValue: 1500, // 15.00% — value is in basis points (100 = 1%)
+        holdPeriodDays: 30,
+        status: 'ACTIVE',
+      });
+    } catch (err) {
+      // Non-blocking — an organization can still function without a default rule.
+    }
+
+    // Seed the Bronze/Silver/Gold/Platinum tier ladder so every affiliate this org
+    // invites is assigned Bronze automatically — without this, an org that never
+    // visits the Gamification page has no default tier for the system to assign at all.
+    try {
+      await this.tierService?.seedDefaultTiers(org.id, userId);
+    } catch (err) {
+      // Non-blocking — tiers can still be configured manually later.
     }
 
     // Audit log
@@ -104,7 +178,65 @@ export class OrganizationsService {
       createdAt: new Date(),
     });
 
+    this.notifyOrganizationCreated(org, userId).catch(() => undefined);
+
     return org;
+  }
+
+  private async notifyOrganizationCreated(org: OrganizationEntity, userId: string) {
+    let creator = dbStore.users.find((u) => u.id === userId) as User | undefined;
+    if (!creator && AppDataSource.isInitialized) {
+      creator = (await AppDataSource.getRepository(User).findOne({ where: { id: userId } })) ?? undefined;
+    }
+    if (!creator?.email) return;
+
+    const dashboardUrl = `${getAppConfig().frontendUrl.replace(/\/$/, '')}/organizations/${org.id}/dashboard`;
+    const statusLabel = org.status
+      ? org.status.charAt(0) + org.status.slice(1).toLowerCase()
+      : 'Active';
+
+    await this.emailDispatch?.send(
+      SystemTemplateKey.ORGANIZATION_WELCOME,
+      creator.email,
+      {
+        user: { firstName: creator.firstName },
+        organization: { name: org.name },
+        // Flat fields — these match the email-design "welcome" template's own variables
+        // (workspaceSlug/workspaceStatus/planName), since the resolver renders the
+        // actual seeded email-design template, not a generic dot-path fallback body.
+        organizationName: org.name,
+        workspaceSlug: org.slug,
+        workspaceStatus: statusLabel,
+        planName: 'PRO Trial (14 Days)',
+        links: { dashboardUrl, setupUrl: dashboardUrl },
+      },
+      { organizationId: org.id, userId: creator.id },
+    );
+
+    this.notificationsService?.createNotification({
+      userId: creator.id,
+      organizationId: org.id,
+      type: 'system',
+      title: 'Your workspace is ready',
+      body: `${org.name} has been created and is ready to configure.`,
+      channel: 'in_app',
+      priority: 'normal',
+      actionUrl: `/organizations/${org.id}/dashboard`,
+    }).catch(() => undefined);
+
+    // Platform visibility: let super admins know a new org just signed up.
+    const superAdmins = dbStore.users.filter((u) => u.platformRole === PlatformRole.SUPER_ADMIN);
+    for (const admin of superAdmins) {
+      this.notificationsService?.createNotification({
+        userId: admin.id,
+        type: 'system',
+        title: 'New organization created',
+        body: `${org.name} (created by ${creator.email}) just joined PartnerIQ.`,
+        channel: 'in_app',
+        priority: 'normal',
+        actionUrl: `/admin/organizations`,
+      }).catch(() => undefined);
+    }
   }
 
   async findAllForUser(userId: string, isSuperAdmin = false) {
@@ -303,7 +435,40 @@ export class OrganizationsService {
     };
 
     dbStore.programs.push(program);
+    this.notifyProgramCreated(org, program, userId).catch(() => undefined);
     return program;
+  }
+
+  private async notifyProgramCreated(org: { id: string; name: string }, program: { name: string }, userId: string) {
+    let creator = dbStore.users.find((u) => u.id === userId) as User | undefined;
+    if (!creator && AppDataSource.isInitialized) {
+      creator = (await AppDataSource.getRepository(User).findOne({ where: { id: userId } })) ?? undefined;
+    }
+    if (!creator?.email) return;
+
+    const dashboardUrl = `${getAppConfig().frontendUrl.replace(/\/$/, '')}/organizations/${org.id}/programs`;
+    await this.emailDispatch?.send(
+      SystemTemplateKey.ORGANIZATION_PROGRAM_CREATED,
+      creator.email,
+      {
+        user: { firstName: creator.firstName },
+        organization: { name: org.name },
+        program: { name: program.name },
+        links: { dashboardUrl },
+      },
+      { organizationId: org.id, userId: creator.id },
+    );
+
+    this.notificationsService?.createNotification({
+      userId: creator.id,
+      organizationId: org.id,
+      type: 'program',
+      title: 'Program created',
+      body: `"${program.name}" is live and ready to accept affiliates.`,
+      channel: 'in_app',
+      priority: 'normal',
+      actionUrl: `/organizations/${org.id}/programs`,
+    }).catch(() => undefined);
   }
 
   // Onboarding Step Complete

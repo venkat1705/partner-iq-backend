@@ -32,7 +32,6 @@ const DEFAULT_CORS_ORIGINS = [
   'http://*.localhost:3005',
   'http://*.localhost:3006',
   'https://*.partneriq.in',
-  'http://*.partneriq.in',
 ];
 
 export const isAllowedCorsOrigin = (origin: string | undefined, allowedOrigins: string[] = DEFAULT_CORS_ORIGINS): boolean => {
@@ -52,8 +51,9 @@ export const isAllowedCorsOrigin = (origin: string | undefined, allowedOrigins: 
       return true;
     }
 
-    // Allow any partneriq domain/subdomain
-    if (hostname === 'partneriq.in' || hostname.endsWith('.partneriq.in')) {
+    // Allow any partneriq domain/subdomain, but only over HTTPS — plaintext HTTP allows a
+    // network-level man-in-the-middle attacker to intercept or forge cross-origin requests.
+    if ((hostname === 'partneriq.in' || hostname.endsWith('.partneriq.in')) && parsed.protocol === 'https:') {
       return true;
     }
 
@@ -66,7 +66,10 @@ export const isAllowedCorsOrigin = (origin: string | undefined, allowedOrigins: 
       return new RegExp(`^${pattern}$`, 'i').test(normalizedOrigin);
     });
 
-    return matchesWildcard;
+    const isLocalSubdomain = hostname.endsWith('.localhost') && ['3000', '3001', '3002', '3004', '3005', '3006'].includes(port);
+    const isPartnerSubdomain = hostname.endsWith('.partneriq.in') && parsed.protocol === 'https:' && ['443', '3000', '3001', '3002', '3004', '3005', '3006'].includes(port);
+
+    return matchesWildcard || isLocalSubdomain || isPartnerSubdomain;
   } catch {
     return false;
   }

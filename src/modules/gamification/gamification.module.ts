@@ -8,6 +8,7 @@ import { MilestoneController } from './milestones/milestone.controller';
 import { PerformanceService } from './performance/performance.service';
 import { PerformanceAggregationService } from './performance/performance-aggregation.service';
 import { PerformanceReconciliationService } from './performance/performance-reconciliation.service';
+import { GamificationSchedulerService } from './performance/gamification-scheduler.service';
 import { PerformanceController } from './performance/performance.controller';
 import { RewardService } from './rewards/reward.service';
 import { RewardExecutorService } from './rewards/reward-executor.service';
@@ -16,9 +17,10 @@ import { LedgerModule } from '../ledger/ledger.module';
 import { CommissionsModule } from '../commissions/commissions.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { MembershipsModule } from '../memberships/memberships.module';
+import { EmailDesignModule } from '../email-design/email-design.module';
 
 @Module({
-  imports: [LedgerModule, NotificationsModule, MembershipsModule, CommissionsModule],
+  imports: [LedgerModule, NotificationsModule, MembershipsModule, CommissionsModule, EmailDesignModule],
   controllers: [
     TierController,
     MilestoneController,
@@ -33,6 +35,7 @@ import { MembershipsModule } from '../memberships/memberships.module';
     PerformanceService,
     PerformanceAggregationService,
     PerformanceReconciliationService,
+    GamificationSchedulerService,
     RewardService,
     RewardExecutorService,
   ],

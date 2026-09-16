@@ -7,12 +7,14 @@ import { PartnerDealsService } from '../../partner-deals/partner-deals.service';
 import { IntegrationCredentialService } from '../integration-credential.service';
 import { HUBSPOT_PROVIDER } from './hubspot.constants';
 import { HubSpotService } from './hubspot.service';
+import { HubSpotTokenService } from './hubspot-token.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 
 @Injectable()
 export class HubSpotWebhookService {
   constructor(
     private readonly hubSpot: HubSpotService,
+    private readonly tokenService: HubSpotTokenService,
     private readonly credentials: IntegrationCredentialService,
     @Inject(forwardRef(() => PartnerDealsService))
     private readonly partnerDeals: PartnerDealsService,
@@ -34,7 +36,12 @@ export class HubSpotWebhookService {
       const platformConfig = dbStore.integrationPlatformConfigs.find((item) => item.provider === HUBSPOT_PROVIDER);
       const webhookSecret = platformConfig ? this.safeCredential(platformConfig.id, 'webhook_secret') : undefined;
       const signature = headers['x-hubspot-signature'] || headers['x-hubspot-signature-v3'];
-      const signatureValid = webhookSecret ? this.hubSpot.verifyWebhookSignature(rawBody, String(signature || ''), webhookSecret) : true;
+      // Fail closed: without a configured webhook secret there is no way to verify the
+      // request came from HubSpot, so it must be rejected rather than trusted by default —
+      // otherwise anyone could forge deauthorization/deal events for this connection.
+      const signatureValid = webhookSecret
+        ? this.hubSpot.verifyWebhookSignature(rawBody, String(signature || ''), webhookSecret)
+        : false;
       const externalEventId = String(eventPayload.eventId || eventPayload.subscriptionId || `${portalId}_${eventPayload.objectId}_${eventPayload.occurredAt || Date.now()}`);
       const duplicate = dbStore.integrationEvents.find((item) => item.organizationIntegrationId === connection.id && item.externalEventId === externalEventId);
       if (duplicate) {
@@ -73,24 +80,8 @@ export class HubSpotWebhookService {
             this.hubSpot.disconnect(connection.organizationId, systemUser);
             // Add a sync log entry to surface in integration logs
             this.hubSpot.syncLog(connection, 'app_uninstalled', 'INTEGRATION', 'INBOUND', 'SUCCEEDED', { event: eventPayload });
-            // Notify active organization members about the disconnect
-            try {
-              const members = dbStore.organizationMemberships.filter((m) => m.organizationId === connection.organizationId && m.status === 'ACTIVE');
-              for (const member of members) {
-                // Fire in-app notification for each member
-                // eslint-disable-next-line @typescript-eslint/no-floating-promises
-                this.notificationsService.createNotification({
-                  userId: member.userId,
-                  organizationId: connection.organizationId,
-                  title: 'HubSpot integration disconnected',
-                  body: 'The HubSpot app was removed. The integration has been disconnected. Please reconnect in Integrations to resume sync.',
-                  actionUrl: '/app/integrations',
-                  metadata: { provider: 'hubspot', organizationIntegrationId: connection.id },
-                });
-              }
-            } catch (nErr) {
-              // Ignore notification errors
-            }
+            // Notify active organization members about the disconnect (in-app + email)
+            this.tokenService.notifyIntegrationDisconnected(connection, 'HubSpot app was uninstalled or access was revoked').catch(() => undefined);
             status = IntegrationEventStatus.PROCESSED;
             result = { uninstalled: true };
           } catch (e) {

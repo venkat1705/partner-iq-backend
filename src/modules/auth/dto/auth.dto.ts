@@ -22,6 +22,27 @@ export class RegisterDto {
   @ApiProperty({ example: 'Doe' })
   @IsString()
   lastName!: string;
+
+  /**
+   * The signup form's single consent checkbox, covering the Master Services
+   * Agreement, Privacy Policy and Anti-Fraud Guidelines.
+   *
+   * Deliberately carries no version: the server decides which document versions
+   * an acceptance is recorded against, since a client-supplied version could be
+   * forged to make stale consent look current.
+   *
+   * Optional on the wire so that existing API clients are not broken by this
+   * field appearing — `AuthService.register` rejects a registration where it is
+   * not explicitly `true`.
+   */
+  @ApiPropertyOptional({
+    example: true,
+    description:
+      'Must be true. Records acceptance of the Master Services Agreement, Privacy Policy, and Anti-Fraud Guidelines.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  acceptedTerms?: boolean;
 }
 
 export class LoginDto {
@@ -57,11 +78,6 @@ export class ForgotPasswordDto {
   @IsEmail()
   email!: string;
 
-  @ApiPropertyOptional({ example: 'http://localhost:3000' })
-  @IsOptional()
-  @IsString()
-  origin?: string;
-
   @ApiPropertyOptional({ example: 'frontend' })
   @IsOptional()
   @IsString()
@@ -79,10 +95,27 @@ export class ResetPasswordDto {
   newPassword!: string;
 }
 
-export class VerifyEmailDto {
-  @ApiProperty()
+export class VerifyEmailOtpDto {
+  @ApiProperty({ example: 'challenge-uuid-123' })
   @IsString()
-  token!: string;
+  challengeId!: string;
+
+  @ApiProperty({ example: '482913' })
+  @IsString()
+  @Matches(/^\d{6}$/, { message: 'Code must be a 6-digit number' })
+  code!: string;
+}
+
+export class ResendEmailOtpDto {
+  @ApiPropertyOptional({ example: 'challenge-uuid-123' })
+  @IsOptional()
+  @IsString()
+  challengeId?: string;
+
+  @ApiPropertyOptional({ example: 'user@example.com' })
+  @IsOptional()
+  @IsEmail()
+  email?: string;
 }
 
 export class MfaChallengeDto {

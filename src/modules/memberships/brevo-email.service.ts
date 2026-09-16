@@ -7,8 +7,10 @@ interface SendInvitationEmailInput {
   toEmail: string;
   organizationName: string;
   inviterEmail?: string;
+  invitedByName?: string;
   role: string;
   inviteUrl: string;
+  expiresIn?: string;
 }
 
 interface SendAffiliateInvitationEmailInput {
@@ -33,6 +35,14 @@ export class BrevoEmailService {
     @Optional() private readonly queueWorker?: EmailQueueWorker,
   ) {}
 
+  private formatRoleLabel(role: string) {
+    return (role || '')
+      .toLowerCase()
+      .split('_')
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ') || 'Team Member';
+  }
+
   async sendInvitationEmail(input: SendInvitationEmailInput) {
     this.logger.log(`Dispatching team invitation email to ${input.toEmail}`);
 
@@ -42,13 +52,20 @@ export class BrevoEmailService {
           templateKey: SystemTemplateKey.ORGANIZATION_MEMBER_INVITED,
           recipientEmail: input.toEmail,
           payload: {
+            // Flat fields — these match the "org-invitation" email-design template's
+            // own variable names, which is what this key now resolves to.
+            organizationName: input.organizationName,
+            invitedBy: input.invitedByName || input.inviterEmail || 'A team member',
+            role: this.formatRoleLabel(input.role),
+            invitationUrl: input.inviteUrl,
+            expiresIn: input.expiresIn || '7 days',
             invitation: {
               recipientEmail: input.toEmail,
               role: input.role,
               inviterEmail: input.inviterEmail,
             },
             organization: { name: input.organizationName },
-            links: { acceptUrl: input.inviteUrl },
+            links: { acceptUrl: input.inviteUrl, dashboardUrl: input.inviteUrl },
           },
         });
         const processed = await this.queueWorker.processJob(jobId);

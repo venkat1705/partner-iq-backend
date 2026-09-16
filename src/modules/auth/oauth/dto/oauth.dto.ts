@@ -1,5 +1,6 @@
-import { IsEnum, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsEnum, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 
 export class InitiateGoogleAuthDto {
   @ApiPropertyOptional({ enum: ['LOGIN', 'REGISTER', 'LINK_ACCOUNT', 'ACCEPT_INVITATION'] })
@@ -16,6 +17,22 @@ export class InitiateGoogleAuthDto {
   @IsOptional()
   @IsString()
   invitationToken?: string;
+
+  /**
+   * Consent captured on the signup form before the user was redirected to
+   * Google. Required when flowType is REGISTER — a Google signup creates an
+   * account just as the password form does, so it needs the same acceptance.
+   */
+  @ApiPropertyOptional({
+    description: 'Must be true for a REGISTER flow. Records acceptance of the PartnerIQ legal documents.',
+  })
+  @IsOptional()
+  // This DTO is bound from the query string, where everything arrives as text
+  // and the global ValidationPipe does not do implicit conversion — so coerce
+  // explicitly rather than letting @IsBoolean reject the string "true".
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  acceptedTerms?: boolean;
 }
 
 export class GoogleCallbackQueryDto {

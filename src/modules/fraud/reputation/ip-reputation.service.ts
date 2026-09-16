@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
+export const IP_REPUTATION_PROVIDER = Symbol('IP_REPUTATION_PROVIDER');
+
 export interface IpReputationResult {
   vpn?: boolean;
   proxy?: boolean;

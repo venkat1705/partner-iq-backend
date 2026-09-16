@@ -1,7 +1,9 @@
 {
   "name": "@partneriq-io/sdk",
   "version": "1.0.0",
-  "description": "Official Node.js & Browser SDK for PartnerIQ B2B SaaS Partner & Affiliate Engine",
+  "private": true,
+  "deprecated": "Superseded and unmaintained - several of its routes no longer exist on the backend. Use @partneriq-io/node (server-to-server) or @partneriq-io/browser (client-side) instead. Kept for reference only; do not publish.",
+  "description": "[DEPRECATED - see 'deprecated' field] Superseded Node.js & Browser SDK for PartnerIQ. Use @partneriq-io/node and @partneriq-io/browser instead.",
   "main": "dist/index.cjs",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",

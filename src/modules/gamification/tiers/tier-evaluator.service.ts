@@ -14,6 +14,7 @@ import {
   TierTransitionType,
   AuditAction,
   CommissionRateEffectiveStrategy,
+  MilestoneRewardType,
 } from '../../../common/enums';
 import { CommissionsService } from '../../commissions/commissions.service';
 import { RewardExecutorService } from '../rewards/reward-executor.service';
@@ -127,6 +128,9 @@ export class TierEvaluatorService {
       closedWonDeals: performanceSummary.closedWonDeals,
       clicks: performanceSummary.clicks,
       trackingLinksCreated: performanceSummary.trackingLinksCreated,
+      conversionRate: performanceSummary.clicks > 0
+        ? Number(((performanceSummary.approvedConversions / performanceSummary.clicks) * 100).toFixed(2))
+        : 0,
     };
 
     // 4. Evaluate highest qualifying tier (tiers sorted highest level to lowest)
@@ -401,6 +405,31 @@ export class TierEvaluatorService {
       createdAt: new Date(),
     });
 
+    // Unlike upgrades, downgrade notifications aren't gated behind a configured
+    // rewardsConfig — an affiliate should always be told when their tier drops.
+    try {
+      await this.rewardExecutor.executeReward({
+        organizationId,
+        programId,
+        affiliateId,
+        rewardType: MilestoneRewardType.NOTIFICATION,
+        rewardConfig: {
+          notificationTitle: `Your tier changed to ${eligibleTier.name}`,
+          notificationBody: `Your partner tier moved from ${currentTier.name} to ${eligibleTier.name} based on your recent performance.${eligibleTier.commissionRateOverride ? ` Your commission rate is now ${(eligibleTier.commissionRateOverride / 100).toFixed(1)}%.` : ''}`,
+          emailSubject: 'Your partner tier has changed',
+          emailBody: `Your partner tier moved from ${currentTier.name} to ${eligibleTier.name} based on your recent performance.`,
+          tierName: eligibleTier.name,
+          commissionRate: eligibleTier.commissionRateOverride ? `${(eligibleTier.commissionRateOverride / 100).toFixed(1)}%` : undefined,
+        },
+        idempotencyKey: `tier-downgrade-${affiliateId}-${eligibleTier.id}-${Date.now()}`,
+        tierId: eligibleTier.id,
+        source: 'TIER',
+        reason,
+      });
+    } catch (notifyErr: any) {
+      this.logger.warn(`Downgrade notification failed for affiliate ${affiliateId}: ${notifyErr?.message || notifyErr}`);
+    }
+
     return {
       affiliateId,
       previousTier: currentTier,
@@ -496,6 +525,8 @@ export class TierEvaluatorService {
         return 'clicks';
       case GamificationMetric.NEW_CUSTOMERS:
         return 'approvedConversions';
+      case GamificationMetric.CONVERSION_RATE:
+        return 'conversionRate';
       default:
         return 'approvedConversions';
     }

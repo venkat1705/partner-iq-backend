@@ -1,4 +1,4 @@
-import { IsArray, IsIn, IsOptional, IsString, IsUrl } from 'class-validator';
+import { IsArray, IsIn, IsObject, IsOptional, IsString, IsUrl } from 'class-validator';
 import { IntegrationEnvironment } from '../../../../common/enums';
 
 export class UpsertHubSpotPlatformConfigDto {
@@ -46,6 +46,7 @@ export class UpdateHubSpotPipelineMappingDto {
   @IsString()
   externalPipelineLabel!: string;
 
+  @IsObject()
   stageMappings!: Record<string, string>;
 
   @IsString()

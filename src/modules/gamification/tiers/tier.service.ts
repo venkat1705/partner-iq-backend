@@ -371,6 +371,36 @@ export class TierService {
     return affiliateTier;
   }
 
+  /** Every affiliate's current tier in one call — used by the org admin affiliates roster to avoid N+1 lookups. */
+  async getAffiliateTierAssignments(organizationId: string): Promise<Record<string, {
+    id: string; name: string; code: string; level: number; icon?: string; badge?: string; colorToken?: string;
+  }>> {
+    const assignments = dbStore.affiliateTiers.filter((at) => at.organizationId === organizationId);
+    const tiersById = new Map(
+      dbStore.partnerTiers.filter((t) => t.organizationId === organizationId).map((t) => [t.id, t]),
+    );
+
+    const result: Record<string, { id: string; name: string; code: string; level: number; icon?: string; badge?: string; colorToken?: string }> = {};
+    for (const assignment of assignments) {
+      const tier = tiersById.get(assignment.currentTierId);
+      if (!tier) continue;
+      // An affiliate can be in multiple programs; keep the highest tier held.
+      const existing = result[assignment.affiliateId];
+      if (!existing || tier.level > existing.level) {
+        result[assignment.affiliateId] = {
+          id: tier.id,
+          name: tier.name,
+          code: tier.code,
+          level: tier.level,
+          icon: tier.icon,
+          badge: tier.badge,
+          colorToken: tier.colorToken,
+        };
+      }
+    }
+    return result;
+  }
+
   async getAffiliateTier(organizationId: string, programId: string, affiliateId: string) {
     const affiliateTier = dbStore.affiliateTiers.find(
       (at) => at.organizationId === organizationId && at.programId === programId && at.affiliateId === affiliateId,
@@ -414,5 +444,84 @@ export class TierService {
         program: program ? { id: program.id, name: program.name } : null,
       };
     });
+  }
+
+  /**
+   * Seeds the Bronze/Silver/Gold/Platinum org-wide tier ladder for a brand-new organization.
+   * No-ops if the org already has any org-wide tier (e.g. an org restored from backup,
+   * or this being called twice) — never overwrites tiers an admin may have configured.
+   */
+  async seedDefaultTiers(organizationId: string, actorId?: string): Promise<void> {
+    const hasOrgWideTier = dbStore.partnerTiers.some(
+      (t) => t.organizationId === organizationId && !t.programId && !t.deletedAt,
+    );
+    if (hasOrgWideTier) return;
+
+    const defaults: CreatePartnerTierDto[] = [
+      {
+        name: 'Bronze',
+        code: 'BRONZE',
+        description: 'Starting tier for every new partner.',
+        level: 1,
+        displayOrder: 1,
+        icon: 'shield',
+        badge: 'Bronze Partner',
+        colorToken: 'bronze',
+        isDefault: true,
+        isActive: true,
+        isVisibleToAffiliate: true,
+        conditions: { minimumConversions: 0, minimumRevenue: 0 },
+      } as CreatePartnerTierDto,
+      {
+        name: 'Silver',
+        code: 'SILVER',
+        description: 'Unlocked at 10+ approved conversions or $2,500+ in revenue.',
+        level: 2,
+        displayOrder: 2,
+        icon: 'award',
+        badge: 'Silver Partner',
+        colorToken: 'silver',
+        isDefault: false,
+        isActive: true,
+        isVisibleToAffiliate: true,
+        conditions: { minimumConversions: 10, minimumRevenue: 2500 },
+      } as CreatePartnerTierDto,
+      {
+        name: 'Gold',
+        code: 'GOLD',
+        description: 'Unlocked at 50+ approved conversions or $10,000+ in revenue.',
+        level: 3,
+        displayOrder: 3,
+        icon: 'crown',
+        badge: 'Gold Partner',
+        colorToken: 'gold',
+        isDefault: false,
+        isActive: true,
+        isVisibleToAffiliate: true,
+        conditions: { minimumConversions: 50, minimumRevenue: 10000 },
+      } as CreatePartnerTierDto,
+      {
+        name: 'Platinum',
+        code: 'PLATINUM',
+        description: 'Top tier for elite partners with 150+ approved conversions or $50,000+ in revenue.',
+        level: 4,
+        displayOrder: 4,
+        icon: 'gem',
+        badge: 'Platinum Partner',
+        colorToken: 'platinum',
+        isDefault: false,
+        isActive: true,
+        isVisibleToAffiliate: true,
+        conditions: { minimumConversions: 150, minimumRevenue: 50000 },
+      } as CreatePartnerTierDto,
+    ];
+
+    for (const dto of defaults) {
+      try {
+        await this.createTier(organizationId, dto, actorId);
+      } catch (err) {
+        this.logger.warn(`Failed to seed default tier ${dto.code} for org ${organizationId}: ${err instanceof Error ? err.message : err}`);
+      }
+    }
   }
 }

@@ -1,5 +1,6 @@
-import { IsString, IsNumber, IsOptional, Min, IsObject, MaxLength } from 'class-validator';
+import { IsString, IsNumber, IsOptional, Min, IsObject, MaxLength, IsIn } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { PLATFORM_CURRENCY } from '../../../common/constants/currency';
 
 export class CreateConversionDto {
   @ApiProperty({ example: 'ORD-10042' })
@@ -10,14 +11,15 @@ export class CreateConversionDto {
   @IsString()
   customerExternalId!: string;
 
-  @ApiProperty({ example: 19900, description: 'Amount in smallest currency unit (e.g. cents for USD)' })
+  @ApiProperty({ example: 19900, description: 'Amount in paise (smallest INR unit)' })
   @IsNumber()
   @Min(1)
   amount!: number;
 
-  @ApiPropertyOptional({ example: 'USD' })
+  @ApiPropertyOptional({ example: PLATFORM_CURRENCY, description: 'Must be INR — PartnerIQ processes INR only.' })
   @IsOptional()
   @IsString()
+  @IsIn([PLATFORM_CURRENCY], { message: `Only ${PLATFORM_CURRENCY} is supported.` })
   currency?: string;
 
   @ApiPropertyOptional({ example: 'pro-plan' })
@@ -30,7 +32,12 @@ export class CreateConversionDto {
   @IsString()
   type?: string;
 
-  @ApiPropertyOptional({ example: 'attr_123' })
+  @ApiPropertyOptional({ example: 'clk_123', description: 'The Click ID returned by the tracking redirect/browser-click API. Preferred over attributionId - it is the primary attribution identifier and survives cookie deletion when the click was later linked to this customer via /tracking/identify.' })
+  @IsOptional()
+  @IsString()
+  clickId?: string;
+
+  @ApiPropertyOptional({ example: 'attr_123', description: 'Legacy: an explicit attribution record id. Prefer clickId.' })
   @IsOptional()
   @IsString()
   attributionId?: string;

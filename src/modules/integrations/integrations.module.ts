@@ -1,6 +1,8 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { PartnerDealsModule } from '../partner-deals/partner-deals.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { EmailDesignModule } from '../email-design/email-design.module';
+import { ConversionsModule } from '../conversions/conversions.module';
 import { IntegrationsController } from './integrations.controller';
 import { IntegrationCredentialService } from './integration-credential.service';
 import { IntegrationsService } from './integrations.service';
@@ -10,11 +12,35 @@ import { HubSpotService } from './hubspot/hubspot.service';
 import { HubSpotTokenService } from './hubspot/hubspot-token.service';
 import { HubSpotWebhookController } from './hubspot/hubspot-webhook.controller';
 import { HubSpotWebhookService } from './hubspot/hubspot-webhook.service';
+import { HubSpotProvider } from './providers/hubspot.provider';
+import { ZohoCrmProvider } from './providers/zoho-crm.provider';
+import { RazorpayProvider } from './providers/razorpay.provider';
+import { CashfreeProvider } from './providers/cashfree.provider';
+import { IntegrationProviderFactory } from './providers/provider.factory';
 
 @Module({
-  imports: [forwardRef(() => PartnerDealsModule), NotificationsModule],
+  imports: [forwardRef(() => PartnerDealsModule), NotificationsModule, EmailDesignModule, ConversionsModule],
   controllers: [IntegrationsController, HubSpotController, HubSpotWebhookController],
-  providers: [IntegrationsService, IntegrationCredentialService, HubSpotService, HubSpotTokenService, HubSpotApiClient, HubSpotWebhookService],
-  exports: [IntegrationsService, IntegrationCredentialService, HubSpotService, HubSpotTokenService, HubSpotApiClient],
+  providers: [
+    IntegrationsService,
+    IntegrationCredentialService,
+    HubSpotService,
+    HubSpotTokenService,
+    HubSpotApiClient,
+    HubSpotWebhookService,
+    HubSpotProvider,
+    ZohoCrmProvider,
+    RazorpayProvider,
+    CashfreeProvider,
+    IntegrationProviderFactory,
+  ],
+  exports: [
+    IntegrationsService,
+    IntegrationCredentialService,
+    HubSpotService,
+    HubSpotTokenService,
+    HubSpotApiClient,
+    IntegrationProviderFactory,
+  ],
 })
-export class IntegrationsModule {}
+export class IntegrationsModule { }

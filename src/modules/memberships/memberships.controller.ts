@@ -52,7 +52,7 @@ export class MembershipsController {
     @Body() dto: UpdateMemberRoleDto,
     @CurrentUser() user: AuthUserPayload,
   ) {
-    return this.membershipsService.updateMemberRole(organizationId, memberId, dto, user.userId);
+    return this.membershipsService.updateMemberRole(organizationId, memberId, dto, user.userId, user.role as any);
   }
 
   @Delete(':memberId')

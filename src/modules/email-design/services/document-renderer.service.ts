@@ -27,35 +27,23 @@ export class DocumentRendererService {
   private readonly logger = new Logger(DocumentRendererService.name);
 
   /**
-   * Currency formatter helper with multi-currency symbol support
+   * Currency formatter. PartnerIQ processes INR only, platform-wide — this always
+   * renders the ₹ symbol regardless of what's passed in, rather than offering a
+   * multi-currency symbol table that implies other currencies are supported.
    */
-  formatCurrency(value: any, currency = 'USD'): string {
+  formatCurrency(value: any): string {
     const num = Number(value);
     if (isNaN(num)) return String(value || '0.00');
 
-    const curr = String(currency || 'USD').toUpperCase();
-    const symbolMap: Record<string, string> = {
-      INR: '₹',
-      USD: '$',
-      EUR: '€',
-      GBP: '£',
-      CAD: 'CA$',
-      AUD: 'AU$',
-      SGD: 'SG$',
-      AED: 'AED ',
-      JPY: '¥',
-    };
-
-    const symbol = symbolMap[curr] || `${curr} `;
     const isNegative = num < 0;
     const absVal = Math.abs(num);
 
-    const formattedNum = absVal.toLocaleString('en-US', {
+    const formattedNum = absVal.toLocaleString('en-IN', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
 
-    return isNegative ? `-${symbol}${formattedNum}` : `${symbol}${formattedNum}`;
+    return isNegative ? `-₹${formattedNum}` : `₹${formattedNum}`;
   }
 
   /**
@@ -139,7 +127,7 @@ export class DocumentRendererService {
 
     switch (fnName.toLowerCase()) {
       case 'currency':
-        return this.formatCurrency(rawVal, args[0] || context?.statement?.currency || context?.invoice?.currency || 'USD');
+        return this.formatCurrency(rawVal);
       case 'date':
         return this.formatDate(rawVal, 'date');
       case 'datetime':

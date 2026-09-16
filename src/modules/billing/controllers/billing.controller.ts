@@ -13,6 +13,7 @@ import { PaymentService } from '../services/payment.service';
 import { InvoiceService } from '../services/invoice.service';
 import { TrialService } from '../services/trial.service';
 import { BillingPricingService } from '../services/billing-pricing.service';
+import { SubscriptionLimitService } from '../services/subscription-limit.service';
 
 @ApiTags('Organization Billing')
 @Controller('api/v1/organizations/:organizationId/billing')
@@ -26,6 +27,7 @@ export class BillingController {
     private readonly invoices: InvoiceService,
     private readonly trialService: TrialService,
     private readonly pricing: BillingPricingService,
+    private readonly limits: SubscriptionLimitService,
   ) {}
 
   @Get('trial')
@@ -109,9 +111,24 @@ export class BillingController {
     return this.invoices.list(organizationId);
   }
 
+  /**
+   * Account-wide usage against effective limits, counted live from the database.
+   * Superseded by `GET /organizations/:organizationId/subscription/limits`,
+   * which returns the same numbers with full add-on detail; kept so existing
+   * clients of this path keep working.
+   */
   @Get('usage')
   @RequirePermissions('billing.view')
-  usage() {
-    return { users: { used: 1 }, programs: { used: 0 } };
+  @ApiOperation({ summary: 'Account-wide resource usage and effective limits' })
+  async usage(@Param('organizationId') organizationId: string) {
+    const limits = await this.limits.getEffectiveLimitsForOrganization(organizationId);
+    return {
+      accountId: limits.accountId,
+      planCode: limits.planCode,
+      organizations: limits.limits.ORGANIZATION,
+      programs: limits.limits.PROGRAM,
+      affiliates: limits.limits.AFFILIATE,
+      members: limits.limits.MEMBER,
+    };
   }
 }

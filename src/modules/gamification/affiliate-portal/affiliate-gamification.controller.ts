@@ -18,10 +18,12 @@ export class AffiliateGamificationController {
     const email = (req.user?.email || '').toLowerCase().trim();
     const orgId = req.user?.organizationId;
 
-    // Find affiliate by email (or user's organization context)
+    // Find affiliate by email (or user's organization context). No cross-tenant
+    // fallback: a session with no matching affiliate record must not silently
+    // see the first affiliate in the entire platform's data.
     const affiliate = dbStore.affiliates.find(
       (a) => a.email.toLowerCase() === email && (!orgId || a.organizationId === orgId),
-    ) || dbStore.affiliates[0]; // fallback for demo if signed in as platform user
+    );
 
     if (!affiliate) {
       throw new NotFoundException('Affiliate account not found for current session');

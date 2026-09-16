@@ -16,6 +16,7 @@ import { IntegrationCredentialService } from '../integration-credential.service'
 import { HubSpotApiClient } from './hubspot-api.client';
 import { HubSpotTokenService } from './hubspot-token.service';
 import {
+  HUBSPOT_CUSTOM_DEAL_PROPERTIES,
   HUBSPOT_DEFAULT_FIELD_MAPPINGS,
   HUBSPOT_PROVIDER,
   HUBSPOT_REQUIRED_SCOPES,
@@ -32,17 +33,34 @@ export class HubSpotService {
     private readonly credentials: IntegrationCredentialService,
     private readonly tokenService: HubSpotTokenService,
     private readonly api: HubSpotApiClient,
-  ) {}
+  ) { }
 
   getPlatformConfig(user: AuthUserPayload) {
     this.assertSuperAdmin(user);
     const config = this.platformConfig();
-    if (!config) return { configured: false, provider: HUBSPOT_PROVIDER, requiredScopes: HUBSPOT_REQUIRED_SCOPES };
+    const appUrl = process.env.APP_URL || 'http://localhost:3000';
+    const defaultRedirectUri = `${appUrl}/api/v1/integrations/hubspot/oauth/callback`;
+
+    if (!config) {
+      return {
+        configured: false,
+        provider: HUBSPOT_PROVIDER,
+        slug: 'hubspot',
+        name: 'HubSpot',
+        redirectUri: defaultRedirectUri,
+        requiredScopes: HUBSPOT_REQUIRED_SCOPES,
+        optionalScopes: [],
+        environment: 'LIVE',
+      };
+    }
+
     return {
-      configured: Boolean(this.safeSecret(config.id, 'client_id') && config.secretReferenceId),
+      configured: Boolean(this.safeSecret(config.id, 'client_id') && (config.secretReferenceId || this.safeSecret(config.id, 'client_secret'))),
       provider: config.provider,
+      slug: 'hubspot',
+      name: 'HubSpot',
       status: config.status,
-      redirectUri: config.redirectUri,
+      redirectUri: config.redirectUri || defaultRedirectUri,
       requiredScopes: config.requiredScopes,
       optionalScopes: config.optionalScopes || [],
       appId: config.appId,
@@ -249,12 +267,12 @@ export class HubSpotService {
     const status = authenticationFailed
       ? CrmHealthStatus.UNHEALTHY
       : Object.values(checks).some((item) => item.status === CrmHealthStatus.DEGRADED || item.status === CrmHealthStatus.UNHEALTHY)
-      ? CrmHealthStatus.DEGRADED
-      : CrmHealthStatus.HEALTHY;
+        ? CrmHealthStatus.DEGRADED
+        : CrmHealthStatus.HEALTHY;
 
     connection.status = status === CrmHealthStatus.HEALTHY ? OrganizationIntegrationStatus.CONNECTED :
       status === CrmHealthStatus.DEGRADED ? OrganizationIntegrationStatus.DEGRADED :
-      OrganizationIntegrationStatus.AUTHENTICATION_ERROR;
+        OrganizationIntegrationStatus.AUTHENTICATION_ERROR;
     connection.config = {
       ...(connection.config || {}),
       externalAccountId: String(account?.portalId || account?.hubId || connection.config?.externalAccountId || ''),
@@ -301,6 +319,13 @@ export class HubSpotService {
     return response.results || [];
   }
 
+  getPipelineMapping(organizationId: string, pipelineId?: string) {
+    const connection = this.requireConnection(organizationId);
+    return dbStore.crmPipelineMappings.find(
+      (item) => item.organizationIntegrationId === connection.id && item.isActive && (!pipelineId || item.externalPipelineId === pipelineId),
+    ) || null;
+  }
+
   async updatePipelineMapping(organizationId: string, dto: UpdateHubSpotPipelineMappingDto) {
     const connection = this.requireConnection(organizationId);
     const existing = dbStore.crmPipelineMappings.find((item) => item.organizationIntegrationId === connection.id && item.externalPipelineId === dto.externalPipelineId);
@@ -320,7 +345,30 @@ export class HubSpotService {
     if (existing) Object.assign(existing, mapping);
     else dbStore.crmPipelineMappings.push(mapping);
     this.audit(organizationId, 'system', 'HUBSPOT_PIPELINE_MAPPING_CHANGED', mapping.id, { externalPipelineId: dto.externalPipelineId });
+    await this.ensureDealCustomProperties(connection.id);
     return mapping;
+  }
+
+  /**
+   * PartnerIQ writes partneriq_* custom properties onto every deal it pushes to HubSpot
+   * (see HUBSPOT_CUSTOM_DEAL_PROPERTIES / createHubSpotDeal). A fresh HubSpot portal has
+   * none of these defined, so outbound sync fails with PROPERTY_DOESNT_EXIST until they
+   * exist. Provisioning is idempotent (HubSpot 409s on an existing name, which we ignore).
+   */
+  async ensureDealCustomProperties(connectionId: string) {
+    for (const name of HUBSPOT_CUSTOM_DEAL_PROPERTIES) {
+      try {
+        await this.api.post(connectionId, '/crm/v3/properties/deals', {
+          name,
+          label: name.replace(/^partneriq_/, '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+          type: 'string',
+          fieldType: 'text',
+          groupName: 'dealinformation',
+        });
+      } catch {
+        // Already exists (409) or portal doesn't allow custom properties on this group — non-fatal.
+      }
+    }
   }
 
   async getFieldMappings(organizationId: string) {

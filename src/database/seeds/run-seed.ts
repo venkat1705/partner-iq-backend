@@ -16,7 +16,7 @@ import {
   AffiliateTier,
 } from '../schema';
 import { RoleDefinition, PermissionDefinition, RolePermission } from '../schema-rbac';
-import { IsNull } from 'typeorm';
+import { DataSource, IsNull } from 'typeorm';
 import { SecurityUtils } from '../../common/utils/security.utils';
 import {
   UserStatus,
@@ -109,6 +109,9 @@ export async function seedSystemDefaults() {
   await seedEmailDesignDefaults(emailDesignTemplates);
   await seedEmailDesignSettings(emailDesignSettings);
 
+  // 3b. Seed/sync the marketplace integration catalog (HubSpot, Zoho CRM, Razorpay, Cashfree, ...)
+  await seedIntegrationCatalog(dataSource);
+
   // 4. Ensure organization_brandings table columns support large image URLs / data URLs
   try {
     await dataSource.query(`ALTER TABLE organization_brandings MODIFY COLUMN logoUrl MEDIUMTEXT NULL`);
@@ -123,6 +126,123 @@ export async function seedSystemDefaults() {
   console.log('✅ Essential PartnerIQ system defaults initialized (0 dummy orgs/users created).');
 }
 
+/**
+ * Upserts the marketplace integration catalog (HubSpot, Zoho CRM, Razorpay, Cashfree, ...).
+ * This is core system catalog data, not demo data, so it always runs as part of
+ * seedSystemDefaults() rather than being gated behind SEED_DEMO_DATA.
+ */
+async function seedIntegrationCatalog(dataSource: DataSource) {
+  const integrations = dataSource.getRepository(Integration);
+
+  const unsupportedIntegrationCodes = [
+    'STRIPE',
+    'PADDLE',
+    'CHARGEBEE',
+    'SHOPIFY',
+    'WOOCOMMERCE',
+    'SALESFORCE',
+    'ZAPIER',
+    'SLACK',
+    'SEGMENT',
+  ];
+  for (const code of unsupportedIntegrationCodes) {
+    const existing = await integrations.findOne({ where: { code } });
+    if (existing && existing.status !== IntegrationStatus.DISABLED) {
+      existing.status = IntegrationStatus.DISABLED;
+      await integrations.save(existing);
+    }
+  }
+
+  const integrationCatalog = [
+    {
+      code: 'HUBSPOT',
+      name: 'HubSpot',
+      slug: 'hubspot',
+      provider: 'HUBSPOT',
+      category: IntegrationCategory.CRM,
+      status: IntegrationStatus.ACTIVE,
+      connectionTypes: [IntegrationConnectionType.API_KEY, IntegrationConnectionType.WEBHOOK],
+      supportsApiKey: true,
+      supportsWebhooks: true,
+      supportsOAuth: true,
+      description: 'Connect HubSpot with PartnerIQ to synchronize your CRM data and partner-driven customer activity.',
+      logo: '/integrations/hubspot.svg',
+      iconKey: 'hubspot',
+      capabilities: ['contacts', 'companies', 'deals', 'conversions'],
+    },
+    {
+      code: 'ZOHO_CRM',
+      name: 'Zoho CRM',
+      slug: 'zoho-crm',
+      provider: 'ZOHO_CRM',
+      category: IntegrationCategory.CRM,
+      status: IntegrationStatus.ACTIVE,
+      connectionTypes: [IntegrationConnectionType.API_KEY, IntegrationConnectionType.WEBHOOK],
+      supportsApiKey: true,
+      supportsWebhooks: false,
+      supportsOAuth: false,
+      description: 'Sync leads, contacts, deals, and conversion data with Zoho CRM to power partner attribution.',
+      logo: '/integrations/zoho.svg',
+      iconKey: 'zoho',
+      capabilities: ['leads', 'contacts', 'deals', 'conversions'],
+    },
+    {
+      code: 'RAZORPAY',
+      name: 'Razorpay',
+      slug: 'razorpay',
+      provider: 'RAZORPAY',
+      category: IntegrationCategory.PAYMENTS,
+      status: IntegrationStatus.ACTIVE,
+      connectionTypes: [IntegrationConnectionType.API_KEY, IntegrationConnectionType.WEBHOOK],
+      supportsApiKey: true,
+      supportsWebhooks: true,
+      supportsOAuth: true,
+      description: 'Accept payments, track orders and refunds, and manage partner conversions with Razorpay.',
+      logo: '/integrations/razorpay.svg',
+      iconKey: 'razorpay',
+      capabilities: ['payments', 'orders', 'refunds', 'customers', 'webhooks'],
+    },
+    {
+      code: 'CASHFREE',
+      name: 'Cashfree',
+      slug: 'cashfree',
+      provider: 'CASHFREE',
+      category: IntegrationCategory.PAYMENTS,
+      status: IntegrationStatus.ACTIVE,
+      connectionTypes: [IntegrationConnectionType.API_KEY, IntegrationConnectionType.WEBHOOK],
+      supportsApiKey: true,
+      supportsWebhooks: true,
+      supportsOAuth: false,
+      description: 'Process payments, verify customer orders and refunds, and automate attribution with Cashfree.',
+      logo: '/integrations/cashfree.svg',
+      iconKey: 'cashfree',
+      capabilities: ['payments', 'orders', 'refunds', 'customers', 'webhooks'],
+    },
+  ];
+
+  for (const [index, item] of integrationCatalog.entries()) {
+    const existingIntegration = await integrations.findOne({ where: { code: item.code } });
+    await integrations.save(integrations.create({
+      ...(existingIntegration || {}),
+      code: item.code,
+      name: item.name,
+      slug: item.slug,
+      provider: item.provider,
+      category: item.category,
+      status: item.status,
+      connectionTypes: [...item.connectionTypes],
+      supportsApiKey: item.supportsApiKey,
+      supportsWebhooks: item.supportsWebhooks,
+      supportsOAuth: item.supportsOAuth,
+      description: item.description,
+      logo: item.logo,
+      iconKey: item.iconKey,
+      capabilities: item.capabilities,
+      displayOrder: index + 1,
+    }));
+  }
+}
+
 export async function runSeed() {
   console.log('🌱 Seeding PartnerIQ database with demo organizations & test data...');
 
@@ -134,7 +254,6 @@ export async function runSeed() {
   const memberships = dataSource.getRepository(OrganizationMembership);
   const programs = dataSource.getRepository(Program);
   const fraudSettings = dataSource.getRepository(FraudSettings);
-  const integrations = dataSource.getRepository(Integration);
   const emailDesignTemplates = dataSource.getRepository(EmailDesignTemplate);
   const emailDesignSettings = dataSource.getRepository(EmailDesignSettings);
   const rolesRepo = dataSource.getRepository(RoleDefinition);
@@ -190,7 +309,7 @@ export async function runSeed() {
       industry: 'Software',
       companySize: '50-200',
       country: 'US',
-      defaultCurrency: 'USD',
+      defaultCurrency: 'INR',
       status: OrganizationStatus.ACTIVE,
       onboardingCompleted: true,
       createdBy: admin.id,
@@ -231,7 +350,7 @@ export async function runSeed() {
         slug: p.slug,
         type: p.type,
         status: ProgramStatus.ACTIVE,
-        currency: 'USD',
+        currency: 'INR',
         commissionType: p.slug === 'customer-referrals' ? CommissionType.FIXED_AMOUNT : CommissionType.PERCENTAGE,
         defaultCommissionValue: p.defaultVal,
         attributionModel: AttributionModel.LAST_CLICK,
@@ -240,6 +359,13 @@ export async function runSeed() {
         createdBy: admin.id,
       });
       prog = await programs.save(prog);
+    }
+    // Programs seeded here go through the raw TypeORM repository (unlike affiliates/tracking
+    // links below, which are pushed directly into dbStore) - mirror it into dbStore too so
+    // in-process services reading dbStore.programs (which is how the real app always creates
+    // programs, via ProgramsService) see these seeded programs as well.
+    if (!dbStore.programs.find((p) => p.id === prog!.id)) {
+      dbStore.programs.push(prog as any);
     }
     seedPrograms.push(prog);
   }
@@ -295,7 +421,7 @@ export async function runSeed() {
     orgZenpay = await organizations.save(orgZenpay);
   }
 
-  // Seed Nova AI Studio Organization (USD)
+  // Seed Nova AI Studio Organization (INR)
   let orgNova = await organizations.findOne({ where: { slug: 'nova' } });
   if (!orgNova) {
     orgNova = organizations.create({
@@ -305,7 +431,7 @@ export async function runSeed() {
       industry: 'Artificial Intelligence',
       companySize: '20-50',
       country: 'US',
-      defaultCurrency: 'USD',
+      defaultCurrency: 'INR',
       status: OrganizationStatus.ACTIVE,
       onboardingCompleted: true,
       createdBy: admin.id,
@@ -313,7 +439,7 @@ export async function runSeed() {
     orgNova = await organizations.save(orgNova);
   }
 
-  // Seed FitLife Pro Organization (USD)
+  // Seed FitLife Pro Organization (INR)
   let orgFitlife = await organizations.findOne({ where: { slug: 'fitlife' } });
   if (!orgFitlife) {
     orgFitlife = organizations.create({
@@ -323,7 +449,7 @@ export async function runSeed() {
       industry: 'Health & Fitness',
       companySize: '50-100',
       country: 'US',
-      defaultCurrency: 'USD',
+      defaultCurrency: 'INR',
       status: OrganizationStatus.ACTIVE,
       onboardingCompleted: true,
       createdBy: admin.id,
@@ -367,7 +493,7 @@ export async function runSeed() {
       slug: 'ai-creator',
       type: ProgramType.AFFILIATE,
       status: ProgramStatus.ACTIVE,
-      currency: 'USD',
+      currency: 'INR',
       commissionType: CommissionType.PERCENTAGE,
       defaultCommissionValue: 3000,
       attributionModel: AttributionModel.LAST_CLICK,
@@ -482,7 +608,7 @@ export async function runSeed() {
       } as any);
 
       // Payout item
-      const batchAcme = { id: uuidv4(), organizationId: org.id, currency: 'USD', createdAt: new Date(Date.now() - 20 * 86400000) };
+      const batchAcme = { id: uuidv4(), organizationId: org.id, currency: 'INR', createdAt: new Date(Date.now() - 20 * 86400000) };
       dbStore.payoutBatches.push(batchAcme as any);
       dbStore.payoutItems.push({
         id: uuidv4(),
@@ -726,63 +852,6 @@ export async function runSeed() {
       });
       console.log(`🔑 Seeded ${dk.environment.toUpperCase()} API Key: ${dk.key}`);
     }
-  }
-
-  const unsupportedIntegrationCodes = [
-    'STRIPE',
-    'PADDLE',
-    'CHARGEBEE',
-    'SHOPIFY',
-    'WOOCOMMERCE',
-    'SALESFORCE',
-    'ZAPIER',
-    'SLACK',
-    'SEGMENT',
-  ];
-  for (const code of unsupportedIntegrationCodes) {
-    const existing = await integrations.findOne({ where: { code } });
-    if (existing && existing.status !== IntegrationStatus.DISABLED) {
-      existing.status = IntegrationStatus.DISABLED;
-      await integrations.save(existing);
-    }
-  }
-
-  const integrationCatalog = [
-    ['HUBSPOT', 'HubSpot CRM', 'hubspot', 'HubSpot', IntegrationCategory.CRM, IntegrationStatus.ACTIVE, [IntegrationConnectionType.OAUTH, IntegrationConnectionType.WEBHOOK], false, true, true, 'B2B partner deal registration, pipeline sync, closed-won attribution, and commission triggering from HubSpot.', 'hubspot'],
-  ] as const;
-
-  for (const [index, item] of integrationCatalog.entries()) {
-    const [
-      code,
-      name,
-      slug,
-      provider,
-      category,
-      status,
-      connectionTypes,
-      supportsApiKey,
-      supportsWebhooks,
-      supportsOAuth,
-      description,
-      iconKey,
-    ] = item;
-    const existingIntegration = await integrations.findOne({ where: { code } });
-    await integrations.save(integrations.create({
-      ...(existingIntegration || {}),
-      code,
-      name,
-      slug,
-      provider,
-      category,
-      status,
-      connectionTypes: [...connectionTypes],
-      supportsApiKey,
-      supportsWebhooks,
-      supportsOAuth,
-      description,
-      iconKey,
-      displayOrder: index + 1,
-    }));
   }
 
   if (!(await fraudSettings.findOne({ where: { organizationId: org.id, programId: IsNull() } }))) {
@@ -1091,6 +1160,31 @@ export async function runSeed() {
         effectiveFrom: new Date(),
         isLocked: false,
       }));
+    }
+  }
+
+  // Users, organizations, and organization memberships above are all created through raw TypeORM
+  // repositories (dataSource.getRepository(...)), same as programs were before the dbStore.programs
+  // mirroring above - which means services that read via dbStore (e.g. the affiliate eligibility
+  // policy, which checks dbStore.users/dbStore.organizations/dbStore.organizationMemberships to
+  // decide whether an invitee is already an active org member) would otherwise never see this seed
+  // data at all. Mirror them into dbStore the same way, guarded against double-pushing on reseed.
+  const seededUsers = await users.find();
+  for (const u of seededUsers) {
+    if (!dbStore.users.some((existing) => existing.id === u.id)) {
+      dbStore.users.push(u as any);
+    }
+  }
+  const seededOrganizations = await organizations.find();
+  for (const o of seededOrganizations) {
+    if (!dbStore.organizations.some((existing) => existing.id === o.id)) {
+      dbStore.organizations.push(o as any);
+    }
+  }
+  const seededMemberships = await memberships.find();
+  for (const m of seededMemberships) {
+    if (!dbStore.organizationMemberships.some((existing) => existing.id === m.id)) {
+      dbStore.organizationMemberships.push(m as any);
     }
   }
 

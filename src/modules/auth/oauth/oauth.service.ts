@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Optional,
   Inject,
   forwardRef,
   Logger,
@@ -19,6 +20,8 @@ import { AuditAction, PlatformRole, UserStatus, Role } from '../../../common/enu
 import { MembershipStatus, ProgramAccessType } from '../../../common/enums/rbac';
 import { GoogleOAuthService } from './providers/google/google-oauth.service';
 import { OAuthStateService, OAuthFlowType, OAuthStateRecord } from './state/oauth-state.service';
+import { LegalAcceptanceService } from '../legal-acceptance.service';
+import { LegalAcceptanceContext } from '../../../common/constants/legal-documents';
 import { ExternalIdentity, OAuthTokens } from './providers/oauth-provider.interface';
 import { InitiateGoogleAuthDto, GoogleCallbackQueryDto, GoogleTokenExchangeDto, SetPasswordDto } from './dto/oauth.dto';
 import { AuthService } from '../auth.service';
@@ -53,6 +56,7 @@ export class OAuthService {
     @Inject(forwardRef(() => MembershipsService))
     private readonly membershipsService: MembershipsService,
     private readonly notificationsService: NotificationsService,
+    @Optional() private readonly legalAcceptance?: LegalAcceptanceService,
   ) { }
 
   private async repositories() {
@@ -80,11 +84,24 @@ export class OAuthService {
       throw new BadRequestException('Google OAuth authentication is currently disabled.');
     }
 
+    // A Google signup creates an account exactly as the password form does, so
+    // it needs the same consent. The checkbox is ticked before the redirect and
+    // carried through the OAuth state, since there is no opportunity to ask
+    // once Google hands the user back.
+    if ((dto.flowType || 'LOGIN') === 'REGISTER' && dto.acceptedTerms !== true) {
+      throw new BadRequestException({
+        code: 'LEGAL_ACCEPTANCE_REQUIRED',
+        message:
+          'You must accept the Master Services Agreement, Privacy Policy, and Anti-Fraud Guidelines to create an account.',
+      });
+    }
+
     const stateRecord = this.stateService.createState({
       flowType: dto.flowType || 'LOGIN',
       returnUrl: dto.returnUrl,
       invitationToken: dto.invitationToken,
       currentUserId,
+      acceptedTerms: dto.acceptedTerms === true,
     });
 
     const authorizationUrl = await this.googleOAuthService.getAuthorizationUrl({
@@ -385,6 +402,17 @@ export class OAuthService {
       );
     }
 
+    // Record consent for accounts this flow just created. Existing users
+    // signing in with Google accepted at their own signup and are untouched.
+    if (isNewUser && state.acceptedTerms === true) {
+      await this.legalAcceptance?.recordSignupAcceptance({
+        userId: user.id,
+        context: LegalAcceptanceContext.OAUTH_SIGNUP,
+        ipAddress: reqMeta.ipAddress,
+        userAgent: reqMeta.userAgent,
+      });
+    }
+
     // Validate account status (defense against suspended or locked users)
     if (user.status === UserStatus.LOCKED && user.lockedUntil) {
       if (new Date() < new Date(user.lockedUntil)) {
@@ -476,6 +504,15 @@ export class OAuthService {
 
         return { user, isNewUser: false };
       }
+
+      // Orphaned identity: it points at a user that no longer exists (e.g. deleted without
+      // cascading cleanup). Remove it so Rule 3 below can re-create the identity instead of
+      // colliding with the (provider, providerUserId) unique constraint on the stale row.
+      await userIdentities.delete({ id: existingIdentity.id });
+      const orphanIndex = dbStore.userIdentities.findIndex((item) => item.id === existingIdentity.id);
+      if (orphanIndex >= 0) {
+        dbStore.userIdentities.splice(orphanIndex, 1);
+      }
     }
 
     // Rule 2: Match by verified email in PartnerIQ users table
@@ -553,9 +590,30 @@ export class OAuthService {
       linkedAt: new Date(),
       lastLoginAt: new Date(),
     });
-    const savedIdentity = await userIdentities.save(newIdentity);
-    if (!dbStore.userIdentities.some((i) => i.id === savedIdentity.id)) {
-      dbStore.userIdentities.push(savedIdentity);
+
+    try {
+      const savedIdentity = await userIdentities.save(newIdentity);
+      if (!dbStore.userIdentities.some((i) => i.id === savedIdentity.id)) {
+        dbStore.userIdentities.push(savedIdentity);
+      }
+    } catch (err: any) {
+      // A concurrent request (e.g. a double-fired callback) may have inserted the same
+      // (provider, providerUserId) identity microseconds earlier. Recover instead of 500ing:
+      // clean up the user row we just sped-created and re-resolve via the identity that won.
+      const isDuplicateKey = err?.code === 'ER_DUP_ENTRY' || err?.code === '23505' || /duplicate/i.test(err?.message || '');
+      if (!isDuplicateKey) throw err;
+
+      await users.delete({ id: savedUser.id });
+      const winningIdentity = await userIdentities.findOne({
+        where: { provider: identity.provider, providerUserId: identity.providerUserId },
+      });
+      const winningUser = winningIdentity
+        ? await users.findOne({ where: { id: winningIdentity.userId, deletedAt: IsNull() } })
+        : null;
+      if (winningUser) {
+        return { user: winningUser, isNewUser: false };
+      }
+      throw err;
     }
 
     return { user: savedUser, isNewUser: true };

@@ -1,13 +1,81 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { dbStore, CommissionRuleEntity, CommissionEntity, ConversionEntity } from '../../database/store';
-import { CommissionType, ConversionStatus, LedgerEntryType, AuditAction } from '../../common/enums';
+import { CommissionType, ConversionStatus, LedgerEntryType, AuditAction, WebhookEvent } from '../../common/enums';
+import { PLATFORM_CURRENCY } from '../../common/constants/currency';
 import { LedgerService } from '../ledger/ledger.service';
-import { CreateCommissionRuleDto, TestCommissionRulesDto } from './dto/commission.dto';
+import { WebhooksService } from '../webhooks/webhooks.service';
+import { CreateCommissionRuleDto, TestCommissionRulesDto, UpdateCommissionRuleDto } from './dto/commission.dto';
+import { SystemEmailDispatchService } from '../email-design/services/system-email-dispatch.service';
+import { SystemTemplateKey } from '../email-design/constants/email-template-keys';
+import { getAppConfig } from '../../config/app.config';
+import { NotificationsService } from '../notifications/notifications.service';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class CommissionsService {
-  constructor(private readonly ledgerService: LedgerService) { }
+  private readonly logger = new Logger(CommissionsService.name);
+
+  constructor(
+    private readonly ledgerService: LedgerService,
+    private readonly webhooksService?: WebhooksService,
+    private readonly emailDispatch?: SystemEmailDispatchService,
+    private readonly notificationsService?: NotificationsService,
+    private readonly auditService?: AuditService,
+  ) { }
+
+  private emitWebhook(organizationId: string, event: WebhookEvent, payload: any) {
+    this.webhooksService?.triggerEvent(organizationId, event, payload).catch((error) => {
+      this.logger.error(`Webhook delivery failed for ${event}: ${error?.message || error}`);
+    });
+  }
+
+  private formatMoney(cents: number, currency: string = PLATFORM_CURRENCY) {
+    return `${currency} ${(cents / 100).toFixed(2)}`;
+  }
+
+  async notifyAffiliateCommission(
+    templateKey: SystemTemplateKey,
+    organizationId: string,
+    affiliateId: string,
+    commissionAmountCents: number,
+    currency: string,
+    extra: Record<string, any> = {},
+  ) {
+    const affiliate = dbStore.affiliates.find((a) => a.id === affiliateId);
+    if (!affiliate?.email) return;
+    const organization = dbStore.organizations.find((o) => o.id === organizationId);
+    const dashboardUrl = `${getAppConfig().affiliateFrontendUrl.replace(/\/$/, '')}/commissions`;
+
+    await this.emailDispatch?.send(
+      templateKey,
+      affiliate.email,
+      {
+        affiliate: { firstName: (affiliate.displayName || '').split(' ')[0] || affiliate.displayName },
+        organization: { name: organization?.name || 'PartnerIQ' },
+        commission: { amountFormatted: this.formatMoney(commissionAmountCents, currency), currency, ...extra },
+        links: { dashboardUrl },
+      },
+      { organizationId },
+    );
+
+    const userId = affiliate.userId || dbStore.users.find((u) => u.email?.toLowerCase() === affiliate.email.toLowerCase())?.id;
+    if (!userId) return;
+
+    const isReversed = templateKey === SystemTemplateKey.AFFILIATE_COMMISSION_REVERSED;
+    this.notificationsService?.createNotification({
+      userId,
+      organizationId,
+      type: 'commission',
+      title: isReversed ? 'Commission reversed' : 'New commission earned',
+      body: isReversed
+        ? `A commission of ${this.formatMoney(commissionAmountCents, currency)} was reversed${extra.reason ? `: ${extra.reason}` : '.'}`
+        : `You earned a commission of ${this.formatMoney(commissionAmountCents, currency)}.`,
+      channel: 'in_app',
+      priority: isReversed ? 'high' : 'normal',
+      actionUrl: '/commissions',
+    }).catch(() => undefined);
+  }
 
   /**
    * Apply retroactive commission adjustments for an affiliate when a tier
@@ -69,17 +137,20 @@ export class CommissionsService {
           delta,
         );
 
-        dbStore.auditLogs.push({
-          id: uuidv4(),
+        const adjustmentEntry = {
           organizationId,
-          actorType: 'SYSTEM',
+          actorType: 'system' as const,
           actorId: 'system',
           action: AuditAction.COMMISSION_APPROVED,
           resourceType: 'commission_adjustment',
           resourceId: comm.id,
           metadata: { affiliateId, programId, previousCommission: comm.commissionAmount, newCommission: newAmount, delta },
-          createdAt: new Date(),
-        });
+        };
+        if (this.auditService) {
+          this.auditService.log(adjustmentEntry);
+        } else {
+          dbStore.auditLogs.push({ id: uuidv4(), createdAt: new Date(), ...adjustmentEntry });
+        }
 
         details.push({ commissionId: comm.id, previous: comm.commissionAmount, new: newAmount, delta });
         totalAdjusted += delta;
@@ -139,8 +210,95 @@ export class CommissionsService {
     };
 
     dbStore.commissionRules.push(rule);
-    this.audit(organizationId, 'system', 'COMMISSION_RULE_CREATED', rule.id, { after: rule });
+    this.audit(organizationId, 'system', 'COMMISSION_RULE_CREATED', rule.id, { after: rule, version: rule.version });
     return rule;
+  }
+
+  /**
+   * Updating a rule bumps its version in place and records a full before/after
+   * snapshot in the audit trail (resourceType 'commission_rule') — this is the
+   * rule's version history: GET .../rules/:ruleId/history replays it as a timeline.
+   */
+  async updateRule(organizationId: string, ruleId: string, dto: UpdateCommissionRuleDto, actorId = 'system') {
+    const rule = dbStore.commissionRules.find(
+      (r) => r.id === ruleId && r.organizationId === organizationId && r.status !== 'ARCHIVED',
+    );
+    if (!rule) throw new NotFoundException('Commission rule not found');
+
+    const before = { ...rule };
+    const scopeProgramId = rule.programId || null;
+
+    if (dto.name?.trim() && dto.name.trim().toLowerCase() !== rule.name.toLowerCase()) {
+      const nameExists = dbStore.commissionRules.some(
+        (r) =>
+          r.id !== ruleId &&
+          r.organizationId === organizationId &&
+          (r.programId || null) === scopeProgramId &&
+          r.status !== 'ARCHIVED' &&
+          r.name.trim().toLowerCase() === dto.name!.trim().toLowerCase(),
+      );
+      if (nameExists) throw new BadRequestException('A commission rule with this name already exists. Use a unique rule name.');
+      rule.name = dto.name.trim();
+      rule.slug = this.createUniqueRuleSlug(organizationId, scopeProgramId, rule.name);
+    }
+
+    if (dto.priority !== undefined && dto.priority !== rule.priority) {
+      const priorityExists = dbStore.commissionRules.some(
+        (r) => r.id !== ruleId && r.organizationId === organizationId && (r.programId || null) === scopeProgramId && r.priority === dto.priority && r.status !== 'ARCHIVED',
+      );
+      if (priorityExists) throw new BadRequestException('A rule with this priority already exists. Choose another priority.');
+      rule.priority = dto.priority;
+    }
+
+    const nextCommissionType = dto.commissionType ?? rule.commissionType;
+    const nextCommissionValueRaw = dto.commissionValue ?? (rule.commissionType === CommissionType.PERCENTAGE ? rule.commissionValue / 100 : rule.commissionValue);
+    const nextHoldPeriodDays = dto.holdPeriodDays ?? rule.holdPeriodDays;
+    this.validateAction(nextCommissionType, nextCommissionValueRaw, nextHoldPeriodDays);
+    rule.commissionType = nextCommissionType;
+    rule.commissionValue = this.normalizeCommissionValue(nextCommissionType, nextCommissionValueRaw);
+    rule.holdPeriodDays = nextHoldPeriodDays;
+
+    if (dto.conditionList || dto.conditions) {
+      rule.conditions = this.normalizeConditions(dto as CreateCommissionRuleDto);
+    }
+
+    if (dto.status) {
+      rule.status = dto.status;
+      rule.active = dto.status === 'ACTIVE';
+    }
+
+    rule.version += 1;
+    rule.updatedAt = new Date();
+
+    this.audit(organizationId, actorId, 'COMMISSION_RULE_UPDATED', rule.id, { before, after: { ...rule }, version: rule.version });
+    return rule;
+  }
+
+  /**
+   * Rule version history — replays the audit trail recorded on create/update/delete
+   * for this rule into a human-readable timeline, newest first.
+   */
+  async getRuleHistory(organizationId: string, ruleId: string) {
+    const rule = dbStore.commissionRules.find((r) => r.id === ruleId && r.organizationId === organizationId);
+    if (!rule) throw new NotFoundException('Commission rule not found');
+
+    return dbStore.auditLogs
+      .filter(
+        (log) =>
+          log.organizationId === organizationId &&
+          log.resourceType === 'commission_rule' &&
+          log.resourceId === ruleId,
+      )
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .map((log) => ({
+        id: log.id,
+        action: log.action,
+        version: (log.metadata as any)?.version,
+        before: (log.metadata as any)?.before,
+        after: (log.metadata as any)?.after,
+        actorId: log.actorId,
+        createdAt: log.createdAt,
+      }));
   }
 
   async getRules(organizationId: string, programId?: string) {
@@ -175,7 +333,7 @@ export class CommissionsService {
     rule.active = false;
     rule.updatedAt = new Date();
 
-    this.audit(organizationId, 'system', 'COMMISSION_RULE_DELETED', rule.id, { before: rule });
+    this.audit(organizationId, 'system', 'COMMISSION_RULE_DELETED', rule.id, { before: rule, version: rule.version });
     return { success: true, message: `Commission rule "${rule.name}" deleted successfully.` };
   }
 
@@ -218,6 +376,19 @@ export class CommissionsService {
     fraudScore: number,
   ) {
     const program = dbStore.programs.find((p) => p.id === conversion.programId);
+
+    // Guard against currency mismatch inflation: commission math below multiplies
+    // conversion.amount directly by the program's rate, so a conversion reported in a
+    // different currency than the program would silently over/under-pay by orders of
+    // magnitude. PartnerIQ enforces INR only at every input boundary (DTOs reject any
+    // other currency), so this should never trigger in practice — kept as defense in
+    // depth against legacy data or a bypassed validation path.
+    if (program?.currency && conversion.currency && program.currency.toUpperCase() !== conversion.currency.toUpperCase()) {
+      throw new BadRequestException(
+        `Conversion currency (${conversion.currency}) does not match program currency (${program.currency}). Currency conversion is not supported; commission cannot be safely calculated.`,
+      );
+    }
+
     let commissionType = program?.commissionType || CommissionType.PERCENTAGE;
     let commissionValue = program?.defaultCommissionValue || 1000; // 10.00%
     let matchedRule: CommissionRuleEntity | undefined = undefined;
@@ -245,9 +416,27 @@ export class CommissionsService {
       }
     }
 
-    // Load active custom rules sorted by priority (if custom rule has higher priority)
+    // Per-affiliate commission override (set by a COMMISSION_RATE_CHANGE milestone reward,
+    // or manually by an admin) on this specific program enrollment. More specific than the
+    // tier default — a reward earned by this individual affiliate should stick even if their
+    // tier's base rate is lower — but a merchant-configured commission RULE below is still the
+    // final, most specific word (e.g. a fraud-risk clamp) and can still override it.
+    const enrollment = dbStore.programAffiliates.find(
+      (pa) => pa.organizationId === organizationId && pa.programId === conversion.programId && pa.affiliateId === affiliateId,
+    );
+    if (enrollment?.commissionOverride !== undefined && enrollment.commissionOverride !== null && enrollment.commissionOverrideType) {
+      if (enrollment.commissionOverrideType === CommissionType.FIXED || enrollment.commissionOverrideType === CommissionType.FIXED_AMOUNT) {
+        commissionType = CommissionType.FIXED;
+      } else {
+        commissionType = enrollment.commissionOverrideType as CommissionType;
+      }
+      commissionValue = enrollment.commissionOverride;
+    }
+
+    // Load active custom rules sorted by priority — program-specific rules and
+    // the organization-wide default rule (no programId) are both eligible.
     const rules = dbStore.commissionRules
-      .filter((r) => r.organizationId === organizationId && r.programId === conversion.programId && r.active && r.status === 'ACTIVE')
+      .filter((r) => r.organizationId === organizationId && (r.programId === conversion.programId || !r.programId) && r.active && r.status === 'ACTIVE')
       .sort((a, b) => b.priority - a.priority);
 
     for (const rule of rules) {
@@ -287,12 +476,20 @@ export class CommissionsService {
       rate: commissionValue,
       baseAmount: conversion.amount,
       commissionAmount,
+      reversedAmount: 0,
       calculationVersion: 'v1.0',
       status: ConversionStatus.APPROVED,
       createdAt: new Date(),
     };
 
     dbStore.commissions.push(commission);
+
+    this.emitWebhook(organizationId, WebhookEvent.COMMISSION_CREATED, {
+      commissionId: commission.id,
+      conversionId: conversion.id,
+      affiliateId,
+      status: commission.status,
+    });
 
     // Post immutable double-entry ledger record
     await this.ledgerService.recordTransaction(
@@ -304,6 +501,15 @@ export class CommissionsService {
       commissionAmount,
     );
 
+    const currency = program?.currency || PLATFORM_CURRENCY;
+    this.notifyAffiliateCommission(
+      SystemTemplateKey.AFFILIATE_COMMISSION_CREATED,
+      organizationId,
+      affiliateId,
+      commissionAmount,
+      currency,
+    ).catch(() => undefined);
+
     return commission;
   }
 
@@ -312,8 +518,12 @@ export class CommissionsService {
   }
 
   private evaluateProgramRules(organizationId: string, programId: string, context: Record<string, any>) {
+    // Program-specific rules and org-wide default rules (no programId — e.g. the
+    // rule seeded automatically when the organization was created) are both
+    // eligible; a program-specific rule naturally wins when given a higher
+    // priority than the organization-wide default.
     const rules = dbStore.commissionRules
-      .filter((r) => r.organizationId === organizationId && r.programId === programId && r.active && r.status === 'ACTIVE')
+      .filter((r) => r.organizationId === organizationId && (r.programId === programId || !r.programId) && r.active && r.status === 'ACTIVE')
       .sort((a, b) => b.priority - a.priority);
 
     for (const rule of rules) {
@@ -435,16 +645,19 @@ export class CommissionsService {
   }
 
   private audit(organizationId: string, actorId: string, action: string, ruleId: string, metadata?: Record<string, any>) {
-    dbStore.auditLogs.push({
-      id: uuidv4(),
+    const entry = {
       organizationId,
-      actorType: 'USER',
+      actorType: (actorId === 'system' ? 'system' : 'user') as 'user' | 'system',
       actorId,
       action: action as AuditAction,
       resourceType: 'commission_rule',
       resourceId: ruleId,
       metadata,
-      createdAt: new Date(),
-    });
+    };
+    if (this.auditService) {
+      this.auditService.log(entry);
+      return;
+    }
+    dbStore.auditLogs.push({ id: uuidv4(), createdAt: new Date(), ...entry });
   }
 }

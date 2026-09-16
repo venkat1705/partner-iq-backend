@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { dbStore, LedgerAccountEntity, LedgerTransactionEntity, LedgerEntryEntity } from '../../database/store';
 import { LedgerEntryType } from '../../common/enums';
+import { PLATFORM_CURRENCY } from '../../common/constants/currency';
 
 @Injectable()
 export class LedgerService {
@@ -17,7 +18,7 @@ export class LedgerService {
         affiliateId,
         type,
         balance: 0,
-        currency: 'USD',
+        currency: PLATFORM_CURRENCY,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -34,6 +35,7 @@ export class LedgerService {
     description: string,
     referenceId: string,
     amount: number, // positive amount in cents
+    options?: { skipBalanceMutation?: boolean },
   ) {
     const account = await this.getAccount(organizationId, affiliateId, 'EARNED');
 
@@ -60,13 +62,17 @@ export class LedgerService {
     };
     dbStore.ledgerEntries.push(entry);
 
-    // Update account balance
-    if (isCredit) {
-      account.balance += amount;
-    } else {
-      account.balance -= amount;
+    // Update account balance, unless the caller already reserved/deducted the balance
+    // ahead of time (e.g. payout batch draft creation reserves funds up front to prevent
+    // a double-spend race, so the later PAYOUT_COMPLETED entry must not deduct again).
+    if (!options?.skipBalanceMutation) {
+      if (isCredit) {
+        account.balance += amount;
+      } else {
+        account.balance -= amount;
+      }
+      account.updatedAt = new Date();
     }
-    account.updatedAt = new Date();
 
     return { transaction, entry, updatedBalance: account.balance };
   }

@@ -3,6 +3,10 @@ import { dbStore } from '../../../database/store';
 import { OrganizationIntegrationStatus } from '../../../common/enums';
 import { IntegrationCredentialService } from '../integration-credential.service';
 import { HUBSPOT_PROVIDER } from './hubspot.constants';
+import { NotificationsService } from '../../notifications/notifications.service';
+import { SystemEmailDispatchService } from '../../email-design/services/system-email-dispatch.service';
+import { SystemTemplateKey } from '../../email-design/constants/email-template-keys';
+import { getAppConfig } from '../../../config/app.config';
 
 type TokenResponse = {
   access_token?: string;
@@ -21,7 +25,11 @@ type TokenResponse = {
 export class HubSpotTokenService {
   private readonly refreshLocks = new Map<string, Promise<string>>();
 
-  constructor(private readonly credentials: IntegrationCredentialService) {}
+  constructor(
+    private readonly credentials: IntegrationCredentialService,
+    private readonly notificationsService?: NotificationsService,
+    private readonly emailDispatch?: SystemEmailDispatchService,
+  ) {}
 
   async getAccessToken(connectionId: string) {
     const expiresAt = Number(this.safeGet(connectionId, 'access_token_expires_at') || 0);
@@ -70,9 +78,62 @@ export class HubSpotTokenService {
       connection.lastError = undefined;
       return this.credentials.getCredential(connectionId, 'access_token');
     } catch {
+      // Only notify on the transition into a broken state — not on every retried
+      // API call while it stays broken — otherwise this would spam the org.
+      const wasAlreadyBroken = connection.status === OrganizationIntegrationStatus.AUTHENTICATION_ERROR;
       connection.status = OrganizationIntegrationStatus.AUTHENTICATION_ERROR;
       connection.lastError = 'HubSpot authentication failed. Reconnect HubSpot.';
+      if (!wasAlreadyBroken) {
+        this.notifyIntegrationDisconnected(connection, 'HubSpot access was revoked and the connection could not refresh').catch(() => undefined);
+      }
       throw new BadRequestException('HubSpot authentication failed. Reconnect HubSpot.');
+    }
+  }
+
+  /**
+   * Fires both the in-app notification and the "Integration Disconnected" email
+   * to every active member of the organization. Called whenever we discover —
+   * via a failed token refresh, not an explicit in-app "Disconnect" click — that
+   * access was revoked on HubSpot's side.
+   */
+  async notifyIntegrationDisconnected(
+    connection: { id: string; organizationId: string },
+    reason: string,
+  ) {
+    const organization = dbStore.organizations.find((o) => o.id === connection.organizationId);
+    const reconnectUrl = `${getAppConfig().frontendUrl.replace(/\/$/, '')}/organizations/${connection.organizationId}/integrations`;
+    const members = dbStore.organizationMemberships.filter(
+      (m) => m.organizationId === connection.organizationId && m.status === 'ACTIVE',
+    );
+
+    for (const member of members) {
+      this.notificationsService?.createNotification({
+        userId: member.userId,
+        organizationId: connection.organizationId,
+        type: 'system',
+        title: 'HubSpot integration disconnected',
+        body: `${reason}. Reconnect in Integrations to resume sync.`,
+        channel: 'in_app',
+        priority: 'high',
+        actionUrl: '/app/integrations',
+        metadata: { provider: 'hubspot', organizationIntegrationId: connection.id },
+      }).catch(() => undefined);
+
+      const user = dbStore.users.find((u) => u.id === member.userId);
+      if (!user?.email) continue;
+      this.emailDispatch
+        ?.send(
+          SystemTemplateKey.INTEGRATION_DISCONNECTED,
+          user.email,
+          {
+            provider: 'HubSpot',
+            organizationName: organization?.name || 'Your organization',
+            disconnectedBy: reason,
+            reconnectUrl,
+          },
+          { organizationId: connection.organizationId, userId: user.id },
+        )
+        .catch(() => undefined);
     }
   }
 

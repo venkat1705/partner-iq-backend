@@ -142,6 +142,14 @@ export class HubSpotController {
     return this.hubSpot.getPipelineStages(organizationId, pipelineId);
   }
 
+  @Get('organizations/:organizationId/integrations/hubspot/pipeline-mapping')
+  @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+  @RequirePermissions('integrations.view')
+  @ApiBearerAuth()
+  getPipelineMapping(@Param('organizationId') organizationId: string, @Query('pipelineId') pipelineId?: string) {
+    return this.hubSpot.getPipelineMapping(organizationId, pipelineId);
+  }
+
   @Patch('organizations/:organizationId/integrations/hubspot/pipeline-mapping')
   @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
   @RequirePermissions('integrations.configure')

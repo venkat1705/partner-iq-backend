@@ -1,8 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { dbStore } from '../../../database/store';
 import { ConversionStatus, FraudEntityType, FraudSignalCategory, FraudSignalCode } from '../../../common/enums';
 import { FraudContext, FraudSignalEvaluator, FraudSignalResult } from '../fraud.types';
 import { FraudVelocityService } from '../velocity/fraud-velocity.service';
+import { IP_REPUTATION_PROVIDER } from '../reputation/ip-reputation.service';
+import type { IpReputationProvider } from '../reputation/ip-reputation.service';
 
 const safe = (code: FraudSignalCode, category: FraudSignalCategory, reason: string): FraudSignalResult => ({
   code,
@@ -18,6 +20,10 @@ export class IpReputationSignal implements FraudSignalEvaluator {
   code = FraudSignalCode.IP_REPUTATION;
   category = FraudSignalCategory.NETWORK;
 
+  constructor(
+    @Optional() @Inject(IP_REPUTATION_PROVIDER) private readonly reputationProvider?: IpReputationProvider,
+  ) {}
+
   async evaluate(context: FraudContext) {
     const rawIp = String(context.rawIp || '');
     const forwardedChain = rawIp
@@ -26,21 +32,44 @@ export class IpReputationSignal implements FraudSignalEvaluator {
       .filter(Boolean);
     const proxyChainDetected = forwardedChain.length > 1;
     const proxyHeaderDetected = /proxy|vpn|tor/i.test(String(context.metadata?.networkHint || ''));
-    const detected = proxyChainDetected || proxyHeaderDetected;
-    const score = detected ? 80 : 0;
+
+    // Pluggable external reputation lookup (VPN/Tor/datacenter/ASN). The default provider
+    // is a no-op that reports "unavailable" until a real provider (e.g. IPQualityScore,
+    // MaxMind) is wired in via IP_REPUTATION_PROVIDER in fraud.module.ts — until then this
+    // only contributes when a real provider is configured, so behavior is unchanged today.
+    const candidateIp = forwardedChain[0] || rawIp || undefined;
+    let providerResult: Awaited<ReturnType<IpReputationProvider['lookup']>> | undefined;
+    if (this.reputationProvider && candidateIp) {
+      try {
+        providerResult = await this.reputationProvider.lookup(candidateIp);
+      } catch {
+        providerResult = undefined;
+      }
+    }
+    const providerAvailable = Boolean(providerResult && !providerResult.unavailable);
+    const providerFlagged = providerAvailable && Boolean(providerResult!.vpn || providerResult!.proxy || providerResult!.tor || providerResult!.datacenter);
+    const providerRiskScore = providerAvailable ? Math.max(0, Math.min(100, providerResult!.riskScore || 0)) : 0;
+
+    const heuristicDetected = proxyChainDetected || proxyHeaderDetected;
+    const detected = heuristicDetected || providerFlagged || providerRiskScore > 0;
+    const score = Math.max(heuristicDetected ? 80 : 0, providerFlagged ? 85 : 0, providerRiskScore);
+
+    const reasons: string[] = [];
+    if (heuristicDetected) reasons.push('traffic arrived through a forwarded proxy/VPN-style IP chain');
+    if (providerFlagged) reasons.push('external reputation lookup flagged this IP as VPN/proxy/Tor/datacenter');
+    else if (providerRiskScore > 0) reasons.push(`external reputation lookup reported risk score ${providerRiskScore}`);
 
     return {
       code: this.code,
       category: this.category,
       detected,
       score,
-      confidence: detected ? 82 : 60,
-      reason: detected
-        ? 'Traffic arrived through a forwarded proxy/VPN-style IP chain.'
-        : 'No proxy/VPN network indicators were observed.',
+      confidence: detected ? 82 : providerAvailable ? 65 : 60,
+      reason: reasons.length ? `Elevated network risk: ${reasons.join('; ')}.` : 'No proxy/VPN network indicators were observed.',
       metadata: {
         forwardedHops: forwardedChain.length,
         firstHopPresent: Boolean(forwardedChain[0]),
+        providerChecked: providerAvailable,
       },
     };
   }
@@ -166,7 +195,9 @@ export class SelfReferralSignal implements FraudSignalEvaluator {
   category = FraudSignalCategory.IDENTITY;
 
   async evaluate(context: FraudContext) {
-    const affiliate = context.affiliateId ? dbStore.affiliates.find((item) => item.id === context.affiliateId) : undefined;
+    const affiliate = context.affiliateId
+      ? dbStore.affiliates.find((item) => item.id === context.affiliateId && item.organizationId === context.organizationId)
+      : undefined;
     const detected = Boolean(affiliate?.email && context.customerExternalId && affiliate.email.toLowerCase() === context.customerExternalId.toLowerCase());
     return {
       code: this.code,
@@ -276,7 +307,9 @@ export class AffiliateTrustSignal implements FraudSignalEvaluator {
   category = FraudSignalCategory.AFFILIATE;
 
   async evaluate(context: FraudContext) {
-    const affiliate = context.affiliateId ? dbStore.affiliates.find((item) => item.id === context.affiliateId) : undefined;
+    const affiliate = context.affiliateId
+      ? dbStore.affiliates.find((item) => item.id === context.affiliateId && item.organizationId === context.organizationId)
+      : undefined;
     const trustScore = affiliate?.trustScore ?? 50;
     const score = trustScore < 20 ? 70 : trustScore < 40 ? 35 : trustScore < 55 ? 10 : 0;
     return {
@@ -337,6 +370,68 @@ export class PayoutAmountAnomalySignal implements FraudSignalEvaluator {
       confidence: historical.length > 3 ? 75 : 55,
       reason: score > 0 ? `Payout amount is ${ratio.toFixed(1)}x the historical baseline.` : 'Payout amount is within expected range.',
       metadata: { baseline, ratio },
+    };
+  }
+}
+
+@Injectable()
+export class AffiliateHighChargebackRateSignal implements FraudSignalEvaluator {
+  code = FraudSignalCode.AFFILIATE_HIGH_CHARGEBACK_RATE;
+  category = FraudSignalCategory.AFFILIATE;
+
+  async evaluate(context: FraudContext) {
+    if (!context.affiliateId) return safe(this.code, this.category, 'No affiliate was attached to this event.');
+    const conversions = dbStore.conversions.filter((item) => item.organizationId === context.organizationId && item.affiliateId === context.affiliateId);
+    if (conversions.length < 10) return safe(this.code, this.category, 'Minimum sample size for chargeback-rate scoring has not been reached.');
+    const chargedBack = conversions.filter((item) => item.status === ConversionStatus.CHARGEBACK).length;
+    const rate = chargedBack / conversions.length;
+    const score = rate > 0.1 ? 70 : rate > 0.05 ? 35 : 0;
+    return {
+      code: this.code,
+      category: this.category,
+      detected: score > 0,
+      score,
+      confidence: conversions.length > 30 ? 85 : 62,
+      reason: score > 0 ? `Affiliate chargeback rate is ${(rate * 100).toFixed(1)}% across ${conversions.length} conversions.` : 'Affiliate chargeback rate is within expected range.',
+      metadata: { sampleSize: conversions.length, chargebackRate: rate },
+    };
+  }
+}
+
+@Injectable()
+export class PayoutTrustDropSignal implements FraudSignalEvaluator {
+  code = FraudSignalCode.PAYOUT_TRUST_DROP;
+  category = FraudSignalCategory.PAYOUT;
+
+  async evaluate(context: FraudContext) {
+    if (context.entityType !== FraudEntityType.PAYOUT || !context.affiliateId) {
+      return safe(this.code, this.category, 'Not a payout assessment with an identifiable affiliate.');
+    }
+    const affiliate = dbStore.affiliates.find((item) => item.id === context.affiliateId && item.organizationId === context.organizationId);
+    if (!affiliate) return safe(this.code, this.category, 'Affiliate record was not found.');
+
+    const windowStart = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const recentHistory = dbStore.affiliateTrustHistory
+      .filter((entry) => entry.organizationId === context.organizationId && entry.affiliateId === context.affiliateId && entry.createdAt >= windowStart)
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+    if (recentHistory.length === 0) return safe(this.code, this.category, 'No recent trust score history for this affiliate.');
+
+    const earliestScore = recentHistory[0].previousScore;
+    const currentScore = affiliate.trustScore ?? recentHistory[recentHistory.length - 1].newScore;
+    const drop = earliestScore - currentScore;
+    const score = drop >= 30 ? 65 : drop >= 15 ? 30 : 0;
+
+    return {
+      code: this.code,
+      category: this.category,
+      detected: score > 0,
+      score,
+      confidence: 70,
+      reason: score > 0
+        ? `Affiliate trust score dropped ${drop} points in the last 30 days (from ${earliestScore} to ${currentScore}).`
+        : 'Affiliate trust score has been stable over the last 30 days.',
+      metadata: { earliestScore, currentScore, drop },
     };
   }
 }
