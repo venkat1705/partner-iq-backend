@@ -2641,4 +2641,774 @@ export class AffiliatePortalController {
       endDate,
     });
   }
+
+  // ----------------------------------------------------
+  // Detailed Analytics & Performance Metrics
+  // ----------------------------------------------------
+  @Get('api/v1/affiliate/me/analytics')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Comprehensive affiliate performance analytics' })
+  async getAnalytics(
+    @Req() req: any,
+    @Query('organizationId') organizationId?: string,
+    @Query('programId') programId?: string,
+    @Query('timeRange') timeRange = '30d',
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    const email = this.resolveAffiliateEmail(req);
+    const userId = req.user?.userId || req.user?.id || req.user?.sub;
+    const affiliates = await this.resolveAffiliatesForUser(email, userId);
+    const scopedAffiliates = organizationId
+      ? affiliates.filter((a) => a.organizationId === organizationId)
+      : affiliates;
+    const affiliateIds = scopedAffiliates.map((a) => a.id);
+
+    const now = new Date();
+    let from: Date;
+    let to = now;
+    let prevFrom: Date;
+
+    if (startDate && endDate) {
+      from = new Date(startDate);
+      to = new Date(endDate);
+      const duration = to.getTime() - from.getTime();
+      prevFrom = new Date(from.getTime() - duration);
+    } else if (timeRange === 'today') {
+      from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      to = now;
+      prevFrom = new Date(from.getTime() - 24 * 60 * 60 * 1000);
+    } else if (timeRange === 'yesterday') {
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      from = new Date(todayStart.getTime() - 24 * 60 * 60 * 1000);
+      to = todayStart;
+      prevFrom = new Date(from.getTime() - 24 * 60 * 60 * 1000);
+    } else if (timeRange === 'all') {
+      from = new Date(0);
+      to = now;
+      prevFrom = from;
+    } else {
+      const days = AffiliatePortalController.rangeDays(timeRange);
+      to = now;
+      from = new Date(to.getTime() - days * 86400000);
+      prevFrom = new Date(from.getTime() - days * 86400000);
+    }
+
+    const {
+      trackingLinks,
+      clicks: clicksRepo,
+      conversions,
+      commissions,
+      payoutItems,
+      programAffiliates,
+      affiliateTiers,
+      partnerTiers,
+      programs,
+      organizations,
+    } = await this.repositories();
+
+    // If no affiliate IDs, return clean empty structure
+    if (affiliateIds.length === 0) {
+      return {
+        summary: {
+          totalClicks: 0,
+          uniqueClicks: 0,
+          totalConversions: 0,
+          conversionRate: 0,
+          totalCommission: 0,
+          pendingCommission: 0,
+          approvedCommission: 0,
+          paidCommission: 0,
+          reversedCommission: 0,
+          averageCommission: 0,
+          activePrograms: 0,
+          totalReferralLinks: 0,
+          attributedRevenue: 0,
+        },
+        trends: { rangeDays: AffiliatePortalController.rangeDays(timeRange) },
+        conversionFunnel: {
+          clicks: 0,
+          conversions: 0,
+          conversionRate: 0,
+          approvedConversions: 0,
+          approvalRate: 0,
+          paidConversions: 0,
+          paidRate: 0,
+          reversedConversions: 0,
+          reversalRate: 0,
+        },
+        commissionBreakdown: {
+          pending: { count: 0, amount: 0 },
+          approved: { count: 0, amount: 0 },
+          paid: { count: 0, amount: 0 },
+          reversed: { count: 0, amount: 0 },
+        },
+        programPerformance: [],
+        referralLinkPerformance: [],
+        campaignPerformance: [],
+        earningsByProgram: [],
+        topPerformers: {
+          topPrograms: [],
+          topLinks: [],
+          topCampaigns: [],
+        },
+        insights: [],
+        tierProgress: null,
+      };
+    }
+
+    // 1. Fetch Tracking Links
+    const linksQb = trackingLinks.createQueryBuilder('tl')
+      .where('tl.affiliateId IN (:...affiliateIds)', { affiliateIds });
+    if (organizationId) {
+      linksQb.andWhere('tl.organizationId = :organizationId', { organizationId });
+    }
+    if (programId) {
+      linksQb.andWhere('tl.programId = :programId', { programId });
+    }
+    const linkList = await linksQb.orderBy('tl.createdAt', 'DESC').getMany();
+
+    // 2. Fetch Clicks (both previous window and current window)
+    const clicksQb = clicksRepo.createQueryBuilder('ck')
+      .where('ck.affiliateId IN (:...affiliateIds)', { affiliateIds });
+    if (organizationId) {
+      clicksQb.andWhere('ck.organizationId = :organizationId', { organizationId });
+    }
+    if (programId) {
+      clicksQb.andWhere('ck.programId = :programId', { programId });
+    }
+    if (timeRange !== 'all') {
+      clicksQb.andWhere('ck.createdAt >= :prevFrom AND ck.createdAt <= :to', { prevFrom, to });
+    }
+    const allClicks = await clicksQb.getMany();
+
+    // 3. Fetch Conversions
+    const convQb = conversions.createQueryBuilder('c')
+      .where('c.affiliateId IN (:...affiliateIds)', { affiliateIds });
+    if (organizationId) {
+      convQb.andWhere('c.organizationId = :organizationId', { organizationId });
+    }
+    if (programId) {
+      convQb.andWhere('c.programId = :programId', { programId });
+    }
+    if (timeRange !== 'all') {
+      convQb.andWhere('c.createdAt >= :prevFrom AND c.createdAt <= :to', { prevFrom, to });
+    }
+    const allConversions = await convQb.getMany();
+
+    // 4. Fetch Commissions
+    const commQb = commissions.createQueryBuilder('comm')
+      .where('comm.affiliateId IN (:...affiliateIds)', { affiliateIds });
+    if (organizationId) {
+      commQb.andWhere('comm.organizationId = :organizationId', { organizationId });
+    }
+    if (programId) {
+      commQb.andWhere('comm.programId = :programId', { programId });
+    }
+    if (timeRange !== 'all') {
+      commQb.andWhere('comm.createdAt >= :prevFrom AND comm.createdAt <= :to', { prevFrom, to });
+    }
+    const allCommissions = await commQb.getMany();
+
+    // 5. Fetch Programs & Organizations
+    const programIdsFromData = [
+      ...new Set([
+        ...linkList.map((l) => l.programId),
+        ...allClicks.map((c) => c.programId),
+        ...allConversions.map((c) => c.programId),
+        ...allCommissions.map((c) => c.programId),
+        ...(programId ? [programId] : []),
+      ].filter(Boolean)),
+    ];
+    const progList = programIdsFromData.length > 0
+      ? await programs.find({ where: { id: In(programIdsFromData) } })
+      : [];
+    const progMap = new Map(progList.map((p) => [p.id, p]));
+
+    const orgIdsFromData = [
+      ...new Set([
+        ...scopedAffiliates.map((a) => a.organizationId),
+        ...linkList.map((l) => l.organizationId),
+        ...progList.map((p) => p.organizationId),
+      ].filter(Boolean)),
+    ];
+    const orgList = orgIdsFromData.length > 0
+      ? await organizations.find({ where: { id: In(orgIdsFromData) } })
+      : [];
+    const orgMap = new Map(orgList.map((o) => [o.id, o]));
+
+    // Helper: is in window
+    const isInCurr = (d: Date | string) => {
+      const t = new Date(d).getTime();
+      return t >= from.getTime() && t <= to.getTime();
+    };
+    const isInPrev = (d: Date | string) => {
+      const t = new Date(d).getTime();
+      return t >= prevFrom.getTime() && t < from.getTime();
+    };
+
+    const currentClicks = allClicks.filter((c) => isInCurr(c.createdAt));
+    const prevClicks = allClicks.filter((c) => isInPrev(c.createdAt));
+
+    const currentConversions = allConversions.filter((c) => isInCurr(c.createdAt));
+    const prevConversions = allConversions.filter((c) => isInPrev(c.createdAt));
+
+    const currentCommissions = allCommissions.filter((c) => isInCurr(c.createdAt));
+    const prevCommissions = allCommissions.filter((c) => isInPrev(c.createdAt));
+
+    // Summary calculations
+    const totalClicks = currentClicks.length;
+    const uniqueClicks = new Set(currentClicks.map((c: any) => c.anonymousId || c.ipHash).filter(Boolean)).size;
+    const totalConversions = currentConversions.length;
+    const conversionRate = totalClicks > 0 ? Number(((totalConversions / totalClicks) * 100).toFixed(2)) : 0;
+
+    // Commission buckets
+    const getNet = (c: any) => Number(c.amount || c.commissionAmount || 0) - Number(c.reversedAmount || 0);
+
+    const approvedCommission = currentCommissions
+      .filter((c: any) => c.status === ConversionStatus.APPROVED || (c.status as any) === 'PAYABLE')
+      .reduce((sum, c: any) => sum + getNet(c), 0);
+
+    const paidCommission = currentCommissions
+      .filter((c: any) => (c.status as any) === 'PAID')
+      .reduce((sum, c: any) => sum + getNet(c), 0);
+
+    const reversedCommission = currentCommissions
+      .filter((c: any) => c.status === ConversionStatus.REFUNDED || c.status === ConversionStatus.PARTIALLY_REFUNDED || c.status === ConversionStatus.CHARGEBACK)
+      .reduce((sum, c: any) => sum + Number(c.reversedAmount || c.amount || c.commissionAmount || 0), 0)
+      + currentCommissions.reduce((sum, c: any) => sum + Number(c.reversedAmount || 0), 0);
+
+    // Pending conversions estimation
+    const pendingConversions = currentConversions.filter((c: any) => c.status === ConversionStatus.PENDING);
+    const pendingFromConversions = pendingConversions.reduce((sum, c: any) => {
+      const prog = progMap.get(c.programId);
+      const commissionValue = prog?.defaultCommissionValue ?? 1000;
+      const estimated =
+        prog?.commissionType === CommissionType.FIXED_AMOUNT
+          ? commissionValue
+          : Math.round((Number(c.amount || 0) * commissionValue) / 10000);
+      return sum + estimated;
+    }, 0);
+    const pendingFromCommissions = currentCommissions
+      .filter((c: any) => c.status === ConversionStatus.PENDING)
+      .reduce((sum, c: any) => sum + getNet(c), 0);
+    const pendingCommission = pendingFromConversions + pendingFromCommissions;
+
+    const totalCommission = approvedCommission + paidCommission;
+
+    const averageCommission = totalConversions > 0
+      ? Number((totalCommission / totalConversions).toFixed(2))
+      : 0;
+
+    const attributedRevenue = currentConversions
+      .filter((c: any) => c.status !== ConversionStatus.REJECTED)
+      .reduce((sum, c: any) => sum + Number(c.amount || (c as any).value || 0), 0);
+
+    const activeProgramsSet = new Set([
+      ...linkList.map((l) => l.programId),
+      ...currentConversions.map((c) => c.programId),
+    ].filter(Boolean));
+    const activePrograms = activeProgramsSet.size;
+    const totalReferralLinks = linkList.length;
+
+    // Previous window metrics for trends
+    const prevClicksCount = prevClicks.length;
+    const prevConvCount = prevConversions.length;
+    const prevEarnings = prevCommissions
+      .filter((c: any) => c.status === ConversionStatus.APPROVED || (c.status as any) === 'PAYABLE' || (c.status as any) === 'PAID')
+      .reduce((sum, c: any) => sum + getNet(c), 0);
+    const prevRevenue = prevConversions
+      .filter((c: any) => c.status !== ConversionStatus.REJECTED)
+      .reduce((sum, c: any) => sum + Number(c.amount || (c as any).value || 0), 0);
+    const prevRate = prevClicksCount > 0 ? (prevConvCount / prevClicksCount) * 100 : 0;
+
+    const daysCount = timeRange === 'all' ? 0 : AffiliatePortalController.rangeDays(timeRange);
+
+    const trends = {
+      rangeDays: daysCount,
+      clicks: AffiliatePortalController.pctChange(totalClicks, prevClicksCount),
+      conversions: AffiliatePortalController.pctChange(totalConversions, prevConvCount),
+      earnings: AffiliatePortalController.pctChange(totalCommission, prevEarnings),
+      revenue: AffiliatePortalController.pctChange(attributedRevenue, prevRevenue),
+      conversionRate: AffiliatePortalController.pctChange(conversionRate, prevRate),
+    };
+
+    // Conversion Funnel
+    const approvedConvCount = currentConversions.filter((c: any) => c.status === ConversionStatus.APPROVED).length;
+    const paidConvCount = currentConversions.filter((c: any) => {
+      const comm = currentCommissions.find((cm) => cm.conversionId === c.id);
+      return (comm?.status as any) === 'PAID';
+    }).length;
+    const reversedConvCount = currentConversions.filter(
+      (c: any) => c.status === ConversionStatus.REFUNDED || c.status === ConversionStatus.PARTIALLY_REFUNDED || c.status === ConversionStatus.CHARGEBACK,
+    ).length;
+
+    const conversionFunnel = {
+      clicks: totalClicks,
+      conversions: totalConversions,
+      conversionRate,
+      approvedConversions: approvedConvCount,
+      approvalRate: totalConversions > 0 ? Number(((approvedConvCount / totalConversions) * 100).toFixed(1)) : 0,
+      paidConversions: paidConvCount,
+      paidRate: totalConversions > 0 ? Number(((paidConvCount / totalConversions) * 100).toFixed(1)) : 0,
+      reversedConversions: reversedConvCount,
+      reversalRate: totalConversions > 0 ? Number(((reversedConvCount / totalConversions) * 100).toFixed(1)) : 0,
+    };
+
+    // Commission Status Breakdown
+    const commissionBreakdown = {
+      pending: {
+        count: pendingConversions.length + currentCommissions.filter((c: any) => c.status === ConversionStatus.PENDING).length,
+        amount: pendingCommission,
+      },
+      approved: {
+        count: currentCommissions.filter((c: any) => c.status === ConversionStatus.APPROVED || (c.status as any) === 'PAYABLE').length,
+        amount: approvedCommission,
+      },
+      paid: {
+        count: currentCommissions.filter((c: any) => (c.status as any) === 'PAID').length,
+        amount: paidCommission,
+      },
+      reversed: {
+        count: currentCommissions.filter((c: any) => c.status === ConversionStatus.REFUNDED || c.status === ConversionStatus.PARTIALLY_REFUNDED || c.status === ConversionStatus.CHARGEBACK).length,
+        amount: reversedCommission,
+      },
+    };
+
+    // Referral Link Performance
+    const clicksByLink = new Map<string, any[]>();
+    for (const ck of currentClicks) {
+      if (ck.trackingLinkId) {
+        if (!clicksByLink.has(ck.trackingLinkId)) clicksByLink.set(ck.trackingLinkId, []);
+        clicksByLink.get(ck.trackingLinkId)!.push(ck);
+      }
+    }
+
+    const clickLinkMap = new Map<string, string>();
+    for (const ck of allClicks) {
+      if (ck.id && ck.trackingLinkId) clickLinkMap.set(ck.id, ck.trackingLinkId);
+    }
+
+    const convByLink = new Map<string, any[]>();
+    for (const c of currentConversions) {
+      const lid = (c as any).trackingLinkId || c.metadata?.trackingLinkId || (c.clickId ? clickLinkMap.get(c.clickId) : null);
+      if (lid) {
+        if (!convByLink.has(lid)) convByLink.set(lid, []);
+        convByLink.get(lid)!.push(c);
+      }
+    }
+
+    const convIdToLink = new Map<string, string>();
+    for (const c of allConversions) {
+      const lid = (c as any).trackingLinkId || c.metadata?.trackingLinkId || (c.clickId ? clickLinkMap.get(c.clickId) : null);
+      if (lid) convIdToLink.set(c.id, lid);
+    }
+    const commByLink = new Map<string, number>();
+    for (const cm of currentCommissions) {
+      const lid = convIdToLink.get(cm.conversionId) || (cm as any).trackingLinkId;
+      if (lid) {
+        commByLink.set(lid, (commByLink.get(lid) || 0) + getNet(cm));
+      }
+    }
+
+    const referralLinkPerformance = linkList.map((l) => {
+      const p = progMap.get(l.programId);
+      const o = orgMap.get(l.organizationId);
+      const lClicks = clicksByLink.get(l.id) || [];
+      const lConvs = convByLink.get(l.id) || [];
+      const lCommission = commByLink.get(l.id) || 0;
+      const lUnique = new Set(lClicks.map((c: any) => c.anonymousId || c.ipHash).filter(Boolean)).size;
+      const lRate = lClicks.length > 0 ? Number(((lConvs.length / lClicks.length) * 100).toFixed(2)) : 0;
+      const lastClick = lClicks.length > 0
+        ? lClicks.reduce((max, c) => (new Date(c.createdAt) > new Date(max) ? c.createdAt : max), lClicks[0].createdAt)
+        : null;
+
+      return {
+        id: l.id,
+        title: (l as any).title || `${p?.name || 'Referral'} Link`,
+        shortCode: l.shortCode,
+        destinationUrl: l.destinationUrl,
+        trackingUrl: `https://${o?.slug || 'go'}.partneriq.in/r/${l.shortCode}`,
+        programId: l.programId,
+        programName: p?.name || 'Partner Program',
+        organizationId: l.organizationId,
+        organizationName: o?.name || 'Organization',
+        clicks: lClicks.length,
+        uniqueClicks: lUnique,
+        conversions: lConvs.length,
+        conversionRate: lRate,
+        commissionEarned: lCommission,
+        lastClickDate: lastClick,
+        campaign: (l as any).campaign || (l as any).campaignId || l.subId || '',
+        status: l.status,
+        createdAt: l.createdAt,
+      };
+    });
+
+    // Program Performance
+    const programIdsForReport = progList.map((p) => p.id);
+    const programPerformance = programIdsForReport.map((pid) => {
+      const p = progMap.get(pid);
+      const o = p ? orgMap.get(p.organizationId) : null;
+      const pLinks = linkList.filter((l) => l.programId === pid);
+      const pClicks = currentClicks.filter((c) => c.programId === pid);
+      const pUnique = new Set(pClicks.map((c: any) => c.anonymousId || c.ipHash).filter(Boolean)).size;
+      const pConvs = currentConversions.filter((c) => c.programId === pid);
+      const pComms = currentCommissions.filter((c) => c.programId === pid);
+
+      const pApproved = pComms
+        .filter((c: any) => c.status === ConversionStatus.APPROVED || (c.status as any) === 'PAYABLE')
+        .reduce((sum, c: any) => sum + getNet(c), 0);
+      const pPaid = pComms
+        .filter((c: any) => (c.status as any) === 'PAID')
+        .reduce((sum, c: any) => sum + getNet(c), 0);
+      const pReversed = pComms
+        .filter((c: any) => c.status === ConversionStatus.REFUNDED || c.status === ConversionStatus.PARTIALLY_REFUNDED || c.status === ConversionStatus.CHARGEBACK)
+        .reduce((sum, c: any) => sum + Number(c.reversedAmount || c.amount || 0), 0)
+        + pComms.reduce((sum, c: any) => sum + Number(c.reversedAmount || 0), 0);
+
+      const pPendingConvs = pConvs.filter((c: any) => c.status === ConversionStatus.PENDING);
+      const pPending = pPendingConvs.reduce((sum, c: any) => {
+        const commissionValue = p?.defaultCommissionValue ?? 1000;
+        const estimated =
+          p?.commissionType === CommissionType.FIXED_AMOUNT
+            ? commissionValue
+            : Math.round((Number(c.amount || 0) * commissionValue) / 10000);
+        return sum + estimated;
+      }, 0);
+
+      const pCommission = pApproved + pPaid;
+      const pConvRate = pClicks.length > 0 ? Number(((pConvs.length / pClicks.length) * 100).toFixed(2)) : 0;
+
+      let topLinkName: string | undefined;
+      let maxLinkEarnings = -1;
+      for (const pl of pLinks) {
+        const plComm = commByLink.get(pl.id) || 0;
+        if (plComm > maxLinkEarnings) {
+          maxLinkEarnings = plComm;
+          topLinkName = pl.shortCode;
+        }
+      }
+
+      return {
+        programId: pid,
+        programName: p?.name || 'Partner Program',
+        organizationId: p?.organizationId || '',
+        organizationName: o?.name || 'Organization',
+        currency: (o as any)?.defaultCurrency || (o as any)?.currency || p?.currency || PLATFORM_CURRENCY,
+        clicks: pClicks.length,
+        uniqueClicks: pUnique,
+        conversions: pConvs.length,
+        conversionRate: pConvRate,
+        commissionEarned: pCommission,
+        pendingCommission: pPending,
+        approvedCommission: pApproved,
+        paidCommission: pPaid,
+        reversedCommission: pReversed,
+        referralLinksCount: pLinks.length,
+        topPerformingLink: topLinkName || (pLinks[0]?.shortCode ?? '—'),
+      };
+    }).filter((item) => item.clicks > 0 || item.conversions > 0 || item.commissionEarned > 0 || item.referralLinksCount > 0);
+
+    // Earnings by program (for charts)
+    const earningsByProgram = programPerformance.map((p) => ({
+      programId: p.programId,
+      programName: p.programName,
+      commissionEarned: p.commissionEarned,
+      conversions: p.conversions,
+      currency: p.currency,
+    }));
+
+    // Campaign & UTM Performance
+    const campaignMap = new Map<string, {
+      campaignName: string;
+      utmSource: string;
+      utmMedium: string;
+      utmCampaign: string;
+      utmContent: string;
+      clicks: number;
+      uniqueClicksSet: Set<string>;
+      conversions: number;
+      commissionEarned: number;
+    }>();
+
+    for (const ck of currentClicks) {
+      const source = (ck.utmSource || '').trim();
+      const medium = (ck.utmMedium || '').trim();
+      const campaign = (ck.utmCampaign || '').trim();
+      const content = (ck.utmContent || '').trim();
+
+      if (source || medium || campaign || content) {
+        const key = `${source}|${medium}|${campaign}|${content}`.toLowerCase();
+        if (!campaignMap.has(key)) {
+          campaignMap.set(key, {
+            campaignName: campaign || source || 'Campaign',
+            utmSource: source || '—',
+            utmMedium: medium || '—',
+            utmCampaign: campaign || '—',
+            utmContent: content || '—',
+            clicks: 0,
+            uniqueClicksSet: new Set<string>(),
+            conversions: 0,
+            commissionEarned: 0,
+          });
+        }
+        const entry = campaignMap.get(key)!;
+        entry.clicks += 1;
+        if (ck.anonymousId || ck.ipHash) entry.uniqueClicksSet.add(ck.anonymousId || ck.ipHash);
+      }
+    }
+
+    // Add conversions & commissions to campaigns
+    for (const c of currentConversions) {
+      if (c.clickId) {
+        const matchedClick = allClicks.find((ck) => ck.id === c.clickId);
+        if (matchedClick) {
+          const source = (matchedClick.utmSource || '').trim();
+          const medium = (matchedClick.utmMedium || '').trim();
+          const campaign = (matchedClick.utmCampaign || '').trim();
+          const content = (matchedClick.utmContent || '').trim();
+          if (source || medium || campaign || content) {
+            const key = `${source}|${medium}|${campaign}|${content}`.toLowerCase();
+            const entry = campaignMap.get(key);
+            if (entry) {
+              entry.conversions += 1;
+              const comm = currentCommissions.find((cm) => cm.conversionId === c.id);
+              if (comm) {
+                entry.commissionEarned += getNet(comm);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    const campaignPerformance = Array.from(campaignMap.values()).map((camp) => ({
+      campaignName: camp.campaignName,
+      utmSource: camp.utmSource,
+      utmMedium: camp.utmMedium,
+      utmCampaign: camp.utmCampaign,
+      utmContent: camp.utmContent,
+      clicks: camp.clicks,
+      uniqueClicks: camp.uniqueClicksSet.size,
+      conversions: camp.conversions,
+      conversionRate: camp.clicks > 0 ? Number(((camp.conversions / camp.clicks) * 100).toFixed(2)) : 0,
+      commissionEarned: camp.commissionEarned,
+    })).sort((a, b) => b.commissionEarned - a.commissionEarned || b.clicks - a.clicks);
+
+    // Top Performers
+    const topPrograms = [...programPerformance]
+      .sort((a, b) => b.commissionEarned - a.commissionEarned || b.conversions - a.conversions)
+      .slice(0, 5);
+
+    const topLinks = [...referralLinkPerformance]
+      .sort((a, b) => b.commissionEarned - a.commissionEarned || b.clicks - a.clicks)
+      .slice(0, 5);
+
+    const topCampaigns = [...campaignPerformance].slice(0, 5);
+
+    // Dynamic Insights
+    const insights: Array<{ type: 'positive' | 'neutral' | 'warning' | 'info'; title: string; message: string }> = [];
+
+    if (trends.clicks !== undefined) {
+      if (trends.clicks > 0) {
+        insights.push({
+          type: 'positive',
+          title: 'Traffic Velocity Surge',
+          message: `Referral traffic grew by ${trends.clicks}% compared to the prior window (${totalClicks} vs ${prevClicksCount} clicks).`,
+        });
+      } else if (trends.clicks < 0) {
+        insights.push({
+          type: 'neutral',
+          title: 'Traffic Dip',
+          message: `Click volume decreased by ${Math.abs(trends.clicks)}% compared to the prior window. Sharing new links or assets could re-engage visitors.`,
+        });
+      }
+    }
+
+    if (topPrograms.length > 0 && topPrograms[0].commissionEarned > 0) {
+      insights.push({
+        type: 'info',
+        title: 'Top Contributing Program',
+        message: `"${topPrograms[0].programName}" is currently your highest-yield program, generating ${topPrograms[0].commissionEarned} in earned commissions.`,
+      });
+    }
+
+    if (pendingCommission > 0) {
+      insights.push({
+        type: 'info',
+        title: 'Pending Review Balance',
+        message: `You have estimated pending commissions awaiting review/approval. These will become payable once the hold window concludes.`,
+      });
+    }
+
+    if (totalClicks > 0 && totalConversions === 0) {
+      insights.push({
+        type: 'warning',
+        title: 'Conversion Optimization',
+        message: `You have recorded ${totalClicks} clicks with no checkouts yet. Consider pointing links directly to high-converting product or promotional landing pages.`,
+      });
+    } else if (conversionRate >= 5) {
+      insights.push({
+        type: 'positive',
+        title: 'High Conversion Efficiency',
+        message: `Your conversion rate of ${conversionRate}% is strong. Your traffic sources are converting effectively.`,
+      });
+    }
+
+    // Tier Progress & Milestones
+    let currentTierDef: any = null;
+    let orgTiers: any[] = [];
+    const orgIdForTier = organizationId || scopedAffiliates[0]?.organizationId;
+
+    if (orgIdForTier) {
+      orgTiers = await partnerTiers.find({
+        where: { organizationId: orgIdForTier, isActive: true },
+        order: { level: 'ASC' },
+      });
+    }
+
+    const DEFAULT_TIER_LADDER = [
+      {
+        id: 'tier_bronze',
+        name: 'Bronze Partner',
+        code: 'BRONZE',
+        level: 1,
+        badge: 'Bronze Affiliate',
+        colorToken: 'bronze',
+        description: 'Entry-level tier for all enrolled partners. Start driving conversions to level up.',
+        commissionRateOverride: 1500,
+        conditions: { minimumConversions: 0 },
+      },
+      {
+        id: 'tier_silver',
+        name: 'Silver Partner',
+        code: 'SILVER',
+        level: 2,
+        badge: 'Silver Affiliate',
+        colorToken: 'silver',
+        description: 'Accelerated tier for active partners with higher commissions and faster review windows.',
+        commissionRateOverride: 1750,
+        conditions: { minimumConversions: 10 },
+      },
+      {
+        id: 'tier_gold',
+        name: 'Gold Partner',
+        code: 'GOLD',
+        level: 3,
+        badge: 'Gold Affiliate',
+        colorToken: 'gold',
+        description: 'Premier tier offering enhanced commission rates, exclusive marketing assets, and priority support.',
+        commissionRateOverride: 2000,
+        conditions: { minimumConversions: 50 },
+      },
+      {
+        id: 'tier_platinum',
+        name: 'Platinum Partner',
+        code: 'PLATINUM',
+        level: 4,
+        badge: 'Platinum Affiliate',
+        colorToken: 'platinum',
+        description: 'Top-tier VIP status with highest commission rates, dedicated affiliate manager, and custom terms.',
+        commissionRateOverride: 2500,
+        conditions: { minimumConversions: 100 },
+      },
+    ];
+
+    const effectiveOrgTiers = orgTiers.length > 0 ? orgTiers : DEFAULT_TIER_LADDER;
+
+    for (const aff of scopedAffiliates) {
+      const affTier = await affiliateTiers.findOne({ where: { organizationId: aff.organizationId, affiliateId: aff.id } });
+      if (!affTier?.currentTierId) continue;
+      const tierDef = await partnerTiers.findOne({ where: { id: affTier.currentTierId } });
+      if (!tierDef) continue;
+      if (!currentTierDef || tierDef.level > currentTierDef.level) {
+        currentTierDef = tierDef;
+      }
+    }
+
+    const qualifiedConversions = currentConversions.filter((c: any) => c.status !== ConversionStatus.REJECTED).length;
+
+    if (!currentTierDef) {
+      // Pick highest eligible tier based on qualified conversions
+      const eligible = effectiveOrgTiers.filter((t) => {
+        const req = t.conditions?.minimumConversions ?? 0;
+        return qualifiedConversions >= req;
+      });
+      currentTierDef = eligible.length > 0 ? eligible[eligible.length - 1] : effectiveOrgTiers[0];
+    }
+
+    const currentLevel = currentTierDef?.level || 1;
+    const nextTierDef = effectiveOrgTiers.find((t) => t.level > currentLevel);
+
+    const nextTierRequiredConversions = nextTierDef?.conditions?.minimumConversions ?? (currentLevel === 1 ? 10 : currentLevel === 2 ? 50 : 100);
+    const conversionsRemaining = nextTierDef ? Math.max(0, nextTierRequiredConversions - qualifiedConversions) : 0;
+    const progressPercentage = nextTierDef
+      ? (nextTierRequiredConversions > 0
+        ? Math.min(100, Math.round((qualifiedConversions / nextTierRequiredConversions) * 100))
+        : 100)
+      : 100;
+
+    const tierProgress = {
+      currentTier: {
+        id: currentTierDef?.id || 'tier_bronze',
+        name: currentTierDef?.name || 'Bronze Partner',
+        code: currentTierDef?.code || 'BRONZE',
+        level: currentLevel,
+        badge: currentTierDef?.badge || 'Bronze Affiliate',
+        colorToken: currentTierDef?.colorToken || 'bronze',
+        description: currentTierDef?.description || 'Starting tier for enrolled partners.',
+        commissionRateOverride: currentTierDef?.commissionRateOverride || 1500,
+      },
+      nextTier: nextTierDef ? {
+        id: nextTierDef.id,
+        name: nextTierDef.name,
+        code: nextTierDef.code,
+        level: nextTierDef.level,
+        badge: nextTierDef.badge,
+        colorToken: nextTierDef.colorToken,
+        description: nextTierDef.description,
+        requiredConversions: nextTierRequiredConversions,
+      } : null,
+      progressPercentage,
+      currentConversions: qualifiedConversions,
+      nextTierRequiredConversions,
+      conversionsRemaining,
+      effectiveCommissionRate: currentTierDef?.commissionRateOverride || 1500,
+    };
+
+    return {
+      summary: {
+        totalClicks,
+        uniqueClicks,
+        totalConversions,
+        conversionRate,
+        totalCommission,
+        pendingCommission,
+        approvedCommission,
+        paidCommission,
+        reversedCommission,
+        averageCommission,
+        activePrograms,
+        totalReferralLinks,
+        attributedRevenue,
+      },
+      trends,
+      conversionFunnel,
+      commissionBreakdown,
+      programPerformance,
+      referralLinkPerformance,
+      campaignPerformance,
+      earningsByProgram,
+      topPerformers: {
+        topPrograms,
+        topLinks,
+        topCampaigns,
+      },
+      insights,
+      tierProgress,
+    };
+  }
 }
+
