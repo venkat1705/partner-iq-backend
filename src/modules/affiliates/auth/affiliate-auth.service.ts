@@ -120,8 +120,9 @@ export class AffiliateAuthService {
     if (!dbStore.users.some((item) => item.id === savedUser.id)) {
       dbStore.users.push(savedUser);
     }
-    const result = await this.authService.createSessionAndTokens(savedUser, userAgent, ipAddress);
 
+    // The partner profile is created now so the account is complete the moment
+    // the code is entered, but no session is issued until then.
     await this.ensureAffiliateProfile({
       userId: savedUser.id,
       email: normalizedEmail,
@@ -137,39 +138,91 @@ export class AffiliateAuthService {
       referralCode: payload.referralCode,
     });
 
-    const dashboardUrl = `${getAppConfig().affiliateFrontendUrl.replace(/\/$/, '')}/dashboard`;
-    this.emailDispatch?.send(
-      SystemTemplateKey.AFFILIATE_WELCOME,
-      normalizedEmail,
-      {
-        affiliateName: savedUser.firstName,
-        organizationName: 'PartnerIQ',
-        dashboardUrl,
-        affiliate: { firstName: savedUser.firstName },
-        organization: { name: 'PartnerIQ' },
-        links: { dashboardUrl },
+    // Registration ends at the email-verification gate. The invitation token is
+    // carried on the challenge rather than in the browser, so the program join
+    // still happens on verification even if the partner finishes on another tab.
+    const challenge = await this.authService.issueEmailOtpChallenge(savedUser, userAgent, ipAddress, {
+      metadata: {
+        portal: 'AFFILIATE',
+        stage: 'registration',
+        invitationToken: payload.invitationToken,
       },
-      { userId: savedUser.id },
-    ).catch(() => undefined);
+    });
 
-    this.notificationsService?.createNotification({
+    return {
+      requiresEmailVerification: true,
+      challengeId: challenge.challengeId,
       userId: savedUser.id,
-      type: 'system',
-      title: 'Welcome to PartnerIQ',
-      body: 'Your affiliate account is ready. Apply to a partner program to start earning.',
-      channel: 'in_app',
-      priority: 'normal',
-      actionUrl: '/dashboard',
-    }).catch(() => undefined);
+      email: savedUser.email,
+      expiresAt: challenge.expiresAt,
+      message: 'Account created. Enter the verification code we emailed you to continue.',
+    };
+  }
 
-    // The account now exists, so the invitation that sent them here can be
-    // completed and the partner lands on their dashboard already joined.
-    const invitation = await this.affiliatesService.completeInvitationAfterAuth(
-      payload.invitationToken,
-      savedUser.id,
-    );
+  /**
+   * Finishes a registration or an unverified sign-in: verifies the emailed code,
+   * issues the affiliate session, and runs the post-signup work that was held
+   * back until the address was proven.
+   */
+  async verifyEmailOtp(challengeId: string, code: string, userAgent?: string, ipAddress?: string) {
+    const result: any = await this.authService.verifyEmailOtp(challengeId, code, userAgent, ipAddress, {
+      expectAffiliate: true,
+    });
 
-    return { ...(await this.withAffiliateContext(result)), invitation };
+    const userId = result.user?.id;
+    const email = (result.user?.email || '').toLowerCase().trim();
+
+    if (userId && email) {
+      await this.ensureAffiliateProfile({ userId, email });
+    }
+
+    // Only a registration that has just been verified gets the welcome mail; a
+    // returning partner clearing the gate at sign-in has already had it.
+    if (userId && result.verificationContext?.stage === 'registration') {
+      const dashboardUrl = `${getAppConfig().affiliateFrontendUrl.replace(/\/$/, '')}/dashboard`;
+      const firstName = result.user?.firstName || 'Partner';
+      this.emailDispatch?.send(
+        SystemTemplateKey.AFFILIATE_WELCOME,
+        email,
+        {
+          affiliateName: firstName,
+          organizationName: 'PartnerIQ',
+          dashboardUrl,
+          affiliate: { firstName },
+          organization: { name: 'PartnerIQ' },
+          links: { dashboardUrl },
+        },
+        { userId },
+      ).catch(() => undefined);
+
+      this.notificationsService?.createNotification({
+        userId,
+        type: 'system',
+        title: 'Welcome to PartnerIQ',
+        body: 'Your affiliate account is ready. Apply to a partner program to start earning.',
+        channel: 'in_app',
+        priority: 'normal',
+        actionUrl: '/dashboard',
+      }).catch(() => undefined);
+    }
+
+    const invitationToken = result.verificationContext?.invitationToken;
+    const invitation = userId
+      ? await this.affiliatesService.completeInvitationAfterAuth(invitationToken, userId)
+      : undefined;
+
+    const { verificationContext, ...tokens } = result;
+    return { ...(await this.withAffiliateContext(tokens)), invitation };
+  }
+
+  /**
+   * Re-sends the pending verification code. Cooldown and account-enumeration
+   * handling both live in AuthService; this only pins the request to this portal.
+   */
+  async resendEmailOtp(challengeId?: string, email?: string, userAgent?: string, ipAddress?: string) {
+    return this.authService.resendEmailOtp(challengeId, email, userAgent, ipAddress, {
+      expectAffiliate: true,
+    });
   }
 
   async login(
@@ -186,6 +239,22 @@ export class AffiliateAuthService {
       ipAddress,
       { allowAffiliate: true },
     );
+
+    // Unverified account: AuthService has already raised (or re-sent) the email
+    // challenge instead of issuing a session. Pin the invitation to that
+    // challenge so verifying the code still joins the invited program.
+    if ('requiresEmailVerification' in result) {
+      if (invitationToken) {
+        const { users } = await this.repositories();
+        const user = await users.findOne({ where: { email: normalizedEmail, deletedAt: IsNull() } });
+        if (user) {
+          await this.authService.issueEmailOtpChallenge(user, userAgent, ipAddress, {
+            metadata: { portal: 'AFFILIATE', stage: 'login', invitationToken },
+          });
+        }
+      }
+      return result;
+    }
 
     if ('accessToken' in result) {
       const userId = (result as any).user?.id;

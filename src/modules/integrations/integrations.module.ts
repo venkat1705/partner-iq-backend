@@ -15,6 +15,7 @@ import { HubSpotWebhookService } from './hubspot/hubspot-webhook.service';
 import { HubSpotProvider } from './providers/hubspot.provider';
 import { ZohoCrmProvider } from './providers/zoho-crm.provider';
 import { RazorpayProvider } from './providers/razorpay.provider';
+import { RazorpayTokenService } from './razorpay/razorpay-token.service';
 import { CashfreeProvider } from './providers/cashfree.provider';
 import { IntegrationProviderFactory } from './providers/provider.factory';
 
@@ -31,6 +32,7 @@ import { IntegrationProviderFactory } from './providers/provider.factory';
     HubSpotProvider,
     ZohoCrmProvider,
     RazorpayProvider,
+    RazorpayTokenService,
     CashfreeProvider,
     IntegrationProviderFactory,
   ],
@@ -40,6 +42,7 @@ import { IntegrationProviderFactory } from './providers/provider.factory';
     HubSpotService,
     HubSpotTokenService,
     HubSpotApiClient,
+    RazorpayTokenService,
     IntegrationProviderFactory,
   ],
 })

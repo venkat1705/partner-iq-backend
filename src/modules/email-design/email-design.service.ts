@@ -20,7 +20,7 @@ const DEFAULT_BRAND_SETTINGS = {
   name: 'PartnerIQ',
   tagline: 'Partner & Affiliate Management Platform',
   signature: 'Built for better partnerships.',
-  companyLegal: 'PartnerIQ Technologies Inc.',
+  companyLegal: 'PartnerIQ',
   logoUrl:
     'https://res.cloudinary.com/bunny1705/image/upload/v1787584202/partneriq/92977d80-3e51-4a12-a382-64b42fb5466a/organization-logo/rrhwttefwtgrxico2rtv.png',
   websiteUrl: 'https://partneriq.in',

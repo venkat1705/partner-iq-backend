@@ -8,6 +8,7 @@ import { RazorpayProvider } from '../modules/integrations/providers/razorpay.pro
 import { CashfreeProvider } from '../modules/integrations/providers/cashfree.provider';
 import { IntegrationProviderFactory } from '../modules/integrations/providers/provider.factory';
 import { IntegrationsService } from '../modules/integrations/integrations.service';
+import { RazorpayTokenService } from '../modules/integrations/razorpay/razorpay-token.service';
 
 async function runIntegrationsTest() {
   console.log('--- Starting Integrations Marketplace End-to-End Test ---');
@@ -25,7 +26,8 @@ async function runIntegrationsTest() {
     cashfreeProvider,
   );
 
-  const integrationsService = new IntegrationsService(credentialService, providerFactory);
+  const razorpayTokenService = new RazorpayTokenService(credentialService, razorpayProvider);
+  const integrationsService = new IntegrationsService(credentialService, providerFactory, razorpayTokenService);
 
   // 1. Check Provider Factory
   console.log('Test 1: Provider Factory lookup');

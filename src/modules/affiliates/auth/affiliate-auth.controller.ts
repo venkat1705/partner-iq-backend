@@ -2,6 +2,7 @@ import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query, Req, Res, Use
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { CookieOptions, Request, Response } from 'express';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { MfaRateLimiterGuard } from '../../../common/guards/mfa-rate-limiter.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { getAppConfig } from '../../../config/app.config';
 import { AffiliateAuthService } from './affiliate-auth.service';
@@ -26,14 +27,13 @@ export class AffiliateAuthController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Register affiliate portal account' })
   async register(@Body() body: any, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    // Registration no longer opens a session: it ends at the email-verification
+    // challenge, and the cookie is set by verify-email-otp once the code checks out.
     const result = await this.affiliateAuthService.register(
       body,
       req.headers['user-agent'],
       req.ip || (req.headers['x-forwarded-for'] as string),
     );
-    if (result.refreshToken) {
-      res.cookie('affiliateRefreshToken', result.refreshToken, affiliateRefreshCookieOptions());
-    }
     return { success: true, data: result };
   }
 
@@ -53,6 +53,37 @@ export class AffiliateAuthController {
     if (result.refreshToken) {
       res.cookie('affiliateRefreshToken', result.refreshToken, affiliateRefreshCookieOptions());
     }
+    return { success: true, data: result };
+  }
+
+  @Post('verify-email-otp')
+  @UseGuards(MfaRateLimiterGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify the emailed OTP code and open the affiliate session' })
+  async verifyEmailOtp(@Body() body: any, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const result = await this.affiliateAuthService.verifyEmailOtp(
+      body?.challengeId,
+      body?.code,
+      req.headers['user-agent'],
+      req.ip || (req.headers['x-forwarded-for'] as string),
+    );
+    if (result.refreshToken) {
+      res.cookie('affiliateRefreshToken', result.refreshToken, affiliateRefreshCookieOptions());
+    }
+    return { success: true, data: result };
+  }
+
+  @Post('resend-email-otp')
+  @UseGuards(MfaRateLimiterGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Resend the affiliate email verification code (cooldown-gated)' })
+  async resendEmailOtp(@Body() body: any, @Req() req: Request) {
+    const result = await this.affiliateAuthService.resendEmailOtp(
+      body?.challengeId,
+      body?.email,
+      req.headers['user-agent'],
+      req.ip || (req.headers['x-forwarded-for'] as string),
+    );
     return { success: true, data: result };
   }
 

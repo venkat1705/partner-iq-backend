@@ -17,6 +17,7 @@ import { PayoutsModule } from './modules/payouts/payouts.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { TaxCertificatesModule } from './modules/tax-certificates/tax-certificates.module';
 import { IntegrationsModule } from './modules/integrations/integrations.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { MediaModule } from './modules/media/media.module';
@@ -57,6 +58,7 @@ import { CouponsModule } from './modules/coupons/coupons.module';
     WebhooksModule,
     AuditModule,
     AdminModule,
+    TaxCertificatesModule,
     IntegrationsModule,
     BillingModule,
     MediaModule,

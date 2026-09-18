@@ -16,7 +16,9 @@ import { integrationAdapterRegistry } from './adapters/registry';
 import { IntegrationCredentialService } from './integration-credential.service';
 import { ConnectIntegrationDto, TestIntegrationDto } from './dto/connect-integration.dto';
 import { IntegrationProviderFactory } from './providers/provider.factory';
+import { IntegrationTestContext, IntegrationTestResult } from './providers/provider.interface';
 import { HubSpotService } from './hubspot/hubspot.service';
+import { RazorpayTokenService } from './razorpay/razorpay-token.service';
 import { getAppConfig } from '../../config/app.config';
 import { ConversionsService } from '../conversions/conversions.service';
 
@@ -27,6 +29,7 @@ export class IntegrationsService {
   constructor(
     private readonly credentialService: IntegrationCredentialService,
     private readonly providerFactory: IntegrationProviderFactory,
+    private readonly razorpayTokenService: RazorpayTokenService,
     @Inject(forwardRef(() => HubSpotService))
     private readonly hubspotService?: HubSpotService,
     private readonly conversionsService?: ConversionsService,
@@ -525,6 +528,11 @@ export class IntegrationsService {
       if (token.expiresIn) {
         this.credentialService.storeCredential(connection.id, 'access_token_expires_at', String(Date.now() + token.expiresIn * 1000));
       }
+      // Provider-issued extras that must persist alongside the token — e.g. Razorpay's
+      // `public_token` (client-side Checkout key) and `razorpay_account_id`.
+      for (const [key, value] of Object.entries((token.extraCredentials || {}) as Record<string, string>)) {
+        this.credentialService.storeCredential(connection.id, key, value);
+      }
 
       connection.status = OrganizationIntegrationStatus.CONNECTED;
       connection.environment = config.environment;
@@ -672,7 +680,7 @@ export class IntegrationsService {
     };
   }
 
-  async testConnection(organizationId: string, slugOrId: string, dto?: TestIntegrationDto) {
+  async testConnection(organizationId: string, slugOrId: string, dto?: TestIntegrationDto): Promise<IntegrationTestResult> {
     const integration = this.findIntegration(slugOrId);
     const provider = this.providerFactory.getProvider(integration.provider);
 
@@ -707,11 +715,37 @@ export class IntegrationsService {
       };
     }
 
-    const testResult = await provider.testConnection(stored, connection.environment as any);
+    // A Razorpay connection made via OAuth authenticates with a bearer token that
+    // expires. Refresh it first so a merely-stale token reports as healthy (and gets
+    // renewed) instead of failing the test.
+    if ((integration.provider === 'RAZORPAY' || integration.slug === 'razorpay') && this.razorpayTokenService && stored.access_token) {
+      try {
+        stored.access_token = await this.razorpayTokenService.getAccessToken(connection.id);
+      } catch (err: any) {
+        connection.lastCheckedAt = new Date();
+        connection.updatedAt = new Date();
+        return {
+          success: false,
+          message: err?.message || 'Razorpay authentication failed. Reconnect Razorpay.',
+        };
+      }
+    }
+
+    const testResult = await provider.testConnection(
+      stored,
+      connection.environment as any,
+      this.buildTestContext(integration.provider, integration.code, connection),
+    );
     connection.lastCheckedAt = new Date();
-    connection.status = testResult.success ? OrganizationIntegrationStatus.CONNECTED : OrganizationIntegrationStatus.ERROR;
-    connection.lastError = testResult.success ? undefined : testResult.message;
     connection.updatedAt = new Date();
+
+    // An inconclusive result means the provider never rejected us — a network blip, or
+    // a credential type this probe cannot verify. Tearing down a working connection over
+    // that would be wrong, so leave its status and lastError exactly as they were.
+    if (!testResult.inconclusive) {
+      connection.status = testResult.success ? OrganizationIntegrationStatus.CONNECTED : OrganizationIntegrationStatus.ERROR;
+      connection.lastError = testResult.success ? undefined : testResult.message;
+    }
 
     return testResult;
   }
@@ -809,9 +843,17 @@ export class IntegrationsService {
     };
   }
 
-  disconnectIntegration(organizationId: string, userId: string, slugOrId: string) {
+  async disconnectIntegration(organizationId: string, userId: string, slugOrId: string) {
     const integration = this.findIntegration(slugOrId);
     const connection = this.requireConnection(organizationId, integration.id);
+
+    // Revoke on Razorpay's side too, so disconnecting here genuinely ends our access
+    // rather than leaving a live token behind. Best-effort: never blocks the disconnect.
+    if (integration.provider === 'RAZORPAY' || integration.slug === 'razorpay') {
+      await this.razorpayTokenService?.revokeTokens(connection.id).catch(() => undefined);
+      // Once revoked the stored tokens are dead weight — do not leave them at rest.
+      this.credentialService.deleteCredentials(connection.id);
+    }
 
     connection.status = OrganizationIntegrationStatus.DISCONNECTED;
     connection.lastError = undefined;
@@ -960,6 +1002,25 @@ export class IntegrationsService {
   // ─────────────────────────────────────────────────────────
   // Helper methods
   // ─────────────────────────────────────────────────────────
+
+  /**
+   * Resolves the platform-level context a health check needs on top of the organization's
+   * own credentials — currently Cashfree's Partner API Key (held against the platform OAuth
+   * app, not the org) plus the merchant this connection is linked to.
+   */
+  private buildTestContext(
+    provider: string,
+    code: string | undefined,
+    connection: OrganizationIntegrationEntity,
+  ): IntegrationTestContext {
+    const config = dbStore.integrationPlatformConfigs.find(
+      (item) => item.provider === provider || (code ? item.provider === code : false),
+    );
+    return {
+      partnerApiKey: config ? this.safeGetCredential(config.id, 'partner_api_key') : undefined,
+      externalAccountId: connection.config?.externalAccountId,
+    };
+  }
 
   private extractCredentials(dto?: ConnectIntegrationDto | TestIntegrationDto): Record<string, string> {
     if (!dto) return {};

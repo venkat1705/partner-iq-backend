@@ -368,7 +368,7 @@ export const DEFAULT_DOCUMENT_TEMPLATES: Record<string, DefaultDocumentTemplate>
     },
     watermarkSettings: { enabled: false, text: 'PAID', opacity: 0.06, rotation: -35 },
     variables: [
-      { key: 'organization.name', label: 'Organization Name', type: 'string', defaultValue: 'PartnerIQ Technologies Inc.' },
+      { key: 'organization.name', label: 'Organization Name', type: 'string', defaultValue: 'PartnerIQ' },
       { key: 'organization.taxId', label: 'Tax ID / EIN', type: 'string', defaultValue: 'US-EIN 94-3829104' },
       { key: 'organization.address', label: 'PartnerIQ Address', type: 'string', defaultValue: '548 Market St, Suite 39201, San Francisco, CA 94104' },
       { key: 'organization.supportEmail', label: 'Billing Support Email', type: 'string', defaultValue: 'info@partneriq.in' },
@@ -399,7 +399,7 @@ export const DEFAULT_DOCUMENT_TEMPLATES: Record<string, DefaultDocumentTemplate>
     ],
     defaultData: {
       organization: {
-        name: 'PartnerIQ Technologies Inc.',
+        name: 'PartnerIQ',
         taxId: 'US-EIN 94-3829104',
         address: '548 Market St, Suite 39201, San Francisco, CA 94104',
         supportEmail: 'info@partneriq.in',
@@ -540,7 +540,7 @@ export const DEFAULT_DOCUMENT_TEMPLATES: Record<string, DefaultDocumentTemplate>
 
   <!-- Security & Support Notice -->
   <div style="border-top: 1px dashed #CBD5E1; padding-top: 14px; text-align: center; font-size: 11px; color: #94A3B8;">
-    Questions about this invoice? Contact our billing team at <a href="mailto:{{organization.supportEmail}}" style="color: #2563EB; text-decoration: none;">{{organization.supportEmail}}</a> &bull; PartnerIQ Technologies Inc.
+    Questions about this invoice? Contact our billing team at <a href="mailto:{{organization.supportEmail}}" style="color: #2563EB; text-decoration: none;">{{organization.supportEmail}}</a> &bull; PartnerIQ
   </div>
 </div>
 `,

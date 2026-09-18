@@ -7,10 +7,13 @@ import {
   Body,
   Param,
   Query,
+  Headers,
   Req,
   UseGuards,
   NotFoundException,
   BadRequestException,
+  ConflictException,
+  ForbiddenException,
   HttpCode,
   HttpStatus,
   Inject,
@@ -19,11 +22,18 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { v4 as uuidv4 } from 'uuid';
+import * as crypto from 'crypto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { dbStore } from '../../database/store';
+import { dbStore, IdempotencyKeyEntity } from '../../database/store';
 import { AffiliateStatus, TrackingLinkStatus, EnvironmentType, PayoutStatus, ProgramStatus, ConversionStatus, CommissionType } from '../../common/enums';
 import { PLATFORM_CURRENCY } from '../../common/constants/currency';
+import { MediaService } from '../media/media.service';
+import { UploadImageDto } from '../media/dto/media.dto';
 import { SecurityUtils } from '../../common/utils/security.utils';
+import {
+  PAYOUT_SCHEDULE_TIMEZONE,
+  resolveNextPayoutDate,
+} from '../../common/utils/payout-schedule.utils';
 import { AuthService } from '../auth/auth.service';
 import { initializeDataSource } from '../../database/data-source';
 import {
@@ -40,6 +50,7 @@ import {
   Organization,
   OrganizationBranding,
   TrackingLink,
+  Click,
   Conversion,
   Commission,
   PayoutBatch,
@@ -54,6 +65,7 @@ import {
 import { IsNull, In } from 'typeorm';
 import { UserStatus, PlatformRole } from '../../common/enums';
 import { assertUserEligibleForAffiliate } from './affiliate-eligibility.policy';
+import { evaluateProfileCompleteness } from './profile-completeness';
 import { AffiliatesService } from './affiliates.service';
 import { AffiliateAuthService } from './auth/affiliate-auth.service';
 
@@ -66,6 +78,7 @@ export class AffiliatePortalController {
     @Optional()
     @Inject(forwardRef(() => AffiliateAuthService))
     private readonly affiliateAuthService?: AffiliateAuthService,
+    @Optional() private readonly mediaService?: MediaService,
   ) { }
 
   private resolveAffiliateEmail(req: any): string {
@@ -90,6 +103,7 @@ export class AffiliatePortalController {
       organizations: dataSource.getRepository(Organization),
       organizationBrandings: dataSource.getRepository(OrganizationBranding),
       trackingLinks: dataSource.getRepository(TrackingLink),
+      clicks: dataSource.getRepository(Click),
       conversions: dataSource.getRepository(Conversion),
       commissions: dataSource.getRepository(Commission),
       payoutBatches: dataSource.getRepository(PayoutBatch),
@@ -101,6 +115,41 @@ export class AffiliatePortalController {
       affiliateTiers: dataSource.getRepository(AffiliateTier),
       affiliateApplications: dataSource.getRepository(AffiliateApplication),
     };
+  }
+
+
+  /** Days covered by a timeRange token, used for both the current and prior window. */
+  private static rangeDays(timeRange?: string): number {
+    switch (timeRange) {
+      case '7d': return 7;
+      case '90d': return 90;
+      case '1y': return 365;
+      default: return 30;
+    }
+  }
+
+  /**
+   * Percentage change between the current window and the one immediately before
+   * it, to one decimal place. Returns undefined when there is no prior activity
+   * to compare against — the card then shows no trend rather than a fabricated
+   * one, which is what "+14.2%" used to be regardless of the real numbers.
+   */
+  private static pctChange(current: number, previous: number): number | undefined {
+    if (!previous) return undefined;
+    return Math.round(((current - previous) / previous) * 1000) / 10;
+  }
+
+  private static sumInWindow<T>(
+    rows: T[],
+    from: Date,
+    to: Date,
+    value: (row: T) => number,
+    dateOf: (row: T) => any = (row: any) => row.createdAt,
+  ): number {
+    return rows.reduce((sum, row) => {
+      const at = new Date(dateOf(row));
+      return at >= from && at < to ? sum + value(row) : sum;
+    }, 0);
   }
 
   private async resolveAffiliateUser(req: any) {
@@ -134,16 +183,20 @@ export class AffiliatePortalController {
         fullName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || email.split('@')[0],
         website: '',
         phone: '',
-        country: 'India',
-        partnerType: 'AFFILIATE',
-        primaryMarket: 'India',
-        audienceSize: '0-1k',
+        // Left blank on purpose. These are facts only the partner can supply,
+        // and seeding them with platform guesses would make a brand-new profile
+        // register as complete. The serializer still substitutes display
+        // defaults on read, so nothing downstream sees an empty value.
+        country: '',
+        partnerType: '',
+        primaryMarket: '',
+        audienceSize: '',
         socialProfiles: {},
         bio: '',
         onboardingCompleted: false,
-        taxCountry: 'India',
+        taxCountry: '',
         panOrTaxId: '',
-        taxClassification: 'INDIVIDUAL',
+        taxClassification: '',
         withholdingRate: 0,
         taxVerified: false,
         taxFormType: 'PAN_TDS',
@@ -313,6 +366,55 @@ export class AffiliatePortalController {
     return this.serializeAffiliateProfile(req);
   }
 
+  /**
+   * Authoritative profile-completion state for the signed-in partner.
+   *
+   * The portal gates restricted features on this rather than on its own view of
+   * the profile: the serialized profile substitutes display defaults for unset
+   * fields, so only the server can tell a supplied value from a placeholder.
+   */
+  @Get('api/v1/affiliate/me/profile-completeness')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Profile completion state computed from persisted data' })
+  async getProfileCompleteness(@Req() req: any) {
+    const { user, profile } = await this.resolveAffiliateProfile(req);
+    const { affiliatePayoutMethods } = await this.repositories();
+
+    // Scoped to this user's own payout methods; no identifier is taken from the
+    // request body.
+    const methods = await affiliatePayoutMethods.find({ where: { userId: user.id } });
+
+    return evaluateProfileCompleteness(user, profile, methods);
+  }
+
+  @Post('api/v1/affiliate/me/avatar')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Upload a profile photo for the current affiliate' })
+  async uploadAvatar(@Req() req: any, @Body() body: UploadImageDto) {
+    if (!this.mediaService) {
+      throw new BadRequestException('Image uploads are not available on this deployment.');
+    }
+
+    const { user } = await this.resolveAffiliateProfile(req);
+    const { users } = await this.repositories();
+
+    // Scoped to the partner's own user id, so one partner's uploads can never
+    // land in another's folder. Size and MIME checks live in MediaService.
+    const uploaded = await this.mediaService.uploadImage(user.id, {
+      ...body,
+      purpose: 'affiliate-avatar',
+    });
+
+    user.avatarUrl = uploaded.secureUrl;
+    await users.save(user);
+    const stored = dbStore.users.find((item) => item.id === user.id);
+    if (stored) stored.avatarUrl = uploaded.secureUrl;
+
+    return { avatarUrl: uploaded.secureUrl };
+  }
+
   @Patch('api/v1/affiliate/me/profile')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -353,7 +455,11 @@ export class AffiliatePortalController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Aggregated affiliate dashboard metrics' })
-  async getDashboard(@Req() req: any, @Query('organizationId') organizationId?: string) {
+  async getDashboard(
+    @Req() req: any,
+    @Query('organizationId') organizationId?: string,
+    @Query('timeRange') timeRange = '30d',
+  ) {
     const email = this.resolveAffiliateEmail(req);
     const userId = req.user?.userId || req.user?.id || req.user?.sub;
     const affiliates = await this.resolveAffiliatesForUser(email, userId);
@@ -371,6 +477,7 @@ export class AffiliatePortalController {
         conversions: 0,
         conversionRate: 0,
         revenue: 0,
+        trends: { rangeDays: AffiliatePortalController.rangeDays(timeRange) },
         currentTier: {
           name: 'Not enrolled',
           tierLevel: 0,
@@ -383,7 +490,7 @@ export class AffiliatePortalController {
       };
     }
 
-    const { trackingLinks, conversions, commissions, payoutItems, programAffiliates, affiliateTiers, partnerTiers, programs } = await this.repositories();
+    const { trackingLinks, clicks: clicksRepo, conversions, commissions, payoutItems, programAffiliates, affiliateTiers, partnerTiers, programs } = await this.repositories();
 
     const linksQuery = trackingLinks.createQueryBuilder('tl')
       .where('tl.affiliateId IN (:...affiliateIds)', { affiliateIds });
@@ -450,6 +557,15 @@ export class AffiliatePortalController {
       .reduce((sum, c: any) => sum + (Number(c.amount || c.commissionAmount || 0) - Number(c.reversedAmount || 0)), 0);
     const paidCommission = poList.reduce((sum, item: any) => sum + Number(item.amount || (item as any).netAmount || 0), 0);
     const clicks = links.reduce((sum, link: any) => sum + Number((link as any).clickCount || (link as any).clicks || 0), 0);
+
+    // Individual click rows, needed because a tracking link only stores a running
+    // total — a total cannot be split into "this period" and "the one before".
+    const clickQuery = clicksRepo.createQueryBuilder('ck')
+      .where('ck.affiliateId IN (:...affiliateIds)', { affiliateIds });
+    if (organizationId) {
+      clickQuery.andWhere('ck.organizationId = :organizationId', { organizationId });
+    }
+    const clickList = await clickQuery.getMany();
     // Rejected (fraud-blocked) conversions never earned anything and shouldn't inflate the
     // "Attributed Revenue" shown to the affiliate; pending ones are kept since they're real,
     // just not yet confirmed — mirroring pendingCommission above.
@@ -477,16 +593,57 @@ export class AffiliatePortalController {
       }
     }
 
+    // Two equal, adjacent windows: [prevFrom, from) and [from, now]. Everything
+    // compared below is measured the same way on both sides.
+    const days = AffiliatePortalController.rangeDays(timeRange);
+    const now = new Date();
+    const from = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+    const prevFrom = new Date(from.getTime() - days * 24 * 60 * 60 * 1000);
+
+    const netCommission = (c: any) => Number(c.amount || c.commissionAmount || 0) - Number(c.reversedAmount || 0);
+    const conversionValue = (c: any) => Number(c.amount || c.value || 0);
+    const one = () => 1;
+
+    const currentEarnings = AffiliatePortalController.sumInWindow(commList, from, now, netCommission);
+    const previousEarnings = AffiliatePortalController.sumInWindow(commList, prevFrom, from, netCommission);
+    const currentRevenue = AffiliatePortalController.sumInWindow(attributedConvList, from, now, conversionValue);
+    const previousRevenue = AffiliatePortalController.sumInWindow(attributedConvList, prevFrom, from, conversionValue);
+    const currentClicks = AffiliatePortalController.sumInWindow(clickList, from, now, one);
+    const previousClicks = AffiliatePortalController.sumInWindow(clickList, prevFrom, from, one);
+    const currentConversions = AffiliatePortalController.sumInWindow(convList, from, now, one);
+    const previousConversions = AffiliatePortalController.sumInWindow(convList, prevFrom, from, one);
+
+    const currentRate = currentClicks > 0 ? (currentConversions / currentClicks) * 100 : 0;
+    const previousRate = previousClicks > 0 ? (previousConversions / previousClicks) * 100 : 0;
+
+    // Real distinct visitors, not a fixed 82% of clicks.
+    const uniqueVisitors = new Set(
+      clickList.map((c: any) => c.anonymousId || c.ipHash).filter(Boolean),
+    ).size;
+
     return {
       totalEarnings,
       pendingCommission,
       payableCommission,
       paidCommission,
       clicks,
-      uniqueVisitors: Math.round(clicks * 0.82),
+      uniqueVisitors,
       conversions: convList.length,
       conversionRate: clicks > 0 ? Number(((convList.length / clicks) * 100).toFixed(2)) : 0,
       revenue,
+      /**
+       * Period-over-period movement for the cards that show a trend. Each key is
+       * undefined when the prior window had nothing to compare against, so the UI
+       * can omit the indicator instead of inventing one.
+       */
+      trends: {
+        rangeDays: days,
+        earnings: AffiliatePortalController.pctChange(currentEarnings, previousEarnings),
+        revenue: AffiliatePortalController.pctChange(currentRevenue, previousRevenue),
+        clicks: AffiliatePortalController.pctChange(currentClicks, previousClicks),
+        conversions: AffiliatePortalController.pctChange(currentConversions, previousConversions),
+        conversionRate: AffiliatePortalController.pctChange(currentRate, previousRate),
+      },
       currentTier: currentTier || {
         name: 'Bronze',
         tierLevel: 1,
@@ -714,11 +871,13 @@ export class AffiliatePortalController {
           name: t.name,
           minMonthlyRevenue: (t.conditions as any)?.minimumRevenue || 0,
           commissionRateBonus: t.commissionRateOverride ? (t.commissionRateOverride - (p.defaultCommissionValue || 1500)) / 100 : 0,
+          // Only facts drawn from the tier record itself. The third entry used to
+          // promise "Automated monthly payouts" regardless of what the program
+          // actually scheduled.
           perks: [
             `${(t.conditions as any)?.minimumConversions || 0}+ conversions threshold`,
-            t.description || 'Tier reward benefits',
-            'Automated monthly payouts',
-          ],
+            t.description,
+          ].filter((perk): perk is string => !!perk),
         }));
 
       return {
@@ -742,10 +901,24 @@ export class AffiliatePortalController {
         affiliateApprovalMode: p.affiliateApprovalMode || 'AUTO',
         applicationStatus: userApp?.status || (progAff ? (progAff.status === 'ACTIVE' ? 'APPROVED' : 'PENDING') : null),
         applicationId: userApp?.id || null,
-        tiers: tiers.length > 0 ? tiers : [
-          { id: 'tier_1', name: 'Standard Partner', minMonthlyRevenue: 0, commissionRateBonus: 0, perks: ['Standard cookie attribution', 'Monthly payouts'] },
-          { id: 'tier_2', name: 'Gold Partner', minMonthlyRevenue: 5000, commissionRateBonus: 5, perks: ['+5% commission bonus', 'Dedicated Partner Manager'] },
-        ],
+        // Settlement terms the partner is actually bound by. The portal showed a
+        // fixed "15th Monthly" and no threshold; these are the real per-program
+        // values the organization configured.
+        payoutSchedule: p.payoutSchedule || null,
+        payoutDay: p.payoutDay || null,
+        minimumPayoutAmount: Number(p.minimumPayoutAmount || 0),
+        currency: p.currency || PLATFORM_CURRENCY,
+        // Computed server-side from those terms so the portal and any
+        // notification quote the same date. Null when the terms do not pin the
+        // run to a calendar date, e.g. a pay-on-request program.
+        nextPayoutDate: resolveNextPayoutDate({
+          payoutSchedule: p.payoutSchedule,
+          payoutDay: p.payoutDay,
+        }),
+        payoutTimezone: PAYOUT_SCHEDULE_TIMEZONE,
+        // No invented tiers: an empty list means this program has none, which is
+        // a fact the UI can state, rather than two fabricated ones.
+        tiers,
         isEnrolled: !!progAff,
         programAffiliate: progAff ? {
           id: progAff.id,
@@ -766,6 +939,7 @@ export class AffiliatePortalController {
     @Query('category') category?: string,
     @Query('organizationId') organizationId?: string,
     @Query('slug') slug?: string,
+    @Query('search') search?: string,
   ) {
     const { programs, organizations, organizationBrandings } = await this.repositories();
     let targetOrgId = organizationId;
@@ -775,46 +949,106 @@ export class AffiliatePortalController {
       if (matchedOrg) targetOrgId = matchedOrg.id;
     }
 
-    // This is a public, unauthenticated endpoint — never allow it to dump every program
-    // across every tenant. It must always be scoped to one organization, and only surface
-    // programs that org has explicitly marked ACTIVE + PUBLIC (never draft/paused/private
-    // programs, which can contain confidential commission rates and terms).
-    if (!targetOrgId) {
-      throw new BadRequestException('organizationId or slug is required.');
-    }
+    // Public marketplace endpoint:
+    // When organizationId/slug is provided, returns that organization's public programs.
+    // When omitted, returns all active, public partner programs across the marketplace.
+    // In both cases, strictly enforces status = ACTIVE, deletedAt IS NULL, and excludes PRIVATE/UNLISTED programs.
     const whereClause: any = {
       deletedAt: IsNull(),
-      organizationId: targetOrgId,
       status: ProgramStatus.ACTIVE,
-      visibility: 'PUBLIC',
+      ...(targetOrgId ? { organizationId: targetOrgId } : {}),
     };
-    const programList = await programs.find({ where: whereClause, take: 100 });
+
+    let programList: any[] = [];
+    try {
+      programList = await programs.find({ where: whereClause, take: 100 });
+    } catch {
+      programList = [];
+    }
+
+    // In-memory / dbStore fallback
+    if (!programList.length && dbStore.programs?.length) {
+      programList = dbStore.programs.filter((p: any) =>
+        !p.deletedAt &&
+        p.status === ProgramStatus.ACTIVE &&
+        (!targetOrgId || p.organizationId === targetOrgId)
+      );
+    }
+
+    // Strictly exclude draft, paused, private, and unlisted programs
+    programList = programList.filter((p: any) => {
+      const v = String(p.visibility || 'PUBLIC').toUpperCase();
+      return v !== 'PRIVATE' && v !== 'UNLISTED';
+    });
+
+    if (category && category !== 'ALL') {
+      const c = category.toLowerCase().trim();
+      programList = programList.filter((p: any) => String(p.category || '').toLowerCase().trim() === c);
+    }
+
+    if (search && search.trim()) {
+      const s = search.toLowerCase().trim();
+      programList = programList.filter((p: any) =>
+        String(p.name || '').toLowerCase().includes(s) ||
+        String(p.description || '').toLowerCase().includes(s)
+      );
+    }
+
     const orgIds = [...new Set(programList.map((p) => p.organizationId))];
-    const orgList = orgIds.length ? await organizations.find({ where: { id: In(orgIds) } }) : [];
-    const brandingList = orgIds.length ? await organizationBrandings.find({ where: { organizationId: In(orgIds) } }) : [];
+    let orgList: any[] = [];
+    try {
+      orgList = orgIds.length ? await organizations.find({ where: { id: In(orgIds) } }) : [];
+    } catch {
+      orgList = [];
+    }
+    if (!orgList.length && dbStore.organizations?.length) {
+      orgList = dbStore.organizations.filter((o: any) => orgIds.includes(o.id));
+    }
+
+    let brandingList: any[] = [];
+    try {
+      brandingList = orgIds.length ? await organizationBrandings.find({ where: { organizationId: In(orgIds) } }) : [];
+    } catch {
+      brandingList = [];
+    }
     const brandingMap: Record<string, any> = {};
     for (const b of brandingList) brandingMap[b.organizationId] = b;
 
     return programList.map((p) => {
-      const org = orgList.find((o) => o.id === p.organizationId);
-      const isFlat = (p as any).commissionType === 'FIXED_AMOUNT';
-      const rate = p.defaultCommissionValue ? (isFlat ? p.defaultCommissionValue / 100 : p.defaultCommissionValue / 100) : 25;
+      const org = orgList.find((o) => o.id === p.organizationId) || dbStore.organizations?.find((o: any) => o.id === p.organizationId);
+      const isFlat = (p as any).commissionType === 'FIXED_AMOUNT' || (p as any).commissionType === 'flat';
+      const rawVal = p.defaultCommissionValue ?? (p as any).commissionValue ?? 2500;
+      const rate = rawVal >= 100 ? (rawVal / 100) : rawVal;
+      const currency = (p as any).currency || (org as any)?.currency || 'INR';
+      const currencySymbol = currency === 'INR' ? '₹' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : '$';
+      const commissionFormatted = isFlat ? `${currencySymbol}${rate} Flat` : `${rate}% Recurring`;
+      const brandName = org?.name || (p as any).brandName || 'PartnerIQ Brand';
+      const brandLogo = (brandingMap[org?.id]?.logoUrl) || (org as any)?.branding?.logoUrl || (p as any).logoUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80';
+      const cookieDays = p.cookieDurationDays || (p as any).cookieWindowDays || (p as any).attributionWindowDays || 60;
 
       return {
         id: p.id,
         organizationId: p.organizationId,
-        brandName: org?.name || 'PartnerIQ Brand',
-        brandLogo: (brandingMap[org?.id]?.logoUrl) || (org as any)?.branding?.logoUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80',
+        brandName,
+        brandLogo,
+        name: p.name,
         title: p.name,
         slug: p.slug,
         category: (p as any).category || 'SAAS',
-        commission: isFlat ? `₹${rate} Flat` : `${rate}% Recurring`,
-        cookieWindow: `${p.cookieDurationDays || 60} Days`,
-        avgEpc: '$4.20',
+        commission: commissionFormatted,
+        commissionSummary: commissionFormatted,
+        commissionType: isFlat ? 'flat' : 'percentage',
+        commissionValue: rate,
+        cookieWindow: `${cookieDays} Days`,
+        attributionWindowDays: cookieDays,
+        cookieDurationDays: cookieDays,
+        currency,
+        avgEpc: (p as any).avgEpc || `${currencySymbol}400`,
         featured: (p as any).featured ?? true,
         affiliateApprovalMode: p.affiliateApprovalMode || 'AUTO',
         instantApproval: p.affiliateApprovalMode === 'AUTO',
-        description: (p as any).description || `Earn high-converting commissions with ${org?.name || p.name}.`,
+        description: (p as any).description || `Earn high-converting commissions with ${brandName}.`,
+        status: p.status,
       };
     });
   }
@@ -1141,6 +1375,235 @@ export class AffiliatePortalController {
       }
     }
     return { success: true };
+  }
+
+  // ----------------------------------------------------
+  // Program Default Tracking Links
+  //
+  // A single, auto-generated canonical link per (affiliate, program) — the
+  // "View Links" flow on the programs page. Distinct from the free-form
+  // custom links above (title/alias/campaign/subId), which affiliates still
+  // create by hand via POST /affiliate/me/links.
+  // ----------------------------------------------------
+
+  /**
+   * Resolves and authorizes the (program, affiliate, membership) context for
+   * the endpoints below. organizationId/affiliateId are never taken from the
+   * request — both are derived from the JWT-resolved affiliate identity and
+   * the program's own organizationId, so one affiliate can never address
+   * another affiliate's or another organization's data by guessing IDs.
+   */
+  private async resolveAffiliateProgramContext(req: any, programId: string) {
+    const email = this.resolveAffiliateEmail(req);
+    const userId = req.user?.userId || req.user?.id || req.user?.sub;
+    const affiliates = await this.resolveAffiliatesForUser(email, userId);
+
+    const { programs, programAffiliates } = await this.repositories();
+
+    const program = await programs.findOne({ where: { id: programId, deletedAt: IsNull() } });
+    if (!program) {
+      throw new NotFoundException('Program not found');
+    }
+
+    const affiliate = affiliates.find((a) => a.organizationId === program.organizationId);
+    if (!affiliate) {
+      throw new ForbiddenException('You are not a member of this organization.');
+    }
+
+    if (program.status !== ProgramStatus.ACTIVE) {
+      throw new BadRequestException({
+        code: 'PROGRAM_NOT_ACTIVE',
+        message: 'This program is not currently accepting new tracking links.',
+      });
+    }
+
+    const membership = await programAffiliates.findOne({
+      where: { organizationId: program.organizationId, programId: program.id, affiliateId: affiliate.id },
+    });
+    if (!membership || membership.status !== AffiliateStatus.ACTIVE) {
+      throw new ForbiddenException({
+        code: 'AFFILIATE_NOT_APPROVED_FOR_PROGRAM',
+        message: 'You must be an approved, active member of this program to view or generate its tracking links.',
+      });
+    }
+
+    return { program, affiliate, environment: EnvironmentType.LIVE };
+  }
+
+  private serializeProgramLink(link: TrackingLink, program: Program, orgSlug?: string) {
+    return {
+      id: link.id,
+      destinationName: program.name,
+      destinationUrl: link.destinationUrl,
+      trackingUrl: `https://${orgSlug || 'go'}.partneriq.in/r/${link.shortCode}`,
+      status: link.status,
+      createdAt: link.createdAt,
+    };
+  }
+
+  @Get('api/v1/affiliate/me/programs/:programId/links')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Get the current affiliate's tracking link(s) for a program" })
+  async getProgramLinks(@Req() req: any, @Param('programId') programId: string) {
+    const { program, affiliate } = await this.resolveAffiliateProgramContext(req, programId);
+    const { trackingLinks, organizations } = await this.repositories();
+
+    const link = await trackingLinks.findOne({
+      where: {
+        organizationId: program.organizationId,
+        programId: program.id,
+        affiliateId: affiliate.id,
+        linkKind: 'PROGRAM_DEFAULT',
+      },
+    });
+
+    const org = await organizations.findOne({ where: { id: program.organizationId } });
+
+    return {
+      success: true,
+      data: {
+        programId: program.id,
+        links: link ? [this.serializeProgramLink(link, program, org?.slug)] : [],
+      },
+    };
+  }
+
+  @Post('api/v1/affiliate/me/programs/:programId/links')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Generate (or retrieve) the current affiliate's canonical tracking link for a program" })
+  async createProgramLink(
+    @Req() req: any,
+    @Param('programId') programId: string,
+    @Headers('idempotency-key') idempotencyKeyHeader?: string,
+  ) {
+    const { program, affiliate, environment } = await this.resolveAffiliateProgramContext(req, programId);
+    const { trackingLinks, organizations } = await this.repositories();
+
+    const idempotencyKey = (idempotencyKeyHeader || '').trim();
+    if (idempotencyKey && (idempotencyKey.length < 8 || idempotencyKey.length > 255)) {
+      throw new BadRequestException('Idempotency-Key must be between 8 and 255 characters.');
+    }
+
+    // The logical operation is fully determined by who is asking and for what
+    // program — there is no other client-suppliable input — so the hash keys
+    // off exactly those three server-resolved values.
+    const requestHash = crypto
+      .createHash('sha256')
+      .update(JSON.stringify({ organizationId: program.organizationId, programId: program.id, affiliateId: affiliate.id }))
+      .digest('hex');
+
+    if (idempotencyKey) {
+      const existingKey = dbStore.idempotencyKeys.find(
+        (k) =>
+          k.organizationId === program.organizationId &&
+          (k as any).environment === environment &&
+          !(k as any).apiKeyId &&
+          k.key === idempotencyKey &&
+          k.expiresAt > new Date(),
+      );
+      if (existingKey) {
+        if (existingKey.requestHash !== requestHash) {
+          // Same key, different logical request (e.g. a different affiliate or
+          // program) — reject rather than silently returning the wrong payload.
+          throw new ConflictException({
+            code: 'IDEMPOTENCY_KEY_REUSED',
+            message: 'This Idempotency-Key was already used for a different request.',
+          });
+        }
+        return existingKey.responseBody;
+      }
+    }
+
+    const org = await organizations.findOne({ where: { id: program.organizationId } });
+    const affiliateProgramDefaultKey = `${program.organizationId}:${environment}:${program.id}:${affiliate.id}`;
+
+    let link = await trackingLinks.findOne({
+      where: {
+        organizationId: program.organizationId,
+        programId: program.id,
+        affiliateId: affiliate.id,
+        linkKind: 'PROGRAM_DEFAULT',
+      },
+    });
+
+    if (!link) {
+      const destinationUrl = program.landingUrl || program.websiteUrl || (org?.website ? `${org.website}/partners` : '');
+      let isValidHttpUrl = false;
+      try {
+        const parsed = new URL(destinationUrl);
+        isValidHttpUrl = parsed.protocol === 'http:' || parsed.protocol === 'https:';
+      } catch {
+        isValidHttpUrl = false;
+      }
+      if (!isValidHttpUrl) {
+        throw new BadRequestException('This program has no valid landing page configured to generate a link for.');
+      }
+
+      const created = trackingLinks.create({
+        id: uuidv4(),
+        organizationId: program.organizationId,
+        environment,
+        programId: program.id,
+        affiliateId: affiliate.id,
+        destinationUrl,
+        shortCode: SecurityUtils.generateRandomCode(10).toLowerCase(),
+        status: TrackingLinkStatus.ACTIVE,
+        linkKind: 'PROGRAM_DEFAULT',
+        affiliateProgramDefaultKey,
+      });
+
+      try {
+        link = await trackingLinks.save(created);
+        if (dbStore.trackingLinks) {
+          dbStore.trackingLinks.unshift(link as any);
+        }
+      } catch (err: any) {
+        const isDuplicateKey =
+          err?.code === 'ER_DUP_ENTRY' || err?.code === '23505' || /duplicate/i.test(err?.message || '');
+        if (!isDuplicateKey) throw err;
+        // Lost the race to a concurrent request for the same affiliate+program:
+        // re-read the row the other request just created instead of failing, so
+        // two near-simultaneous clicks never surface an error or produce a
+        // second link.
+        link = await trackingLinks.findOne({
+          where: {
+            organizationId: program.organizationId,
+            programId: program.id,
+            affiliateId: affiliate.id,
+            linkKind: 'PROGRAM_DEFAULT',
+          },
+        });
+        if (!link) throw err;
+      }
+    }
+
+    const responseBody = {
+      success: true,
+      data: {
+        programId: program.id,
+        links: [this.serializeProgramLink(link, program, org?.slug)],
+      },
+    };
+
+    if (idempotencyKey) {
+      const ikRecord: IdempotencyKeyEntity = {
+        id: uuidv4(),
+        organizationId: program.organizationId,
+        environment,
+        apiKeyId: undefined,
+        key: idempotencyKey,
+        requestHash,
+        responseStatus: 200,
+        responseBody,
+        expiresAt: new Date(Date.now() + 24 * 3600 * 1000),
+        createdAt: new Date(),
+      };
+      dbStore.idempotencyKeys.push(ikRecord);
+    }
+
+    return responseBody;
   }
 
   // ----------------------------------------------------
@@ -1784,6 +2247,99 @@ export class AffiliatePortalController {
     }
 
     return result;
+  }
+
+  // ----------------------------------------------------
+  // Traffic Sources
+  // ----------------------------------------------------
+  /**
+   * Breakdown of where this partner's tracked clicks came from.
+   *
+   * The metric is deliberately a single, named one — recorded clicks — rather
+   * than a blend of clicks, sessions and conversions, so the percentages on the
+   * chart always add up against one denominator. A click's source is its UTM
+   * source when the link carried one, otherwise the referrer's host. Clicks with
+   * neither are grouped under a real "Unknown" bucket; no bucket is invented to
+   * make the chart look fuller, so an affiliate with no tracked clicks gets an
+   * empty list and the portal shows an empty state.
+   */
+  @Get('api/v1/affiliate/me/traffic-sources')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Click volume grouped by traffic source' })
+  async getTrafficSources(
+    @Req() req: any,
+    @Query('organizationId') organizationId?: string,
+    @Query('timeRange') timeRange = '30d',
+  ) {
+    const email = this.resolveAffiliateEmail(req);
+    const userId = req.user?.userId || req.user?.id || req.user?.sub;
+    const affiliates = await this.resolveAffiliatesForUser(email, userId);
+    // Ownership is derived from the token, never from a client-supplied
+    // affiliateId, and an organizationId filter can only ever narrow the set of
+    // affiliate rows that already belong to this user.
+    const scopedAffiliates = organizationId
+      ? affiliates.filter((a) => a.organizationId === organizationId)
+      : affiliates;
+    const affiliateIds = scopedAffiliates.map((a) => a.id);
+
+    const rangeDays = AffiliatePortalController.rangeDays(timeRange);
+    const since = new Date(Date.now() - rangeDays * 86400000);
+
+    if (affiliateIds.length === 0) {
+      return { metric: 'clicks', rangeDays, total: 0, sources: [] };
+    }
+
+    const { clicks: clicksRepo } = await this.repositories();
+    const clicksQuery = clicksRepo.createQueryBuilder('click')
+      .where('click.affiliateId IN (:...affiliateIds)', { affiliateIds })
+      .andWhere('click.createdAt >= :since', { since });
+    if (organizationId) {
+      clicksQuery.andWhere('click.organizationId = :organizationId', { organizationId });
+    }
+    const clickRows = await clicksQuery.getMany();
+
+    const counts = new Map<string, number>();
+    for (const click of clickRows) {
+      const label = AffiliatePortalController.resolveTrafficSourceLabel(click as any);
+      counts.set(label, (counts.get(label) || 0) + 1);
+    }
+
+    const total = clickRows.length;
+    const sources = Array.from(counts.entries())
+      .map(([source, count]) => ({
+        source,
+        count,
+        // Rounded to one decimal, matching how the portal renders every other
+        // percentage. Guarded so an empty window can never divide by zero.
+        percentage: total > 0 ? Math.round((count / total) * 1000) / 10 : 0,
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    return { metric: 'clicks', rangeDays, total, sources };
+  }
+
+  /** UTM source wins; otherwise the referrer host; otherwise a real Unknown bucket. */
+  static resolveTrafficSourceLabel(click: {
+    utmSource?: string | null;
+    referrer?: string | null;
+  }): string {
+    const utm = (click.utmSource || '').trim();
+    if (utm) return utm.toLowerCase();
+
+    const referrer = (click.referrer || '').trim();
+    if (referrer) {
+      try {
+        const host = new URL(referrer).hostname.replace(/^www\./i, '');
+        if (host) return host.toLowerCase();
+      } catch {
+        // A referrer that is not a parseable URL is still real data; keep it
+        // rather than discarding the click or relabelling it as something else.
+        return referrer.slice(0, 64).toLowerCase();
+      }
+    }
+
+    return 'Unknown';
   }
 
   // ----------------------------------------------------

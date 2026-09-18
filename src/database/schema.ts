@@ -950,6 +950,81 @@ export class Affiliate {
   updatedAt!: Date;
 }
 
+
+/**
+ * A tax certificate (Form 16A, 1099, etc.) published to one affiliate for one
+ * filing period. Certificates are issued by PartnerIQ staff, never by the
+ * partner, so there is no affiliate-facing write path — only list and download.
+ */
+@Entity('affiliate_tax_certificates')
+@Index(['userId', 'financialYear'])
+export class AffiliateTaxCertificate {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  /** The affiliate's user id — the same identity the portal authenticates as. */
+  @Index()
+  @Column({ type: 'uuid' })
+  userId!: string;
+
+  /** Set when the certificate relates to earnings from one organization. */
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  organizationId?: string;
+
+  @Column({ type: 'varchar', length: 50, default: 'FORM_16A' })
+  formType!: string;
+
+  /** e.g. "FY 2025-26". */
+  @Column({ type: 'varchar', length: 20 })
+  financialYear!: string;
+
+  /** e.g. "Q3" — null for an annual certificate. */
+  @Column({ type: 'varchar', length: 10, nullable: true })
+  quarter?: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  periodLabel!: string;
+
+  @Column({ type: 'varchar', length: 2000 })
+  fileUrl!: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  fileName?: string;
+
+  @Column({ type: 'int', default: 0 })
+  fileSizeBytes!: number;
+
+  /** Minor units, matching every other money column in this schema. */
+  @Column({ type: 'bigint', default: 0 })
+  grossAmount!: number;
+
+  @Column({ type: 'bigint', default: 0 })
+  taxWithheldAmount!: number;
+
+  @Column({ type: 'varchar', length: 10, default: 'INR' })
+  currency!: string;
+
+  @Column({ type: 'varchar', length: 20, default: 'PUBLISHED' })
+  status!: 'DRAFT' | 'PUBLISHED' | 'REVOKED';
+
+  @Column({ type: 'timestamp', nullable: true })
+  publishedAt?: Date;
+
+  /** The staff user who published it, for audit. */
+  @Column({ type: 'uuid', nullable: true })
+  publishedByUserId?: string;
+
+  @Column({ type: 'text', nullable: true })
+  notes?: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
 @Entity('affiliate_portal_profiles')
 export class AffiliatePortalProfile {
   @PrimaryGeneratedColumn('uuid')
@@ -1348,6 +1423,20 @@ export class TrackingLink {
 
   @Column({ type: 'varchar', length: 50, default: TrackingLinkStatus.ACTIVE })
   status!: TrackingLinkStatus;
+
+  // 'CUSTOM' = affiliate-authored link (alias/campaign/subId, via POST /affiliate/me/links).
+  // 'PROGRAM_DEFAULT' = the single auto-generated canonical link for an
+  // affiliate+program pair (via POST /affiliate/me/programs/:programId/links).
+  @Column({ type: 'varchar', length: 30, default: 'CUSTOM' })
+  linkKind?: 'CUSTOM' | 'PROGRAM_DEFAULT';
+
+  // Set only for PROGRAM_DEFAULT rows, to `${organizationId}:${environment}:${programId}:${affiliateId}`.
+  // Left null for CUSTOM links. The unique index on this column is what makes
+  // concurrent "get or create the program default link" requests race-safe —
+  // MySQL unique indexes allow unlimited NULLs, so CUSTOM links are unaffected.
+  @Index({ unique: true })
+  @Column({ type: 'varchar', length: 160, nullable: true })
+  affiliateProgramDefaultKey?: string | null;
 
   @CreateDateColumn()
   createdAt!: Date;

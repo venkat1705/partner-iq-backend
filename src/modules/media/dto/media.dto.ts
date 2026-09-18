@@ -3,8 +3,8 @@ import { ApiProperty } from '@nestjs/swagger';
 
 export class UploadImageDto {
   @ApiProperty({ example: 'program-logo' })
-  @IsIn(['program-logo', 'program-banner', 'organization-logo', 'asset'])
-  purpose!: 'program-logo' | 'program-banner' | 'organization-logo' | 'asset';
+  @IsIn(['program-logo', 'program-banner', 'organization-logo', 'asset', 'affiliate-avatar'])
+  purpose!: 'program-logo' | 'program-banner' | 'organization-logo' | 'asset' | 'affiliate-avatar';
 
   @ApiProperty({ example: 'logo.png' })
   @IsString()

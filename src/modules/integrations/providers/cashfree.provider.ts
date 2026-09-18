@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import {
   IntegrationProvider,
+  IntegrationTestContext,
   IntegrationTestResult,
   OAuthAuthorizationUrlParams,
   OAuthCodeExchangeParams,
@@ -127,6 +128,9 @@ export class CashfreeProvider implements IntegrationProvider {
       expiresIn: payload.expires_in,
       externalAccountId: payload.merchant_id,
       externalAccountName: payload.merchant_id ? `Cashfree ${payload.merchant_id}` : 'Cashfree Account',
+      // Persisted so later partner API calls can address this merchant via
+      // x-partner-merchantid without re-reading the connection record.
+      extraCredentials: payload.merchant_id ? { merchant_id: String(payload.merchant_id) } : undefined,
       raw: payload,
     };
   }
@@ -148,11 +152,55 @@ export class CashfreeProvider implements IntegrationProvider {
   async testConnection(
     credentials: Record<string, string>,
     environment: 'TEST' | 'LIVE' = 'TEST',
+    context: IntegrationTestContext = {},
   ): Promise<IntegrationTestResult> {
     const appId = (credentials.appId || credentials.clientId || credentials.apiKey || '').trim();
     const secretKey = (credentials.secretKey || credentials.clientSecret || credentials.apiSecret || '').trim();
 
-    if (!appId || !secretKey) {
+    // A Partner-OAuth connection holds an access token and a linked merchant id rather
+    // than the merchant's own App ID / Secret Key. Cashfree's partner APIs are called
+    // with the PLATFORM's Partner API Key plus that merchant id — the OAuth access token
+    // is not a bearer credential for the PG APIs.
+    const isOAuth = Boolean(credentials.access_token) && !(appId && secretKey);
+    const merchantId = (credentials.merchant_id || context.externalAccountId || '').trim();
+    const partnerApiKey = (context.partnerApiKey || '').trim();
+
+    let headers: Record<string, string>;
+    let connectedVia: 'OAuth' | 'API Key';
+
+    if (isOAuth) {
+      if (!partnerApiKey) {
+        return {
+          success: false,
+          inconclusive: true,
+          message: 'Cashfree Partner API Key is not configured. Add it in Admin > Integrations > Cashfree > Configuration to verify OAuth connections.',
+          details: { connectedVia: 'OAuth', environment },
+        };
+      }
+      if (!merchantId) {
+        return {
+          success: false,
+          inconclusive: true,
+          message: 'This Cashfree connection is missing its linked merchant ID. Reconnect Cashfree to restore it.',
+          details: { connectedVia: 'OAuth', environment },
+        };
+      }
+      headers = {
+        'x-partner-apikey': partnerApiKey,
+        'x-partner-merchantid': merchantId,
+        'x-api-version': '2023-08-01',
+        'Content-Type': 'application/json',
+      };
+      connectedVia = 'OAuth';
+    } else if (appId && secretKey) {
+      headers = {
+        'x-client-id': appId,
+        'x-client-secret': secretKey,
+        'x-api-version': '2023-08-01',
+        'Content-Type': 'application/json',
+      };
+      connectedVia = 'API Key';
+    } else {
       return {
         success: false,
         message: 'App ID and Secret Key are required to test the connection.',
@@ -162,20 +210,14 @@ export class CashfreeProvider implements IntegrationProvider {
     const baseUrl = environment === 'LIVE' ? 'https://api.cashfree.com/pg' : 'https://sandbox.cashfree.com/pg';
 
     try {
-      const response = await fetch(`${baseUrl}/orders?limit=1`, {
-        method: 'GET',
-        headers: {
-          'x-client-id': appId,
-          'x-client-secret': secretKey,
-          'x-api-version': '2023-08-01',
-          'Content-Type': 'application/json',
-        },
-      });
+      const response = await fetch(`${baseUrl}/orders?limit=1`, { method: 'GET', headers });
 
       if (response.status === 401 || response.status === 403) {
         return {
           success: false,
-          message: 'The credentials were rejected by Cashfree (unauthorized). Please verify your App ID and Secret Key and try again.',
+          message: connectedVia === 'OAuth'
+            ? 'Cashfree rejected the partner credentials for this merchant. The authorization may have been revoked — please reconnect your Cashfree account.'
+            : 'The credentials were rejected by Cashfree (unauthorized). Please verify your App ID and Secret Key and try again.',
         };
       }
 
@@ -190,11 +232,14 @@ export class CashfreeProvider implements IntegrationProvider {
       return {
         success: true,
         message: 'PartnerIQ successfully connected to Cashfree.',
-        details: { environment },
+        details: { environment, connectedVia, merchantId: merchantId || undefined },
       };
     } catch (error: any) {
       return {
         success: false,
+        // A transport failure is not a rejection: never let a blip mark a
+        // healthy connection as broken.
+        inconclusive: true,
         message: `Unable to reach Cashfree: ${error?.message || 'Network error'}`,
       };
     }

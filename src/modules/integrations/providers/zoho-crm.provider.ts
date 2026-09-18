@@ -93,7 +93,11 @@ export class ZohoCrmProvider implements IntegrationProvider {
   }
 
   async testConnection(credentials: Record<string, string>): Promise<IntegrationTestResult> {
-    const credential = (credentials.apiKey || credentials.token || credentials.accessCredential || '').trim();
+    // An OAuth-connected org stores `access_token`; a manually-connected one stores a
+    // pasted credential. Both are presented to Zoho the same way, as a Zoho-oauthtoken.
+    const credential = (
+      credentials.access_token || credentials.apiKey || credentials.token || credentials.accessCredential || ''
+    ).trim();
     if (!credential) {
       return {
         success: false,
@@ -132,6 +136,9 @@ export class ZohoCrmProvider implements IntegrationProvider {
     } catch (error: any) {
       return {
         success: false,
+        // A transport failure is not a rejection: never let a blip mark a
+        // healthy connection as broken.
+        inconclusive: true,
         message: `Unable to reach Zoho CRM: ${error?.message || 'Network error'}`,
       };
     }

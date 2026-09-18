@@ -53,6 +53,9 @@ export class HubSpotProvider implements IntegrationProvider {
     } catch (error: any) {
       return {
         success: false,
+        // A transport failure is not a rejection: never let a blip mark a
+        // healthy connection as broken.
+        inconclusive: true,
         message: `Unable to reach HubSpot: ${error?.message || 'Network error'}`,
       };
     }

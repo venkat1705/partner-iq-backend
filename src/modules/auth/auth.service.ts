@@ -831,9 +831,11 @@ export class AuthService {
     user.lastLoginAt = new Date();
     await users.save(user);
 
-    // Email must be verified before a session is issued.
-    // Affiliates are out of scope for this gate — they have their own onboarding/verification model.
-    if (!user.emailVerified && user.platformRole !== PlatformRole.AFFILIATE) {
+    // Email must be verified before a session is issued. This applies to
+    // affiliates too: the affiliate portal reaches this method with
+    // allowAffiliate, and organization logins reject affiliates further up, so
+    // there is no portal for which an unverified password login should pass.
+    if (!user.emailVerified) {
       const { challenge } = await this.getOrCreateActiveEmailOtpChallenge(user, userAgent, ipAddress, { resend: true });
       await this.recordSecurityEvent({
         userId: user.id,
@@ -1098,6 +1100,38 @@ export class AuthService {
     return { challenge, isNew: true };
   }
 
+  /**
+   * Public entry point for portals that own their own registration flow (the
+   * affiliate portal) and need to raise the same email-verification challenge
+   * this service raises for organization signups. `metadata` is merged into the
+   * challenge and handed back by verifyEmailOtp as `verificationContext`, which
+   * is how a portal carries state (an invitation token, say) across the gap
+   * between registering and verifying without holding a session.
+   */
+  async issueEmailOtpChallenge(
+    user: User,
+    userAgent?: string,
+    ipAddress?: string,
+    options: { resend?: boolean; metadata?: Record<string, any> } = {},
+  ): Promise<{ challengeId: string; expiresAt: Date; isNew: boolean; cooldownRemainingSeconds?: number }> {
+    const result = await this.getOrCreateActiveEmailOtpChallenge(user, userAgent, ipAddress, {
+      resend: options.resend,
+    });
+
+    if (options.metadata && Object.keys(options.metadata).length > 0) {
+      const { mfaChallenges } = await this.repositories();
+      result.challenge.metadata = { ...(result.challenge.metadata || {}), ...options.metadata };
+      await mfaChallenges.save(result.challenge);
+    }
+
+    return {
+      challengeId: result.challenge.challengeId,
+      expiresAt: result.challenge.expiresAt,
+      isNew: result.isNew,
+      cooldownRemainingSeconds: result.cooldownRemainingSeconds,
+    };
+  }
+
   private decryptOtpCode(challenge: MfaChallenge): string | null {
     const codeEncrypted = challenge.metadata?.codeEncrypted as string | undefined;
     if (!codeEncrypted) return null;
@@ -1112,7 +1146,13 @@ export class AuthService {
     return Math.max(1, Math.round((date.getTime() - Date.now()) / 60000));
   }
 
-  async resendEmailOtp(challengeId?: string, email?: string, userAgent?: string, ipAddress?: string) {
+  async resendEmailOtp(
+    challengeId?: string,
+    email?: string,
+    userAgent?: string,
+    ipAddress?: string,
+    options: { expectAffiliate?: boolean } = {},
+  ) {
     const { users, mfaChallenges } = await this.repositories();
     let user: User | null = null;
 
@@ -1130,7 +1170,11 @@ export class AuthService {
     // Generic response regardless of outcome — never reveal account existence
     const genericResponse = { success: true, message: 'If a verification is pending for this account, a new code has been sent.' };
 
-    if (!user || user.emailVerified) {
+    // A portal mismatch is answered with the same generic response rather than an
+    // error, for the same reason an unknown address is: the response must not say
+    // whether an account exists, let alone what kind.
+    const isAffiliate = user?.platformRole === PlatformRole.AFFILIATE;
+    if (!user || user.emailVerified || Boolean(options.expectAffiliate) !== isAffiliate) {
       return genericResponse;
     }
 
@@ -1144,7 +1188,13 @@ export class AuthService {
     return { ...genericResponse, challengeId: result.challenge.challengeId, expiresAt: result.challenge.expiresAt };
   }
 
-  async verifyEmailOtp(challengeId: string, code: string, userAgent?: string, ipAddress?: string) {
+  async verifyEmailOtp(
+    challengeId: string,
+    code: string,
+    userAgent?: string,
+    ipAddress?: string,
+    options: { expectAffiliate?: boolean } = {},
+  ) {
     const { mfaChallenges, users } = await this.repositories();
     const { browser, os } = this.parseUserAgent(userAgent);
 
@@ -1156,6 +1206,18 @@ export class AuthService {
 
     const user = await users.findOne({ where: { id: challenge.userId, deletedAt: IsNull() } });
     if (!user) throw new NotFoundException('User not found');
+
+    // A verified code issues a real session, so it must issue one for the portal
+    // the code was requested from. Without this an affiliate could verify at the
+    // organization endpoint and walk away with an organization session.
+    const isAffiliate = user.platformRole === PlatformRole.AFFILIATE;
+    if (Boolean(options.expectAffiliate) !== isAffiliate) {
+      throw new ForbiddenException(
+        isAffiliate
+          ? 'This account is an affiliate partner account. Please verify from the affiliate portal.'
+          : 'This account is an organization account. Please verify from the organization portal.',
+      );
+    }
 
     const storedCode = this.decryptOtpCode(challenge);
     const isValid = Boolean(storedCode) && /^\d{6}$/.test(code) && SecurityUtils.timingSafeCompare(storedCode!, code);
@@ -1225,7 +1287,11 @@ export class AuthService {
       metadata: { method: 'EMAIL_OTP' },
     });
 
-    return tokens;
+    // Anything the issuing portal stashed on the challenge comes back here, minus
+    // the encrypted code and the bookkeeping fields that are this service's own.
+    const { codeEncrypted, lastSentAt, userEmail, ...verificationContext } = challenge.metadata || {};
+
+    return { ...tokens, verificationContext };
   }
 
   private async dispatchEmailVerificationOtp(user: User, code: string, expiresInMinutes = AuthService.EMAIL_OTP_TTL_MINUTES) {

@@ -27,6 +27,8 @@
     "test:attribution": "tsx src/tests/attribution-e2e.test.ts",
     "test:limits": "tsx src/tests/subscription-limits.test.ts",
     "test:legal": "tsx src/tests/legal-acceptance.test.ts",
+    "test:affiliate-portal": "tsx src/tests/affiliate-portal-data.test.ts",
+    "test:program-links": "tsx src/tests/program-default-links.test.ts",
     "test:invitations": "cross-env DATABASE_PORT=59999 DATABASE_URL= tsx src/tests/affiliate-invitation-flow.test.ts"
   },
   "dependencies": {

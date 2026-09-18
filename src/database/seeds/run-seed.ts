@@ -356,6 +356,8 @@ export async function runSeed() {
         attributionModel: AttributionModel.LAST_CLICK,
         cookieDurationDays: 60,
         affiliateApprovalMode: 'AUTO',
+        visibility: 'PUBLIC',
+        category: 'SAAS',
         createdBy: admin.id,
       });
       prog = await programs.save(prog);
@@ -1202,7 +1204,7 @@ async function seedEmailDesignSettings(emailDesignSettingsRepo: any) {
       name: 'PartnerIQ',
       tagline: 'Partner & Affiliate Management Platform',
       signature: 'Built for better partnerships.',
-      companyLegal: 'PartnerIQ Technologies Inc.',
+      companyLegal: 'PartnerIQ',
       logoUrl:
         'https://res.cloudinary.com/bunny1705/image/upload/v1787584202/partneriq/92977d80-3e51-4a12-a382-64b42fb5466a/organization-logo/rrhwttefwtgrxico2rtv.png',
       websiteUrl: 'https://partneriq.in',

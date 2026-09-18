@@ -8,6 +8,7 @@ import { ZohoCrmProvider } from '../modules/integrations/providers/zoho-crm.prov
 import { RazorpayProvider } from '../modules/integrations/providers/razorpay.provider';
 import { CashfreeProvider } from '../modules/integrations/providers/cashfree.provider';
 import { IntegrationProviderFactory } from '../modules/integrations/providers/provider.factory';
+import { RazorpayTokenService } from '../modules/integrations/razorpay/razorpay-token.service';
 import { dbStore } from '../database/store';
 
 console.log('--- Starting Admin Platform OAuth End-to-End Test ---');
@@ -25,7 +26,8 @@ const providerFactory = new IntegrationProviderFactory(
   cashfreeProvider,
 );
 const hubspotService = new HubSpotService(credService, {} as any, {} as any);
-const service = new IntegrationsService(credService, providerFactory, hubspotService);
+const razorpayTokenService = new RazorpayTokenService(credService, razorpayProvider);
+const service = new IntegrationsService(credService, providerFactory, razorpayTokenService, hubspotService);
 
 const superAdminUser: any = {
   userId: 'usr_admin_test_1',
