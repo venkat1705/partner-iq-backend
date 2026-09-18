@@ -132,7 +132,7 @@ export class AffiliateAuthService {
       website: payload.website,
     });
 
-    this.audit(savedUser.id, AuditAction.AFFILIATE_APPROVED, 'affiliate_profile', savedUser.id, {
+    this.audit(savedUser.id, AuditAction.AFFILIATE_REGISTERED, 'affiliate_profile', savedUser.id, {
       source: 'AFFILIATE_REGISTER',
       partnerType: payload.partnerType,
       referralCode: payload.referralCode,

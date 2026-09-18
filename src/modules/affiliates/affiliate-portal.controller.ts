@@ -25,7 +25,7 @@ import { v4 as uuidv4 } from 'uuid';
 import * as crypto from 'crypto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { dbStore, IdempotencyKeyEntity } from '../../database/store';
-import { AffiliateStatus, TrackingLinkStatus, EnvironmentType, PayoutStatus, ProgramStatus, ConversionStatus, CommissionType } from '../../common/enums';
+import { AffiliateStatus, TrackingLinkStatus, EnvironmentType, PayoutStatus, ProgramStatus, ConversionStatus, CommissionType, AuditAction } from '../../common/enums';
 import { PLATFORM_CURRENCY } from '../../common/constants/currency';
 import { MediaService } from '../media/media.service';
 import { UploadImageDto } from '../media/dto/media.dto';
@@ -35,6 +35,7 @@ import {
   resolveNextPayoutDate,
 } from '../../common/utils/payout-schedule.utils';
 import { AuthService } from '../auth/auth.service';
+import { AuditService } from '../audit/audit.service';
 import { initializeDataSource } from '../../database/data-source';
 import {
   User,
@@ -79,6 +80,7 @@ export class AffiliatePortalController {
     @Inject(forwardRef(() => AffiliateAuthService))
     private readonly affiliateAuthService?: AffiliateAuthService,
     @Optional() private readonly mediaService?: MediaService,
+    @Optional() private readonly auditService?: AuditService,
   ) { }
 
   private resolveAffiliateEmail(req: any): string {
@@ -412,6 +414,22 @@ export class AffiliatePortalController {
     const stored = dbStore.users.find((item) => item.id === user.id);
     if (stored) stored.avatarUrl = uploaded.secureUrl;
 
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || req.connection?.remoteAddress;
+    const clientUserAgent = req.headers['user-agent'];
+
+    this.auditService?.log({
+      actorType: 'affiliate',
+      actorId: user.id,
+      action: AuditAction.AFFILIATE_AVATAR_UPLOADED,
+      resourceType: 'affiliate_profile',
+      resourceId: user.id,
+      ipAddress: clientIp,
+      userAgent: clientUserAgent,
+      metadata: {
+        avatarUrl: uploaded.secureUrl,
+      },
+    });
+
     return { avatarUrl: uploaded.secureUrl };
   }
 
@@ -429,11 +447,14 @@ export class AffiliatePortalController {
       ...(profileUpdates.socialProfiles || {}),
     };
 
+    let passwordChanged = false;
+    let nameChanged = false;
     if (user && user.id) {
       if (body.fullName) {
         const parts = body.fullName.trim().split(' ');
         user.firstName = parts[0] || user.firstName;
         user.lastName = parts.slice(1).join(' ') || user.lastName;
+        nameChanged = true;
       }
       if (body.avatarUrl !== undefined) {
         user.avatarUrl = body.avatarUrl;
@@ -443,10 +464,44 @@ export class AffiliatePortalController {
           throw new BadRequestException('Password must be at least 8 characters long.');
         }
         user.passwordHash = await SecurityUtils.hashPassword(body.password);
+        passwordChanged = true;
       }
       await users.save(user);
     }
     await affiliatePortalProfiles.save(profile);
+
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || req.connection?.remoteAddress;
+    const clientUserAgent = req.headers['user-agent'];
+
+    const fieldsUpdated: string[] = Object.keys(profileUpdates);
+    if (nameChanged) fieldsUpdated.push('fullName');
+    if (body.avatarUrl !== undefined) fieldsUpdated.push('avatarUrl');
+    if (passwordChanged) fieldsUpdated.push('password');
+
+    const updatedSummary: Record<string, any> = {};
+    if (body.fullName) updatedSummary.fullName = body.fullName;
+    if (profileUpdates.partnerType) updatedSummary.partnerType = profileUpdates.partnerType;
+    if (profileUpdates.phone) updatedSummary.phone = profileUpdates.phone;
+    if (profileUpdates.country) updatedSummary.country = profileUpdates.country;
+    if (profileUpdates.primaryMarket) updatedSummary.primaryMarket = profileUpdates.primaryMarket;
+    if (profileUpdates.audienceSize) updatedSummary.audienceSize = profileUpdates.audienceSize;
+    if (profileUpdates.website) updatedSummary.website = profileUpdates.website;
+    if (profileUpdates.bio) updatedSummary.bio = profileUpdates.bio.slice(0, 100);
+    if (passwordChanged) updatedSummary.passwordChanged = true;
+
+    this.auditService?.log({
+      actorType: 'affiliate',
+      actorId: user.id,
+      action: AuditAction.AFFILIATE_PROFILE_UPDATED,
+      resourceType: 'affiliate_profile',
+      resourceId: profile.id,
+      ipAddress: clientIp,
+      userAgent: clientUserAgent,
+      metadata: {
+        fieldsUpdated,
+        ...updatedSummary,
+      },
+    });
 
     return this.serializeAffiliateProfile(req);
   }
@@ -1332,6 +1387,21 @@ export class AffiliatePortalController {
       dbStore.trackingLinks.unshift(saved as any);
     }
 
+    this.auditService?.log({
+      organizationId: orgId,
+      actorType: 'affiliate',
+      actorId: affiliate.userId || affiliate.id,
+      action: AuditAction.AFFILIATE_LINK_CREATED,
+      resourceType: 'tracking_link',
+      resourceId: saved.id,
+      metadata: {
+        programId: prog.id,
+        programName: prog.name,
+        shortCode: saved.shortCode,
+        affiliateId: affiliate.id,
+      },
+    });
+
     const org = await organizations.findOne({ where: { id: orgId } });
     return {
       id: saved.id,
@@ -1373,6 +1443,18 @@ export class AffiliatePortalController {
         const storeLink = dbStore.trackingLinks.find((l) => l.id === linkId);
         if (storeLink) storeLink.status = TrackingLinkStatus.INACTIVE;
       }
+      this.auditService?.log({
+        organizationId: link.organizationId,
+        actorType: 'affiliate',
+        actorId: link.affiliateId,
+        action: AuditAction.AFFILIATE_LINK_DELETED,
+        resourceType: 'tracking_link',
+        resourceId: link.id,
+        metadata: {
+          affiliateId: link.affiliateId,
+          programId: link.programId,
+        },
+      });
     }
     return { success: true };
   }
@@ -1969,6 +2051,21 @@ export class AffiliatePortalController {
       dbStore.payoutItems.unshift(newPayout as any);
     }
 
+    this.auditService?.log({
+      organizationId: org.id,
+      actorType: 'affiliate',
+      actorId: affiliate.userId || affiliate.id,
+      action: AuditAction.AFFILIATE_PAYOUT_REQUESTED,
+      resourceType: 'payout_item',
+      resourceId: newPayout.id,
+      metadata: {
+        organizationId: org.id,
+        grossAmount,
+        commissionCount,
+        affiliateId: affiliate.id,
+      },
+    });
+
     return {
       id: newPayout.id,
       organizationId: org.id,
@@ -2039,7 +2136,27 @@ export class AffiliatePortalController {
       await affiliatePayoutMethods.update({ userId }, { isDefault: false });
     }
 
-    return this.serializePayoutMethod(await affiliatePayoutMethods.save(newMethod));
+    const saved = await affiliatePayoutMethods.save(newMethod);
+
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || req.connection?.remoteAddress;
+    const clientUserAgent = req.headers['user-agent'];
+
+    this.auditService?.log({
+      actorType: 'affiliate',
+      actorId: userId,
+      action: AuditAction.AFFILIATE_PAYOUT_METHOD_ADDED,
+      resourceType: 'payout_method',
+      resourceId: saved.id,
+      ipAddress: clientIp,
+      userAgent: clientUserAgent,
+      metadata: {
+        type: newMethod.type,
+        isDefault: newMethod.isDefault,
+        accountHolder: newMethod.accountHolderName,
+      },
+    });
+
+    return this.serializePayoutMethod(saved);
   }
 
   @Patch('api/v1/affiliate/me/payout-methods/:methodId/default')
@@ -2054,6 +2171,20 @@ export class AffiliatePortalController {
     await affiliatePayoutMethods.update({ userId: user.id }, { isDefault: false });
     method.isDefault = true;
     await affiliatePayoutMethods.save(method);
+
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || req.connection?.remoteAddress;
+    const clientUserAgent = req.headers['user-agent'];
+
+    this.auditService?.log({
+      actorType: 'affiliate',
+      actorId: user.id,
+      action: AuditAction.AFFILIATE_PAYOUT_METHOD_DEFAULT_SET,
+      resourceType: 'payout_method',
+      resourceId: methodId,
+      ipAddress: clientIp,
+      userAgent: clientUserAgent,
+    });
+
     return { success: true };
   }
 
@@ -2065,7 +2196,24 @@ export class AffiliatePortalController {
     const { user } = await this.resolveAffiliateUser(req);
     const { affiliatePayoutMethods } = await this.repositories();
     const method = await affiliatePayoutMethods.findOne({ where: { id: methodId, userId: user.id } });
-    if (method) await affiliatePayoutMethods.remove(method);
+    if (method) {
+      await affiliatePayoutMethods.remove(method);
+      const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || req.connection?.remoteAddress;
+      const clientUserAgent = req.headers['user-agent'];
+
+      this.auditService?.log({
+        actorType: 'affiliate',
+        actorId: user.id,
+        action: AuditAction.AFFILIATE_PAYOUT_METHOD_DELETED,
+        resourceType: 'payout_method',
+        resourceId: methodId,
+        ipAddress: clientIp,
+        userAgent: clientUserAgent,
+        metadata: {
+          type: method.type,
+        },
+      });
+    }
     return { success: true };
   }
 
@@ -2096,6 +2244,26 @@ export class AffiliatePortalController {
     profile.taxFormType = body.formType || profile.taxFormType || 'PAN_TDS';
     profile.taxSubmittedAt = new Date();
     await affiliatePortalProfiles.save(profile);
+
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || req.connection?.remoteAddress;
+    const clientUserAgent = req.headers['user-agent'];
+
+    this.auditService?.log({
+      actorType: 'affiliate',
+      actorId: profile.userId,
+      action: AuditAction.AFFILIATE_TAX_PROFILE_UPDATED,
+      resourceType: 'tax_profile',
+      resourceId: profile.id,
+      ipAddress: clientIp,
+      userAgent: clientUserAgent,
+      metadata: {
+        country: profile.taxCountry,
+        formType: profile.taxFormType,
+        taxClassification: profile.taxClassification,
+        withholdingRate: profile.withholdingRate,
+      },
+    });
+
     return this.serializeTaxProfile(profile);
   }
 
@@ -2117,10 +2285,20 @@ export class AffiliatePortalController {
   @ApiOperation({ summary: 'Accept affiliate invitation for current affiliate' })
   async acceptInvitation(@Req() req: any, @Param('invitationId') invitationId: string, @Body() body: any) {
     const email = this.resolveAffiliateEmail(req);
-    return this.affiliatesService?.acceptInvitationForEmail(invitationId, email, {
+    const result = await this.affiliatesService?.acceptInvitationForEmail(invitationId, email, {
       acceptedTerms: true,
       termsVersionAccepted: body?.termsVersionAccepted || 1,
     }, req.user?.userId || req.user?.sub);
+
+    this.auditService?.log({
+      actorType: 'affiliate',
+      actorId: req.user?.userId || req.user?.sub || email,
+      action: AuditAction.AFFILIATE_INVITATION_ACCEPTED,
+      resourceType: 'affiliate_invitation',
+      resourceId: invitationId,
+    });
+
+    return result;
   }
 
   @Post('api/v1/affiliate/me/invitations/:invitationId/decline')
@@ -2129,7 +2307,17 @@ export class AffiliatePortalController {
   @ApiOperation({ summary: 'Decline affiliate invitation' })
   async declineInvitation(@Req() req: any, @Param('invitationId') invitationId: string) {
     const email = this.resolveAffiliateEmail(req);
-    return this.affiliatesService?.declineInvitationForEmail(invitationId, email, req.user?.userId || req.user?.sub);
+    const result = await this.affiliatesService?.declineInvitationForEmail(invitationId, email, req.user?.userId || req.user?.sub);
+
+    this.auditService?.log({
+      actorType: 'affiliate',
+      actorId: req.user?.userId || req.user?.sub || email,
+      action: AuditAction.AFFILIATE_INVITATION_DECLINED,
+      resourceType: 'affiliate_invitation',
+      resourceId: invitationId,
+    });
+
+    return result;
   }
 
   // ----------------------------------------------------
@@ -2376,6 +2564,81 @@ export class AffiliatePortalController {
       lastReply: 'Ticket registered. Partner manager assigned.',
     });
 
-    return affiliateSupportTickets.save(ticket);
+    const saved = await affiliateSupportTickets.save(ticket);
+
+    this.auditService?.log({
+      organizationId: body.organizationId,
+      actorType: 'affiliate',
+      actorId: user.id,
+      action: AuditAction.AFFILIATE_SUPPORT_TICKET_CREATED,
+      resourceType: 'support_ticket',
+      resourceId: saved.id,
+      metadata: {
+        category: ticket.category,
+        priority: ticket.priority,
+      },
+    });
+
+    return saved;
+  }
+
+  // ----------------------------------------------------
+  // Audit Logs
+  // ----------------------------------------------------
+  @Get('api/v1/affiliate/me/audit-logs')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List scoped audit logs for current affiliate user' })
+  async getAuditLogs(
+    @Req() req: any,
+    @Query('organizationId') organizationId?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('search') search?: string,
+    @Query('action') action?: string,
+    @Query('resourceType') resourceType?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    const { user, email } = await this.resolveAffiliateUser(req);
+    const affiliates = await this.resolveAffiliatesForUser(email, user.id);
+    const affiliateIds = affiliates.map((a) => a.id);
+
+    // If an organization is specified, verify the affiliate has an active partnership
+    if (organizationId) {
+      const isMember = affiliates.some((a) => a.organizationId === organizationId);
+      if (!isMember) {
+        return {
+          data: [],
+          total: 0,
+          page: Math.max(1, Number(page) || 1),
+          limit: Math.min(100, Math.max(1, Number(limit) || 20)),
+          totalPages: 0,
+        };
+      }
+    }
+
+    if (!this.auditService) {
+      return {
+        data: [],
+        total: 0,
+        page: 1,
+        limit: 20,
+        totalPages: 0,
+      };
+    }
+
+    return this.auditService.getAffiliateAuditLogs({
+      actorId: user.id,
+      affiliateIds,
+      organizationId,
+      page,
+      limit,
+      search,
+      action,
+      resourceType,
+      startDate,
+      endDate,
+    });
   }
 }

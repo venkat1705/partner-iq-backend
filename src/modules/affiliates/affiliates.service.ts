@@ -1669,7 +1669,7 @@ export class AffiliatesService {
       if (dbAff && dbAff.length > 0) affiliates = dbAff as any;
       if (dbPa && dbPa.length > 0) orgProgramAffiliates = dbPa as any;
       if (dbP && dbP.length > 0) programs = dbP as any;
-    } catch {}
+    } catch { }
 
     const filteredProgAffs = orgProgramAffiliates.filter(
       (pa) =>
@@ -1867,6 +1867,18 @@ export class AffiliatesService {
         console.warn('Failed to persist affiliate application to db:', e);
       }
     }
+
+    this.audit(
+      dto.organizationId,
+      email,
+      AuditAction.AFFILIATE_APPLICATION_SUBMITTED,
+      'affiliate_application',
+      app.id,
+      {
+        programId: dto.programId,
+        name: dto.name,
+      },
+    );
 
     if (isAutoApproval) {
       const created = await this.create(dto.organizationId, {
