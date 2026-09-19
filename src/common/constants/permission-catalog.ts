@@ -141,6 +141,11 @@ export const PERMISSIONS = [
   { code: 'coupons.delete', resource: 'coupons', action: 'delete', description: 'Archive organization product coupons' },
   { code: 'coupons.assign', resource: 'coupons', action: 'assign', description: 'Assign or unassign coupons to affiliates' },
   { code: 'coupons.settings.update', resource: 'coupons', action: 'settings.update', description: 'Toggle coupon accessibility for the organization' },
+  { code: 'blogs.read', resource: 'blogs', action: 'read', description: 'View blog posts' },
+  { code: 'blogs.create', resource: 'blogs', action: 'create', description: 'Create blog posts' },
+  { code: 'blogs.update', resource: 'blogs', action: 'update', description: 'Update blog posts' },
+  { code: 'blogs.delete', resource: 'blogs', action: 'delete', description: 'Delete blog posts' },
+  { code: 'blogs.publish', resource: 'blogs', action: 'publish', description: 'Publish or unpublish blog posts' },
 ];
 
 export const BUILT_IN_ROLES = {
@@ -257,6 +262,11 @@ export const BUILT_IN_ROLES = {
       'coupons.delete',
       'coupons.assign',
       'coupons.settings.update',
+      'blogs.read',
+      'blogs.create',
+      'blogs.update',
+      'blogs.delete',
+      'blogs.publish',
     ],
   },
   PROGRAM_MANAGER: {

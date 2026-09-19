@@ -14,7 +14,9 @@ import {
   AutomationEmailTemplate,
   AutomationWorkflow,
   AffiliateTier,
+  BlogPost,
 } from '../schema';
+import { DEFAULT_BLOG_POSTS } from '../../modules/blogs/constants/default-blogs';
 import { RoleDefinition, PermissionDefinition, RolePermission } from '../schema-rbac';
 import { DataSource, IsNull } from 'typeorm';
 import { SecurityUtils } from '../../common/utils/security.utils';
@@ -56,6 +58,7 @@ export async function seedSystemDefaults() {
   const rolePermissionsRepo = dataSource.getRepository(RolePermission);
   const emailDesignTemplates = dataSource.getRepository(EmailDesignTemplate);
   const emailDesignSettings = dataSource.getRepository(EmailDesignSettings);
+  const blogPostsRepo = dataSource.getRepository(BlogPost);
 
   // 1. Seed Permissions Catalog
   for (const permission of PERMISSIONS) {
@@ -108,6 +111,7 @@ export async function seedSystemDefaults() {
   // 3. Seed Email Design Defaults & Brand Settings
   await seedEmailDesignDefaults(emailDesignTemplates);
   await seedEmailDesignSettings(emailDesignSettings);
+  await seedDefaultBlogs(blogPostsRepo);
 
   // 3b. Seed/sync the marketplace integration catalog (HubSpot, Zoho CRM, Razorpay, Cashfree, ...)
   await seedIntegrationCatalog(dataSource);
@@ -1272,6 +1276,43 @@ async function seedEmailDesignDefaults(emailDesignTemplatesRepo: any) {
     }
   } catch (error) {
     console.warn('Unable to seed email design defaults from registry:', error instanceof Error ? error.message : error);
+  }
+}
+
+async function seedDefaultBlogs(blogPostsRepo: any) {
+  let count = 0;
+  for (const post of DEFAULT_BLOG_POSTS) {
+    const existing = await blogPostsRepo.findOne({ where: { slug: post.slug } });
+    if (existing) continue;
+
+    await blogPostsRepo.save(blogPostsRepo.create({
+      id: post.id,
+      title: post.title,
+      slug: post.slug,
+      excerpt: post.excerpt,
+      content: post.content,
+      coverImage: (post as any).coverImage,
+      ogImage: (post as any).ogImage || `/og/blog-${post.slug}.svg`,
+      category: post.category,
+      tags: [...post.tags],
+      author: { ...post.author },
+      status: 'PUBLISHED',
+      scopeType: 'GLOBAL',
+      organizationId: null,
+      readingTime: post.readingTime || '10 min read',
+      featured: Boolean((post as any).featured),
+      seoTitle: post.seoTitle || post.title,
+      seoDescription: post.seoDescription || post.excerpt,
+      canonicalUrl: post.canonicalUrl || `https://affiliate.partneriq.in/blog/${post.slug}`,
+      publishedAt: post.publishedAt ? new Date(post.publishedAt) : new Date(),
+      version: 1,
+      createdAt: new Date(),
+      updatedAt: post.updatedAt ? new Date(post.updatedAt) : new Date(),
+    }));
+    count++;
+  }
+  if (count > 0) {
+    console.log(`Seeded ${count} global default educational blogs`);
   }
 }
 

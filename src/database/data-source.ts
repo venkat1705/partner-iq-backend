@@ -113,6 +113,7 @@ import {
   EmailDeliveryLog,
   EmailSuppression,
   PlatformSetting,
+  BlogPost,
 } from './schema';
 import {
   RoleDefinition,
@@ -267,6 +268,7 @@ export const AppDataSource = new DataSource({
     OrganizationPolicy,
     OrganizationInvitation,
     PlatformSetting,
+    BlogPost,
   ],
   migrations: ['src/database/migrations/*.ts'],
   migrationsRun: false,

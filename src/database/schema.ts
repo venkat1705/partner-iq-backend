@@ -5673,3 +5673,97 @@ export class UserLegalAcceptance {
   @CreateDateColumn()
   createdAt!: Date;
 }
+
+@Entity('blog_posts')
+@Unique(['slug'])
+export class BlogPost {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  title!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  slug!: string;
+
+  @Column({ type: 'text' })
+  excerpt!: string;
+
+  @Column({ type: 'simple-json' })
+  content!: any;
+
+  @Column({ type: 'text', nullable: true })
+  coverImage?: string;
+
+  @Column({ type: 'text', nullable: true })
+  ogImage?: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 80 })
+  category!: string;
+
+  @Column({ type: 'simple-json' })
+  tags!: string[];
+
+  @Column({ type: 'simple-json' })
+  author!: {
+    id?: string;
+    name: string;
+    role?: string;
+    avatarUrl?: string;
+    bio?: string;
+    twitter?: string;
+    linkedin?: string;
+  };
+
+  @Index()
+  @Column({ type: 'varchar', length: 50, default: 'DRAFT' })
+  status!: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+
+  @Index()
+  @Column({ type: 'varchar', length: 50, default: 'GLOBAL' })
+  scopeType!: 'GLOBAL' | 'ORGANIZATION';
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  organizationId?: string;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  readingTime?: string;
+
+  @Column({ type: 'boolean', default: false })
+  featured!: boolean;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  seoTitle?: string;
+
+  @Column({ type: 'text', nullable: true })
+  seoDescription?: string;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  canonicalUrl?: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  createdById?: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  updatedById?: string;
+
+  @Column({ type: 'datetime', nullable: true })
+  publishedAt?: Date;
+
+  @Column({ type: 'datetime', nullable: true })
+  deletedAt?: Date;
+
+  @Column({ type: 'int', default: 1 })
+  version!: number;
+
+  @Column({ type: 'simple-json', nullable: true })
+  metadata?: Record<string, any>;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}

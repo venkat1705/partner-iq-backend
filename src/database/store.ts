@@ -120,6 +120,7 @@ import {
   EmailSuppression,
   PlatformSetting,
   OrganizationBranding,
+  BlogPost,
 } from './schema';
 import {
   RoleDefinition,
@@ -234,15 +235,17 @@ export type OrganizationPolicyEntity = import('./schema-rbac').OrganizationPolic
 export type OrganizationInvitationEntity = import('./schema-rbac').OrganizationInvitation;
 export type PlatformSettingEntity = PlatformSetting;
 export type OrganizationBrandingEntity = OrganizationBranding;
+export type BlogPostEntity = BlogPost;
 
 class DBBackedArray<T extends object> extends Array<T> {
   private repo: Repository<T>;
 
-  private static isBillingPlans<T extends object>(repo: Repository<T>) {
-    return repo.metadata.tableName === 'billing_plans';
+  private static isBillingPlans<T extends object>(repo?: Repository<T>) {
+    return repo?.metadata?.tableName === 'billing_plans';
   }
 
-  private static conflictPathsFor<T extends object>(repo: Repository<T>) {
+  private static conflictPathsFor<T extends object>(repo?: Repository<T>) {
+    if (!repo?.metadata) return ['id'];
     if (DBBackedArray.isBillingPlans(repo)) {
       return ['code', 'billingInterval', 'currency'];
     }
@@ -258,10 +261,14 @@ class DBBackedArray<T extends object> extends Array<T> {
     if (repo.metadata.tableName === 'platform_settings') {
       return ['key'];
     }
+    if (repo.metadata.tableName === 'blog_posts') {
+      return ['slug'];
+    }
     return ['id'];
   }
 
-  private static async persistEntity<T extends object>(repo: Repository<T>, item: T) {
+  private static async persistEntity<T extends object>(repo?: Repository<T>, item?: T) {
+    if (!repo || !item) return;
     if (DBBackedArray.isBillingPlans(repo)) {
       const plan = item as any;
       if (plan.code && plan.billingInterval && plan.currency) {
@@ -548,6 +555,7 @@ export class InMemoryDataStore {
   organizationInvitations: OrganizationInvitationEntity[] = [];
   platformSettings: PlatformSettingEntity[] = [];
   organizationBrandings: OrganizationBrandingEntity[] = [];
+  blogPosts: BlogPostEntity[] = [];
 
   // Counter maps for Redis rate-limit/fraud tracking
   ipClickCounters: Map<string, { count: number; expiresAt: number }> = new Map();
@@ -896,6 +904,7 @@ export class InMemoryDataStore {
     this.organizationInvitations = new DBBackedArray(AppDataSource.getRepository(OrganizationInvitation), await AppDataSource.getRepository(OrganizationInvitation).find());
     this.platformSettings = new DBBackedArray(AppDataSource.getRepository(PlatformSetting), await AppDataSource.getRepository(PlatformSetting).find());
     this.organizationBrandings = new DBBackedArray(AppDataSource.getRepository(OrganizationBranding), await AppDataSource.getRepository(OrganizationBranding).find());
+    this.blogPosts = new DBBackedArray(AppDataSource.getRepository(BlogPost), await AppDataSource.getRepository(BlogPost).find());
 
     // Preload default affiliate eligibility setting if not present
     if (!this.platformSettings.some((s) => s.key === 'affiliateEligibility.allowOrganizationMembers')) {

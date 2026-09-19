@@ -33,6 +33,7 @@ import { InternalOpsModule } from './modules/internal-ops/internal-ops.module';
 import { BrandingModule } from './modules/branding/branding.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { CouponsModule } from './modules/coupons/coupons.module';
+import { BlogsModule } from './modules/blogs/blogs.module';
 
 @Module({
   imports: [
@@ -74,6 +75,7 @@ import { CouponsModule } from './modules/coupons/coupons.module';
     InternalOpsModule,
     BrandingModule,
     AnalyticsModule,
+    BlogsModule,
   ],
   providers: [
     {
