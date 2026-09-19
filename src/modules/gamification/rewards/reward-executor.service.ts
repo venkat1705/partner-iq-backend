@@ -5,6 +5,10 @@ import { LedgerService } from '../../ledger/ledger.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { BrevoEmailService } from '../../memberships/brevo-email.service';
 import { AuditAction, CommissionType, LedgerEntryType, MilestoneRewardStatus, MilestoneRewardType } from '../../../common/enums';
+import {
+  collectTierConditionMetrics,
+  isClickBasedMetric,
+} from '../../../common/invariants/click-compensation.invariant';
 import { SystemEmailDispatchService } from '../../email-design/services/system-email-dispatch.service';
 import { SystemTemplateKey } from '../../email-design/constants/email-template-keys';
 import { getAppConfig } from '../../../config/app.config';
@@ -33,6 +37,23 @@ export class RewardExecutorService {
     private readonly emailDispatch?: SystemEmailDispatchService,
   ) {}
 
+  /**
+   * True when the milestone or tier that triggered this reward is gated on raw click
+   * volume. A MANUAL reward has no metric behind it and is an operator decision, so it
+   * is never click-sourced.
+   */
+  private isClickSourced(ctx: ExecuteRewardContext): boolean {
+    if (ctx.milestoneId) {
+      const milestone = dbStore.milestones.find((m) => m.id === ctx.milestoneId);
+      if (milestone && isClickBasedMetric(milestone.metric)) return true;
+    }
+    if (ctx.tierId) {
+      const tier = dbStore.partnerTiers.find((t) => t.id === ctx.tierId);
+      if (tier && collectTierConditionMetrics(tier.conditions).some(isClickBasedMetric)) return true;
+    }
+    return false;
+  }
+
   async executeReward(ctx: ExecuteRewardContext): Promise<{ success: boolean; error?: string; details?: any }> {
     const affiliate = dbStore.affiliates.find((a) => a.id === ctx.affiliateId);
     const organization = dbStore.organizations.find((o) => o.id === ctx.organizationId);
@@ -47,7 +68,18 @@ export class RewardExecutorService {
       // 1. FIXED BONUS
       if (type === MilestoneRewardType.FIXED_BONUS || config.bonusAmount) {
         const amountCents = config.bonusAmount || 0;
-        if (amountCents > 0) {
+        // CLICK != COMMISSION. This bonus credits the affiliate ledger directly, so it is the
+        // one reward that can turn traffic into a payable balance. Milestone/tier creation
+        // already refuses the combination, but rows configured before that check existed (or
+        // written straight to the store by a seed or migration) still reach here, so the
+        // boundary is enforced again at the moment money would actually be created.
+        if (amountCents > 0 && this.isClickSourced(ctx)) {
+          this.logger.warn(
+            `Blocked a ${amountCents}-cent bonus for affiliate ${ctx.affiliateId}: its ${ctx.source.toLowerCase()} ` +
+              'is gated on click volume, and clicks are a traffic metric rather than an earning event.',
+          );
+          results.fixedBonus = { amountCents, status: 'BLOCKED', reason: 'CLICK_BASED_COMPENSATION_NOT_SUPPORTED' };
+        } else if (amountCents > 0) {
           const desc = ctx.reason || `Reward bonus for ${ctx.source.toLowerCase()}`;
           await this.ledgerService.recordTransaction(
             ctx.organizationId,

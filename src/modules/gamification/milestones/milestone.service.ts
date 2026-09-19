@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { dbStore, MilestoneEntity } from '../../../database/store';
 import { CreateMilestoneDto, UpdateMilestoneDto } from '../dto/milestone.dto';
 import { AuditAction, GamificationMetric, MilestoneResetBehavior, MilestoneRewardType } from '../../../common/enums';
+import { assertMilestoneNotClickCompensated } from '../../../common/invariants/click-compensation.invariant';
 
 @Injectable()
 export class MilestoneService {
@@ -31,6 +32,13 @@ export class MilestoneService {
     if (existing) {
       throw new BadRequestException(`A milestone with code '${code}' already exists in this program scope.`);
     }
+
+    // CLICK != COMMISSION — a cash bonus may not be gated on raw click volume.
+    assertMilestoneNotClickCompensated({
+      metric: dto.metric || GamificationMetric.APPROVED_CONVERSIONS,
+      rewardType: dto.rewardType || MilestoneRewardType.BADGE,
+      rewardConfig: dto.rewardConfig,
+    });
 
     const milestone: MilestoneEntity = {
       id: uuidv4(),
@@ -111,6 +119,15 @@ export class MilestoneService {
     actorId?: string,
   ): Promise<MilestoneEntity> {
     const milestone = await this.getMilestone(organizationId, id);
+
+    // Validate the *resulting* configuration, not just the fields in this patch —
+    // adding a bonus to an existing click milestone and switching an existing bonus
+    // milestone over to a click metric are the same violation from opposite sides.
+    assertMilestoneNotClickCompensated({
+      metric: dto.metric ?? milestone.metric,
+      rewardType: dto.rewardType ?? milestone.rewardType,
+      rewardConfig: dto.rewardConfig !== undefined ? dto.rewardConfig : milestone.rewardConfig,
+    });
 
     if (dto.name) milestone.name = dto.name.trim();
     if (dto.description !== undefined) milestone.description = dto.description;

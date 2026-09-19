@@ -18,6 +18,7 @@ import {
 import { EmailTemplateService } from '../templates/email-template.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { LedgerService } from '../../ledger/ledger.service';
+import { isWorkflowClickGated } from '../../../common/invariants/click-compensation.invariant';
 import { TierService } from '../../gamification/tiers/tier.service';
 
 @Injectable()
@@ -305,14 +306,26 @@ export class AutomationStepRunnerService {
 
     // 4. GRANT BONUS
     if (config.actionType === AutomationActionType.GRANT_BONUS && config.bonusAmountCents) {
-      await this.ledgerService.recordTransaction(
-        execution.organizationId,
-        execution.affiliateId,
-        LedgerEntryType.COMMISSION_EARNED,
-        `Automation bonus from ${workflow.name}`,
-        uuidv4(),
-        config.bonusAmountCents,
-      );
+      // CLICK != COMMISSION. This is a direct ledger credit, so a workflow triggered by
+      // FIRST_CLICK_RECEIVED or gated on a CLICKS goal/condition would be paying for traffic.
+      // Activation-time validation refuses that shape, but workflows saved before this check
+      // (or activated by a path that skipped it) still reach here, so it is enforced again
+      // at the moment the money would be created.
+      if (isWorkflowClickGated(workflow)) {
+        this.logger.warn(
+          `Blocked a ${config.bonusAmountCents}-cent automation bonus for affiliate ${execution.affiliateId}: ` +
+            `workflow '${workflow.name}' is gated on click volume, and clicks are a traffic metric rather than an earning event.`,
+        );
+      } else {
+        await this.ledgerService.recordTransaction(
+          execution.organizationId,
+          execution.affiliateId,
+          LedgerEntryType.COMMISSION_EARNED,
+          `Automation bonus from ${workflow.name}`,
+          uuidv4(),
+          config.bonusAmountCents,
+        );
+      }
     }
   }
 

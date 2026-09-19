@@ -25,6 +25,7 @@
     "test:oauth": "tsx src/tests/oauth.test.ts",
     "test:analytics": "tsx src/tests/analytics-sanity-check.ts",
     "test:attribution": "tsx src/tests/attribution-e2e.test.ts",
+    "test:invariants": "tsx src/tests/click-compensation-invariant.test.ts",
     "test:limits": "tsx src/tests/subscription-limits.test.ts",
     "test:legal": "tsx src/tests/legal-acceptance.test.ts",
     "test:affiliate-portal": "tsx src/tests/affiliate-portal-data.test.ts",

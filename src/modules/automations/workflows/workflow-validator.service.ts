@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { dbStore, AutomationWorkflowEntity } from '../../../database/store';
 import { AutomationNodeType } from '../../../common/enums';
+import { assertWorkflowNotClickCompensated } from '../../../common/invariants/click-compensation.invariant';
 import { EmailTemplateService } from '../templates/email-template.service';
 
 @Injectable()
@@ -48,7 +49,16 @@ export class WorkflowValidatorService {
       }
     }
 
-    // 3. Cycle & Loop validation: ensure no immediate infinite loop (cycle without any DELAY node)
+    // 3. CLICK != COMMISSION — a workflow that credits the affiliate ledger may not be
+    // triggered by, or gated on, click volume. Non-monetary click-driven workflows
+    // (nudge emails, asset unlocks) remain fully supported.
+    assertWorkflowNotClickCompensated({
+      triggerType: (workflow as any).triggerType,
+      goalConfig: (workflow as any).goalConfig,
+      nodes,
+    });
+
+    // 4. Cycle & Loop validation: ensure no immediate infinite loop (cycle without any DELAY node)
     this.detectZeroDelayCycles(nodes, edges);
 
     return { valid: true };

@@ -1076,7 +1076,12 @@ export class AffiliatePortalController {
       const rate = rawVal >= 100 ? (rawVal / 100) : rawVal;
       const currency = (p as any).currency || (org as any)?.currency || 'INR';
       const currencySymbol = currency === 'INR' ? '₹' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : '$';
-      const commissionFormatted = isFlat ? `${currencySymbol}${rate} Flat` : `${rate}% Recurring`;
+      // Commission is always stated per qualified conversion — the unit matters, because a bare
+      // "25%" or "₹500" on a marketplace tile is what lets a partner assume they are paid for traffic.
+      const commissionFormatted = isFlat ? `${currencySymbol}${rate} per conversion` : `${rate}% per conversion`;
+      const commissionBasis = isFlat
+        ? `${currencySymbol}${rate} for every qualified conversion`
+        : `${rate}% of every qualified conversion's value`;
       const brandName = org?.name || (p as any).brandName || 'PartnerIQ Brand';
       const brandLogo = (brandingMap[org?.id]?.logoUrl) || (org as any)?.branding?.logoUrl || (p as any).logoUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80';
       const cookieDays = p.cookieDurationDays || (p as any).cookieWindowDays || (p as any).attributionWindowDays || 60;
@@ -1098,11 +1103,19 @@ export class AffiliatePortalController {
         attributionWindowDays: cookieDays,
         cookieDurationDays: cookieDays,
         currency,
-        avgEpc: (p as any).avgEpc || `${currencySymbol}400`,
+        commissionBasis,
+        commissionUnit: 'QUALIFIED_CONVERSION',
+        /**
+         * @deprecated Retained only so older marketplace clients do not break on a missing key.
+         * It previously served a hardcoded placeholder figure that read as a guaranteed
+         * per-click rate — affiliates are paid per qualified conversion, never per click.
+         * Always null; never use it for a calculation or present it as earnings.
+         */
+        avgEpc: null,
         featured: (p as any).featured ?? true,
         affiliateApprovalMode: p.affiliateApprovalMode || 'AUTO',
         instantApproval: p.affiliateApprovalMode === 'AUTO',
-        description: (p as any).description || `Earn high-converting commissions with ${brandName}.`,
+        description: (p as any).description || `Earn commission on every qualified conversion you refer to ${brandName}.`,
         status: p.status,
       };
     });

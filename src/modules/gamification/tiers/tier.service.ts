@@ -6,6 +6,7 @@ import {
   AffiliateTierEntity,
   AffiliateTierHistoryEntity,
 } from '../../../database/store';
+import { assertTierNotClickCompensated } from '../../../common/invariants/click-compensation.invariant';
 import {
   CreatePartnerTierDto,
   UpdatePartnerTierDto,
@@ -62,6 +63,9 @@ export class TierService {
         }
       });
     }
+
+    // CLICK != COMMISSION — a tier promotion gated on click volume cannot pay a cash bonus.
+    assertTierNotClickCompensated({ conditions: dto.conditions, rewardsConfig: dto.rewardsConfig });
 
     const tier: PartnerTierEntity = {
       id: uuidv4(),
@@ -149,6 +153,13 @@ export class TierService {
         }
       });
     }
+
+    // Validate the resulting configuration, so neither half of the violation can be
+    // introduced by patching the other half in on its own.
+    assertTierNotClickCompensated({
+      conditions: dto.conditions ?? tier.conditions,
+      rewardsConfig: dto.rewardsConfig !== undefined ? dto.rewardsConfig : tier.rewardsConfig,
+    });
 
     if (dto.name) tier.name = dto.name.trim();
     if (dto.description !== undefined) tier.description = dto.description;
