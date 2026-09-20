@@ -10,6 +10,7 @@ import { AssetManagementService } from './asset-management.service';
 import {
   AddAssetVersionDto,
   AddBundleAssetDto,
+  BulkAssetActionDto,
   CreateAssetBundleDto,
   CreateAssetDto,
   CreateUploadUrlDto,
@@ -25,7 +26,7 @@ import {
 @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
 @ApiBearerAuth()
 export class AssetManagementController {
-  constructor(private readonly service: AssetManagementService) {}
+  constructor(private readonly service: AssetManagementService) { }
 
   @Post('assets/upload-url')
   @RequirePermissions('assets.create')
@@ -46,10 +47,32 @@ export class AssetManagementController {
     return this.service.listAssets(organizationId, query);
   }
 
+  @Get('assets/folders')
+  @RequirePermissions('assets.view')
+  listFolders(@Param('organizationId') organizationId: string) {
+    return this.service.listFolders(organizationId);
+  }
+
+  @Post('assets/bulk-action')
+  @RequirePermissions('assets.edit')
+  bulkAction(
+    @Param('organizationId') organizationId: string,
+    @CurrentUser() user: AuthUserPayload,
+    @Body() dto: BulkAssetActionDto,
+  ) {
+    return this.service.bulkAction(organizationId, user.userId, dto);
+  }
+
   @Get('assets/:assetId')
   @RequirePermissions('assets.view')
   getAsset(@Param('organizationId') organizationId: string, @Param('assetId') assetId: string) {
     return this.service.getAsset(organizationId, assetId);
+  }
+
+  @Get('assets/:assetId/usage-references')
+  @RequirePermissions('assets.view')
+  getAssetUsageReferences(@Param('organizationId') organizationId: string, @Param('assetId') assetId: string) {
+    return this.service.getAssetUsageReferences(organizationId, assetId);
   }
 
   @Patch('assets/:assetId')
@@ -208,5 +231,23 @@ export class AssetManagementController {
   @RequirePermissions('assets.view')
   analytics(@Param('organizationId') organizationId: string) {
     return this.service.analytics(organizationId);
+  }
+
+  @Get('asset-analytics/storage')
+  @RequirePermissions('assets.view')
+  storageAnalytics(@Param('organizationId') organizationId: string) {
+    return this.service.getStorageAnalytics(organizationId);
+  }
+
+  @Get('asset-analytics/usage-intelligence')
+  @RequirePermissions('assets.view')
+  usageIntelligence(@Param('organizationId') organizationId: string) {
+    return this.service.getUsageIntelligence(organizationId);
+  }
+
+  @Get('asset-activity')
+  @RequirePermissions('assets.view')
+  assetActivity(@Param('organizationId') organizationId: string) {
+    return this.service.getAssetActivity(organizationId);
   }
 }

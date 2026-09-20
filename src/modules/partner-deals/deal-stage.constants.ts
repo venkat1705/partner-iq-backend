@@ -2,6 +2,14 @@ import type { PartnerDealEntity } from '../../database/store';
 import { PartnerDealStatus } from '../../common/enums';
 
 export const DEAL_BOARD_COLUMNS = ['NEW', 'QUALIFIED', 'PROPOSAL', 'NEGOTIATION', 'WON', 'LOST'] as const;
+export const DealBoardColumn = {
+  NEW: 'NEW',
+  QUALIFIED: 'QUALIFIED',
+  PROPOSAL: 'PROPOSAL',
+  NEGOTIATION: 'NEGOTIATION',
+  WON: 'WON',
+  LOST: 'LOST',
+} as const;
 export type DealBoardColumn = (typeof DEAL_BOARD_COLUMNS)[number];
 
 export const COLUMN_STATUSES: Record<DealBoardColumn, PartnerDealStatus[]> = {
@@ -18,6 +26,33 @@ export const COLUMN_STATUSES: Record<DealBoardColumn, PartnerDealStatus[]> = {
   NEGOTIATION: [PartnerDealStatus.NEGOTIATION, PartnerDealStatus.IN_PROGRESS],
   WON: [PartnerDealStatus.CLOSED_WON],
   LOST: [PartnerDealStatus.CLOSED_LOST, PartnerDealStatus.REJECTED, PartnerDealStatus.CANCELLED],
+};
+
+export const COLUMN_LABELS: Record<DealBoardColumn, string> = {
+  NEW: 'New / Submitted',
+  QUALIFIED: 'Qualified',
+  PROPOSAL: 'Proposal',
+  NEGOTIATION: 'Negotiation',
+  WON: 'Closed Won',
+  LOST: 'Closed Lost',
+};
+
+export const COLUMN_PROBABILITIES: Record<DealBoardColumn, number> = {
+  NEW: 0.10,
+  QUALIFIED: 0.25,
+  PROPOSAL: 0.50,
+  NEGOTIATION: 0.75,
+  WON: 1.00,
+  LOST: 0.00,
+};
+
+export const COLUMN_COLORS: Record<DealBoardColumn, string> = {
+  NEW: 'hsl(var(--muted-foreground))',
+  QUALIFIED: 'hsl(var(--primary))',
+  PROPOSAL: '#f97316',
+  NEGOTIATION: '#8b5cf6',
+  WON: '#10b981',
+  LOST: '#ef4444',
 };
 
 export function statusToColumn(status: PartnerDealStatus): DealBoardColumn {

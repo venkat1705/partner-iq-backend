@@ -13,6 +13,7 @@ import {
   Min,
   ValidateIf,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import {
   AffiliateAssetActivityType,
   AssetBundleStatus,
@@ -136,6 +137,11 @@ export class CreateAssetDto {
   @IsOptional()
   @IsBoolean()
   isCopyable?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  folderPath?: string;
 }
 
 export class UpdateAssetDto extends CreateAssetDto {
@@ -212,10 +218,20 @@ export class ListAssetsQueryDto {
   country?: string;
 
   @IsOptional()
+  @IsString()
+  folderPath?: string;
+
+  @IsOptional()
+  @IsString()
+  tag?: string;
+
+  @IsOptional()
+  @Type(() => Number)
   @IsInt()
   page?: number;
 
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   limit?: number;
 }
@@ -326,4 +342,23 @@ export class RecordAssetActivityDto {
 
   @IsOptional()
   metadata?: Record<string, unknown>;
+}
+
+export class BulkAssetActionDto {
+  @IsString()
+  action!: 'ARCHIVE' | 'MOVE' | 'TAG';
+
+  @IsArray()
+  @IsUUID('4', { each: true })
+  assetIds!: string[];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  folderPath?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tags?: string[];
 }

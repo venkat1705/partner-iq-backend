@@ -505,6 +505,7 @@ export const PERMISSION_ALIASES: Record<string, string[]> = {
   'view.payouts': ['payouts.read'],
   'view.fraud': ['fraud.read'],
   'manage.links': ['links.read', 'links.create', 'links.update'],
+  'view.links': ['links.read'],
   'manage.assets': ['assets.view', 'assets.create', 'assets.edit', 'assets.delete', 'assets.publish', 'assets.download'],
   'manage.assetBundles': ['assetBundles.view', 'assetBundles.create', 'assetBundles.edit', 'assetBundles.delete', 'assetBundles.publish'],
   'manage.tiers': ['tiers.view', 'tiers.create', 'tiers.edit', 'tiers.delete', 'tiers.assign'],

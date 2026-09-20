@@ -7,6 +7,7 @@ import { OrganizationGuard } from '../../common/guards/organization.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import type { AuthUserPayload } from '../../common/interfaces/request-with-user.interface';
 import { CreatePartnerDealDto, RejectPartnerDealDto, UpdateDealStageDto } from './dto/partner-deal.dto';
+import { DealAnalyticsQueryDto, BulkDealActionDto } from './dto/deal-analytics.dto';
 import { PartnerDealsService } from './partner-deals.service';
 
 @ApiTags('Partner B2B Deals')
@@ -14,7 +15,7 @@ import { PartnerDealsService } from './partner-deals.service';
 @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
 @ApiBearerAuth()
 export class PartnerDealsController {
-  constructor(private readonly partnerDeals: PartnerDealsService) {}
+  constructor(private readonly partnerDeals: PartnerDealsService) { }
 
   @Post()
   @RequirePermissions('deals.create')
@@ -28,10 +29,59 @@ export class PartnerDealsController {
     return this.partnerDeals.list(organizationId, user, { crmOnly: crmOnly === 'true' });
   }
 
+  @Get('analytics/overview')
+  @RequirePermissions('deals.view')
+  getAnalyticsOverview(
+    @Param('organizationId') organizationId: string,
+    @CurrentUser() user: AuthUserPayload,
+    @Query() query?: DealAnalyticsQueryDto,
+  ) {
+    return this.partnerDeals.getAnalyticsOverview(organizationId, user, query);
+  }
+
+  @Get('analytics/pipeline')
+  @RequirePermissions('deals.view')
+  getPipelineMetrics(
+    @Param('organizationId') organizationId: string,
+    @CurrentUser() user: AuthUserPayload,
+    @Query() query?: DealAnalyticsQueryDto,
+  ) {
+    return this.partnerDeals.getPipelineMetrics(organizationId, user, query);
+  }
+
+  @Get('analytics/sync')
+  @RequirePermissions('deals.view')
+  getSyncAnalytics(
+    @Param('organizationId') organizationId: string,
+    @CurrentUser() user: AuthUserPayload,
+  ) {
+    return this.partnerDeals.getSyncAnalytics(organizationId, user);
+  }
+
   @Post('sync-now')
   @RequirePermissions('deals.sync')
   syncNow(@Param('organizationId') organizationId: string, @CurrentUser() user: AuthUserPayload) {
     return this.partnerDeals.syncAllFromHubSpot(organizationId, user);
+  }
+
+  @Post('bulk')
+  @RequirePermissions('deals.edit')
+  bulkAction(
+    @Param('organizationId') organizationId: string,
+    @CurrentUser() user: AuthUserPayload,
+    @Body() dto: BulkDealActionDto,
+  ) {
+    return this.partnerDeals.bulkAction(organizationId, user, dto);
+  }
+
+  @Get(':dealId/dossier')
+  @RequirePermissions('deals.view')
+  getDossier(
+    @Param('organizationId') organizationId: string,
+    @CurrentUser() user: AuthUserPayload,
+    @Param('dealId') dealId: string,
+  ) {
+    return this.partnerDeals.getDealDossier(organizationId, user, dealId);
   }
 
   @Get(':dealId')

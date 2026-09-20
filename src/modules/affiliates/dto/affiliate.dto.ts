@@ -186,3 +186,118 @@ export class BulkUploadAffiliateInvitationsDto {
   defaultPersonalMessage?: string;
 }
 
+export class ListAffiliatesQueryDto {
+  @ApiPropertyOptional({ default: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  page?: number = 1;
+
+  @ApiPropertyOptional({ default: 10 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  @Max(100)
+  limit?: number = 10;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  tierCode?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  programId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  riskLevel?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  period?: string;
+
+  @ApiPropertyOptional({ default: 'createdAt' })
+  @IsOptional()
+  @IsString()
+  sortBy?: string = 'createdAt';
+
+  @ApiPropertyOptional({ enum: ['asc', 'desc'], default: 'desc' })
+  @IsOptional()
+  @IsEnum(['asc', 'desc'])
+  sortOrder?: 'asc' | 'desc' = 'desc';
+}
+
+export class AffiliateAnalyticsQueryDto {
+  @ApiPropertyOptional({ default: '30d' })
+  @IsOptional()
+  @IsString()
+  period?: string = '30d';
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  programId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  tierCode?: string;
+}
+
+export class BulkAffiliateActionDto {
+  @ApiProperty({ type: [String] })
+  @IsString({ each: true })
+  affiliateIds!: string[];
+
+  @ApiProperty({ enum: ['ACTIVATE', 'PAUSE', 'SUSPEND', 'ASSIGN_PROGRAM', 'REMOVE_PROGRAM'] })
+  @IsEnum(['ACTIVATE', 'PAUSE', 'SUSPEND', 'ASSIGN_PROGRAM', 'REMOVE_PROGRAM'])
+  action!: 'ACTIVATE' | 'PAUSE' | 'SUSPEND' | 'ASSIGN_PROGRAM' | 'REMOVE_PROGRAM';
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  programId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
+export class AssignAffiliateTierDto {
+  @ApiProperty()
+  @IsString()
+  tierId!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  isLocked?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  lockReason?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+

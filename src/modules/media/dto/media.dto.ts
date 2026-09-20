@@ -2,9 +2,9 @@ import { IsIn, IsString, Matches, MaxLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class UploadImageDto {
-  @ApiProperty({ example: 'program-logo' })
-  @IsIn(['program-logo', 'program-banner', 'organization-logo', 'asset', 'affiliate-avatar'])
-  purpose!: 'program-logo' | 'program-banner' | 'organization-logo' | 'asset' | 'affiliate-avatar';
+  @ApiProperty({ example: 'organization-logo' })
+  @IsIn(['program-logo', 'program-banner', 'organization-logo', 'asset', 'affiliate-avatar', 'user-avatar'])
+  purpose!: 'program-logo' | 'program-banner' | 'organization-logo' | 'asset' | 'affiliate-avatar' | 'user-avatar';
 
   @ApiProperty({ example: 'logo.png' })
   @IsString()

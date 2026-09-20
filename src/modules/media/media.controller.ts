@@ -12,10 +12,11 @@ import { MediaService } from './media.service';
 @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
 @ApiBearerAuth()
 export class MediaController {
-  constructor(private readonly mediaService: MediaService) {}
+  constructor(private readonly mediaService: MediaService) { }
 
   @Post('images')
   @RequireAnyPermission('manage.programs', 'assets.create')
+  @RequireAnyPermission('manage.programs', 'assets.create', 'workspace.manage', 'branding.update', 'organizations.update')
   @ApiOperation({ summary: 'Upload an organization image asset to Cloudinary' })
   uploadImage(
     @Param('organizationId') organizationId: string,

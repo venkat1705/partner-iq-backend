@@ -8,11 +8,23 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AffiliatesService } from './affiliates.service';
-import { AcceptAffiliateInvitationDto, BulkUploadAffiliateInvitationsDto, CreateAffiliateDto, CreateAffiliateInvitationDto, PublicApplyDto } from './dto/affiliate.dto';
+import {
+  AcceptAffiliateInvitationDto,
+  BulkUploadAffiliateInvitationsDto,
+  CreateAffiliateDto,
+  CreateAffiliateInvitationDto,
+  PublicApplyDto,
+  ListAffiliatesQueryDto,
+  AffiliateAnalyticsQueryDto,
+  BulkAffiliateActionDto,
+  AssignAffiliateTierDto,
+} from './dto/affiliate.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { OrganizationGuard } from '../../common/guards/organization.guard';
 import { ProgramGuard } from '../../common/guards/program.guard';
@@ -28,6 +40,66 @@ import type { AuthUserPayload } from '../../common/interfaces/request-with-user.
 @Controller()
 export class AffiliatesController {
   constructor(private readonly affiliatesService: AffiliatesService) { }
+
+  @Get('api/v1/organizations/:organizationId/affiliates/analytics')
+  @UseGuards(JwtAuthGuard, OrganizationGuard, EnvironmentGuard, PermissionsGuard)
+  @RequirePermissions('view.affiliates')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get 360-degree affiliate network analytics overview' })
+  async getAnalytics(
+    @Param('organizationId') organizationId: string,
+    @CurrentEnvironment() environment: EnvironmentType,
+    @Query() query: AffiliateAnalyticsQueryDto,
+  ) {
+    return this.affiliatesService.getAffiliateAnalytics(organizationId, environment, query);
+  }
+
+  @Get('api/v1/organizations/:organizationId/affiliates/paginated')
+  @UseGuards(JwtAuthGuard, OrganizationGuard, EnvironmentGuard, PermissionsGuard)
+  @RequirePermissions('view.affiliates')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Paginated affiliate directory with search and dynamic filters' })
+  async getPaginated(
+    @Param('organizationId') organizationId: string,
+    @CurrentEnvironment() environment: EnvironmentType,
+    @Query() query: ListAffiliatesQueryDto,
+  ) {
+    return this.affiliatesService.getAffiliatesPaginated(organizationId, environment, query);
+  }
+
+  @Get('api/v1/organizations/:organizationId/affiliates/export')
+  @UseGuards(JwtAuthGuard, OrganizationGuard, EnvironmentGuard, PermissionsGuard)
+  @RequirePermissions('manage.affiliates')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Export affiliate directory as CSV' })
+  async exportCsv(
+    @Param('organizationId') organizationId: string,
+    @CurrentEnvironment() environment: EnvironmentType,
+    @Query() query: ListAffiliatesQueryDto,
+    @Res() res: Response,
+  ) {
+    const csv = await this.affiliatesService.exportAffiliatesCsv(organizationId, environment, query);
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="affiliates-${new Date().toISOString().slice(0, 10)}.csv"`,
+    );
+    res.status(200).send(csv);
+  }
+
+  @Post('api/v1/organizations/:organizationId/affiliates/bulk-action')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, OrganizationGuard, EnvironmentGuard, PermissionsGuard)
+  @RequirePermissions('manage.affiliates')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Execute bulk operational action on multiple affiliates' })
+  async bulkAction(
+    @Param('organizationId') organizationId: string,
+    @Body() dto: BulkAffiliateActionDto,
+    @CurrentUser() user: AuthUserPayload,
+  ) {
+    return this.affiliatesService.bulkUpdateAffiliates(organizationId, dto, user.userId);
+  }
 
   @Post('api/v1/organizations/:organizationId/affiliates')
   @UseGuards(JwtAuthGuard, OrganizationGuard, EnvironmentGuard, ProgramGuard, PermissionsGuard)
@@ -54,6 +126,34 @@ export class AffiliatesController {
     @Query('programId') programId?: string,
   ) {
     return this.affiliatesService.findAll(organizationId, environment, programId);
+  }
+
+  @Get('api/v1/organizations/:organizationId/affiliates/:affiliateId/detail')
+  @UseGuards(JwtAuthGuard, OrganizationGuard, EnvironmentGuard, PermissionsGuard)
+  @RequirePermissions('view.affiliates')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get 360-degree affiliate CRM dossier' })
+  async getDetail(
+    @Param('organizationId') organizationId: string,
+    @Param('affiliateId') affiliateId: string,
+    @CurrentEnvironment() environment: EnvironmentType,
+  ) {
+    return this.affiliatesService.getAffiliateDetail(organizationId, affiliateId, environment);
+  }
+
+  @Post('api/v1/organizations/:organizationId/affiliates/:affiliateId/tier')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, OrganizationGuard, EnvironmentGuard, PermissionsGuard)
+  @RequirePermissions('manage.affiliates')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Assign or lock affiliate tier override' })
+  async updateTier(
+    @Param('organizationId') organizationId: string,
+    @Param('affiliateId') affiliateId: string,
+    @Body() dto: AssignAffiliateTierDto,
+    @CurrentUser() user: AuthUserPayload,
+  ) {
+    return this.affiliatesService.updateAffiliateTier(organizationId, affiliateId, dto, user.userId);
   }
 
   @Get('api/v1/organizations/:organizationId/affiliates/:affiliateId')

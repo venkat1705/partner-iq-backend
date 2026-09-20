@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -13,6 +14,11 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ProgramsService } from './programs.service';
 import { CreateProgramDto, UpdateProgramDto } from './dto/program.dto';
+import {
+  ProgramAnalyticsQueryDto,
+  BulkProgramActionDto,
+  DuplicateProgramDto,
+} from './dto/program-analytics.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { OrganizationGuard } from '../../common/guards/organization.guard';
 import { ProgramGuard } from '../../common/guards/program.guard';
@@ -50,6 +56,52 @@ export class ProgramsController {
     @CurrentEnvironment() environment: EnvironmentType,
   ) {
     return this.programsService.findAll(organizationId, environment);
+  }
+
+  @Get('analytics/overview')
+  @RequirePermissions('manage.programs')
+  @ApiOperation({ summary: 'Get 360-degree program analytics, Bento KPIs, and health diagnostics' })
+  async getAnalyticsOverview(
+    @Param('organizationId') organizationId: string,
+    @CurrentEnvironment() environment: EnvironmentType,
+    @Query() query: ProgramAnalyticsQueryDto,
+  ) {
+    return this.programsService.getAnalyticsOverview(organizationId, environment, query);
+  }
+
+  @Get('analytics/performance')
+  @RequirePermissions('manage.programs')
+  @ApiOperation({ summary: 'Get per-program performance rankings and operational health' })
+  async getPerformanceAnalytics(
+    @Param('organizationId') organizationId: string,
+    @CurrentEnvironment() environment: EnvironmentType,
+    @Query() query: ProgramAnalyticsQueryDto,
+  ) {
+    return this.programsService.getPerformanceAnalytics(organizationId, environment, query);
+  }
+
+  @Get('activity')
+  @RequirePermissions('manage.programs')
+  @ApiOperation({ summary: 'Get program activity and audit history' })
+  async getActivityLog(
+    @Param('organizationId') organizationId: string,
+    @CurrentEnvironment() environment: EnvironmentType,
+    @Query('programId') programId?: string,
+  ) {
+    return this.programsService.getActivityLog(organizationId, environment, programId);
+  }
+
+  @Post('bulk')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('manage.programs')
+  @ApiOperation({ summary: 'Execute bulk status changes across partner programs' })
+  async bulkAction(
+    @Param('organizationId') organizationId: string,
+    @CurrentUser() user: AuthUserPayload,
+    @CurrentEnvironment() environment: EnvironmentType,
+    @Body() dto: BulkProgramActionDto,
+  ) {
+    return this.programsService.bulkAction(organizationId, user.userId, environment, dto);
   }
 
   @Get(':programId')
@@ -113,6 +165,31 @@ export class ProgramsController {
     @CurrentEnvironment() environment: EnvironmentType,
   ) {
     return this.programsService.activate(organizationId, programId, user.userId, environment);
+  }
+
+  @Get(':programId/analytics')
+  @RequirePermissions('manage.programs')
+  @ApiOperation({ summary: 'Get detailed intelligence dossier and operational analytics for a program' })
+  async getProgramDetailAnalytics(
+    @Param('organizationId') organizationId: string,
+    @Param('programId') programId: string,
+    @CurrentEnvironment() environment: EnvironmentType,
+  ) {
+    return this.programsService.getProgramDetailAnalytics(organizationId, programId, environment);
+  }
+
+  @Post(':programId/duplicate')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('manage.programs')
+  @ApiOperation({ summary: 'Safely clone program configuration without copying analytics or affiliates' })
+  async duplicateProgram(
+    @Param('organizationId') organizationId: string,
+    @Param('programId') programId: string,
+    @CurrentUser() user: AuthUserPayload,
+    @CurrentEnvironment() environment: EnvironmentType,
+    @Body() dto: DuplicateProgramDto,
+  ) {
+    return this.programsService.duplicateProgram(organizationId, programId, user.userId, dto, environment);
   }
 
   @Delete(':programId')

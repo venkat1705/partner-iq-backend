@@ -176,3 +176,155 @@ export class TestCommissionRulesDto {
   @IsNumber()
   conversionAmount?: number;
 }
+
+export class ListCommissionsQueryDto {
+  @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  page?: number;
+
+  @ApiPropertyOptional({ example: 25 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  limit?: number;
+
+  @ApiPropertyOptional({ example: 'ORD-94812' })
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @ApiPropertyOptional({ example: 'APPROVED' })
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @ApiPropertyOptional({ example: 'uuid-of-program' })
+  @IsOptional()
+  @IsString()
+  programId?: string;
+
+  @ApiPropertyOptional({ example: 'uuid-of-affiliate' })
+  @IsOptional()
+  @IsString()
+  affiliateId?: string;
+
+  @ApiPropertyOptional({ example: 'PERCENTAGE' })
+  @IsOptional()
+  @IsString()
+  type?: string;
+
+  @ApiPropertyOptional({ example: '2026-01-01' })
+  @IsOptional()
+  @IsString()
+  startDate?: string;
+
+  @ApiPropertyOptional({ example: '2026-12-31' })
+  @IsOptional()
+  @IsString()
+  endDate?: string;
+
+  @ApiPropertyOptional({ example: 'createdAt' })
+  @IsOptional()
+  @IsString()
+  sortBy?: string;
+
+  @ApiPropertyOptional({ example: 'DESC' })
+  @IsOptional()
+  @IsString()
+  sortOrder?: 'ASC' | 'DESC';
+}
+
+export class CommissionAnalyticsQueryDto {
+  @ApiPropertyOptional({ example: '30D' })
+  @IsOptional()
+  @IsString()
+  period?: string;
+
+  @ApiPropertyOptional({ example: 'uuid-of-program' })
+  @IsOptional()
+  @IsString()
+  programId?: string;
+
+  @ApiPropertyOptional({ example: 'uuid-of-affiliate' })
+  @IsOptional()
+  @IsString()
+  affiliateId?: string;
+
+  @ApiPropertyOptional({ example: '2026-01-01' })
+  @IsOptional()
+  @IsString()
+  startDate?: string;
+
+  @ApiPropertyOptional({ example: '2026-12-31' })
+  @IsOptional()
+  @IsString()
+  endDate?: string;
+
+  @ApiPropertyOptional({ example: 'day' })
+  @IsOptional()
+  @IsString()
+  interval?: 'day' | 'week' | 'month';
+}
+
+export class ApproveCommissionDto {
+  @ApiPropertyOptional({ example: 'Verified order and completed hold period' })
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
+export class BulkApproveCommissionsDto {
+  @ApiProperty({ example: ['uuid-1', 'uuid-2'] })
+  @IsArray()
+  @IsString({ each: true })
+  commissionIds!: string[];
+
+  @ApiPropertyOptional({ example: 'Bulk monthly reconciliation approval' })
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
+export class RejectCommissionDto {
+  @ApiProperty({ example: 'Fraudulent transaction detected by payment provider' })
+  @IsString()
+  reason!: string;
+
+  @ApiPropertyOptional({ example: 'Chargeback confirmation received' })
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
+export class AdjustCommissionDto {
+  @ApiProperty({ example: 500, description: 'Adjustment in cents (can be positive or negative)' })
+  @IsNumber()
+  deltaAmountCents!: number;
+
+  @ApiProperty({ example: 'Manual performance bonus' })
+  @IsString()
+  reason!: string;
+
+  @ApiPropertyOptional({ example: 'Awarded extra tier bonus for Q3 volume milestone' })
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
+export class ResolveDisputeDto {
+  @ApiProperty({ example: 'UPHOLD', enum: ['UPHOLD', 'REJECT', 'PARTIAL'] })
+  @IsString()
+  resolution!: 'UPHOLD' | 'REJECT' | 'PARTIAL';
+
+  @ApiPropertyOptional({ example: 250, description: 'Optional adjustment in cents if partial/uphold' })
+  @IsOptional()
+  @IsNumber()
+  deltaAmountCents?: number;
+
+  @ApiProperty({ example: 'Re-reviewed order and customer attribution log' })
+  @IsString()
+  notes!: string;
+}
+

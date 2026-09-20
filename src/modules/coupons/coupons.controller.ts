@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
@@ -20,7 +20,7 @@ import {
 @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
 @ApiBearerAuth()
 export class CouponsController {
-  constructor(private readonly couponsService: CouponsService) {}
+  constructor(private readonly couponsService: CouponsService) { }
 
   @Get('settings')
   @RequirePermissions('coupons.view')
@@ -40,6 +40,79 @@ export class CouponsController {
     return this.couponsService.upsertSettings(organizationId, user.userId, dto);
   }
 
+  @Get('analytics/overview')
+  @RequirePermissions('coupons.view')
+  @ApiOperation({ summary: 'Get coupon analytics overview and KPI metrics' })
+  getAnalyticsOverview(
+    @Param('organizationId') organizationId: string,
+    @Query('period') period?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @Query('programId') programId?: string,
+    @Query('affiliateId') affiliateId?: string,
+  ) {
+    return this.couponsService.getAnalyticsOverview(organizationId, {
+      period,
+      dateFrom,
+      dateTo,
+      programId,
+      affiliateId,
+    });
+  }
+
+  @Get('analytics/performance')
+  @RequirePermissions('coupons.view')
+  @ApiOperation({ summary: 'Get coupon performance analytics rankings' })
+  getPerformanceAnalytics(
+    @Param('organizationId') organizationId: string,
+    @Query('programId') programId?: string,
+    @Query('affiliateId') affiliateId?: string,
+    @Query('sortBy') sortBy?: string,
+  ) {
+    return this.couponsService.getPerformanceAnalytics(organizationId, {
+      programId,
+      affiliateId,
+      sortBy,
+    });
+  }
+
+  @Get('analytics/by-affiliate')
+  @RequirePermissions('coupons.view')
+  @ApiOperation({ summary: 'Get coupon attribution grouped by affiliate' })
+  getAffiliatePerformance(
+    @Param('organizationId') organizationId: string,
+    @Query('programId') programId?: string,
+  ) {
+    return this.couponsService.getAffiliatePerformance(organizationId, { programId });
+  }
+
+  @Get('analytics/by-program')
+  @RequirePermissions('coupons.view')
+  @ApiOperation({ summary: 'Get coupon attribution grouped by program' })
+  getProgramPerformance(@Param('organizationId') organizationId: string) {
+    return this.couponsService.getProgramPerformance(organizationId);
+  }
+
+  @Get('analytics/activity')
+  @RequirePermissions('coupons.view')
+  @ApiOperation({ summary: 'Get coupon activity and audit logs' })
+  getActivityLog(
+    @Param('organizationId') organizationId: string,
+    @Query('couponId') couponId?: string,
+  ) {
+    return this.couponsService.getActivityLog(organizationId, couponId);
+  }
+
+  @Get('validate/:code')
+  @RequirePermissions('coupons.view')
+  @ApiOperation({ summary: 'Validate coupon code eligibility in real time' })
+  validateCoupon(
+    @Param('organizationId') organizationId: string,
+    @Param('code') code: string,
+  ) {
+    return this.couponsService.validateCouponCode(organizationId, code);
+  }
+
   @Get()
   @RequirePermissions('coupons.view')
   @ApiOperation({ summary: 'List coupons for this organization' })
@@ -56,6 +129,16 @@ export class CouponsController {
     @Body() dto: CreateCouponDto,
   ) {
     return this.couponsService.create(organizationId, user.userId, dto);
+  }
+
+  @Get(':couponId/analytics')
+  @RequirePermissions('coupons.view')
+  @ApiOperation({ summary: 'Get detailed analytics for a single coupon' })
+  getCouponAnalytics(
+    @Param('organizationId') organizationId: string,
+    @Param('couponId') couponId: string,
+  ) {
+    return this.couponsService.getCouponDetailAnalytics(organizationId, couponId);
   }
 
   @Get(':couponId')

@@ -63,6 +63,16 @@ export class UpdateOrganizationDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @IsString()
+  country?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  logo?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsEnum(OrganizationStatus)
   status?: OrganizationStatus;
 }

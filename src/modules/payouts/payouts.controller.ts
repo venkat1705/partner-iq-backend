@@ -4,6 +4,7 @@ import {
   Post,
   Body,
   Param,
+  Query,
   Res,
   UseGuards,
   HttpCode,
@@ -12,7 +13,15 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { PayoutsService } from './payouts.service';
-import { CreatePayoutBatchDto, ProcessPayoutBatchDto } from './dto/payout.dto';
+import {
+  CreatePayoutBatchDto,
+  ProcessPayoutBatchDto,
+  ListPayoutsQueryDto,
+  PayoutAnalyticsQueryDto,
+  ValidateBatchDto,
+  RetryPayoutItemDto,
+  CancelBatchDto,
+} from './dto/payout.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { OrganizationGuard } from '../../common/guards/organization.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
@@ -28,6 +37,87 @@ import type { AuthUserPayload } from '../../common/interfaces/request-with-user.
 @ApiBearerAuth()
 export class PayoutsController {
   constructor(private readonly payoutsService: PayoutsService) { }
+
+  @Get('analytics')
+  @RequirePermissions('view.payouts')
+  @ApiOperation({ summary: 'Get payout overview metrics, trajectories, and distribution analytics' })
+  async getAnalytics(
+    @Param('organizationId') organizationId: string,
+    @CurrentEnvironment() environment: EnvironmentType,
+    @Query() query: PayoutAnalyticsQueryDto,
+  ) {
+    return this.payoutsService.getPayoutAnalytics(organizationId, environment, query);
+  }
+
+  @Post('validate')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('manage.payouts')
+  @ApiOperation({ summary: 'Run pre-flight validation on affiliate balances and payment rails' })
+  async validateBatch(
+    @Param('organizationId') organizationId: string,
+    @CurrentEnvironment() environment: EnvironmentType,
+    @Body() dto: ValidateBatchDto,
+  ) {
+    return this.payoutsService.validateBatch(organizationId, environment, dto);
+  }
+
+  @Get('reconciliation')
+  @RequirePermissions('view.payouts')
+  @ApiOperation({ summary: 'Get provider reconciliation matching records and discrepancies' })
+  async getReconciliation(
+    @Param('organizationId') organizationId: string,
+    @CurrentEnvironment() environment: EnvironmentType,
+  ) {
+    return this.payoutsService.getReconciliationData(organizationId, environment);
+  }
+
+  @Get('items/paginated')
+  @RequirePermissions('view.payouts')
+  @ApiOperation({ summary: 'List paginated payout transactions with server-side filtering' })
+  async getItemsPaginated(
+    @Param('organizationId') organizationId: string,
+    @CurrentEnvironment() environment: EnvironmentType,
+    @Query() query: ListPayoutsQueryDto,
+  ) {
+    return this.payoutsService.getItemsPaginated(organizationId, environment, query);
+  }
+
+  @Get('batches/paginated')
+  @RequirePermissions('view.payouts')
+  @ApiOperation({ summary: 'List paginated payout batches with server-side filtering' })
+  async getBatchesPaginated(
+    @Param('organizationId') organizationId: string,
+    @CurrentEnvironment() environment: EnvironmentType,
+    @Query() query: ListPayoutsQueryDto,
+  ) {
+    return this.payoutsService.getBatchesPaginated(organizationId, environment, query);
+  }
+
+  @Post('items/:itemId/retry')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('manage.payouts')
+  @ApiOperation({ summary: 'Retry a failed or held payout item' })
+  async retryItem(
+    @Param('organizationId') organizationId: string,
+    @Param('itemId') itemId: string,
+    @CurrentUser() user: AuthUserPayload,
+    @Body() dto?: RetryPayoutItemDto,
+  ) {
+    return this.payoutsService.retryFailedItem(organizationId, itemId, user.userId, dto);
+  }
+
+  @Post('batches/:batchId/cancel')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('manage.payouts')
+  @ApiOperation({ summary: 'Cancel a draft or held payout batch and restore affiliate balances' })
+  async cancelBatch(
+    @Param('organizationId') organizationId: string,
+    @Param('batchId') batchId: string,
+    @CurrentUser() user: AuthUserPayload,
+    @Body() dto?: CancelBatchDto,
+  ) {
+    return this.payoutsService.cancelBatch(organizationId, batchId, user.userId, dto);
+  }
 
   @Get()
   @RequirePermissions('view.payouts')
@@ -86,6 +176,19 @@ export class PayoutsController {
     const csvContent = await this.payoutsService.generateCsvExport(organizationId, batchId);
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename="payout_batch_${batchId}.csv"`);
+    return res.status(200).send(csvContent);
+  }
+
+  @Get('export')
+  @RequirePermissions('manage.payouts')
+  @ApiOperation({ summary: 'Export all organization payouts as CSV' })
+  async exportAllCsv(
+    @Param('organizationId') organizationId: string,
+    @Res() res: Response,
+  ) {
+    const csvContent = await this.payoutsService.generateCsvExport(organizationId);
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="payouts_all.csv"`);
     return res.status(200).send(csvContent);
   }
 }

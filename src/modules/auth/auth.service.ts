@@ -1937,6 +1937,29 @@ export class AuthService {
   // Current User
   // ─────────────────────────────────────────────────────────
 
+  async updateProfile(userId: string, data: { firstName?: string; lastName?: string; avatarUrl?: string }) {
+    const { users } = await this.repositories();
+    const user = await users.findOne({
+      where: { id: userId, deletedAt: IsNull() },
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    if (data.firstName !== undefined) user.firstName = data.firstName;
+    if (data.lastName !== undefined) user.lastName = data.lastName;
+    if (data.avatarUrl !== undefined) user.avatarUrl = data.avatarUrl;
+    await users.save(user);
+
+    const inStore = dbStore.users.find((u) => u.id === userId);
+    if (inStore) {
+      if (data.firstName !== undefined) inStore.firstName = data.firstName;
+      if (data.lastName !== undefined) inStore.lastName = data.lastName;
+      if (data.avatarUrl !== undefined) inStore.avatarUrl = data.avatarUrl;
+    }
+
+    return this.getMe(userId);
+  }
+
   async getMe(userId?: string) {
     const { users, memberships, organizations } = await this.repositories();
     const user = await users.findOne({

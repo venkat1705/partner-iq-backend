@@ -1438,8 +1438,44 @@ export class TrackingLink {
   @Column({ type: 'varchar', length: 160, nullable: true })
   affiliateProgramDefaultKey?: string | null;
 
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  utmSource?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  utmMedium?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  utmCampaign?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  utmTerm?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  utmContent?: string;
+
+  @Column({ type: 'json', nullable: true })
+  customParameters?: Record<string, string>;
+
+  @Column({ type: 'varchar', length: 30, default: 'HEALTHY' })
+  healthStatus?: 'HEALTHY' | 'DEGRADED' | 'BROKEN' | 'INACTIVE';
+
+  @Column({ type: 'simple-array', nullable: true })
+  healthIssues?: string[];
+
+  @Column({ type: 'text', nullable: true })
+  notes?: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  expiresAt?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  lastActivityAt?: Date;
+
   @CreateDateColumn()
   createdAt!: Date;
+
+  @UpdateDateColumn({ nullable: true })
+  updatedAt?: Date;
 }
 
 @Entity('asset_tags')
@@ -2085,11 +2121,35 @@ export class Conversion {
   @Column({ type: 'varchar', length: 50 })
   status!: ConversionStatus;
 
-  @Column({ type: 'timestamp' })
-  occurredAt!: Date;
+  @Column({ type: 'varchar', length: 50, default: 'VALID' })
+  validationStatus?: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  validatedAt?: Date;
+
+  @Column({ type: 'uuid', nullable: true })
+  validatedBy?: string;
+
+  @Column({ type: 'text', nullable: true })
+  validationNotes?: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  validationChecks?: Array<{ code: string; name: string; passed: boolean; details?: string }>;
+
+  @Column({ type: 'varchar', length: 50, default: 'API' })
+  source?: string;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  rejectionReason?: string;
+
+  @Column({ type: 'text', nullable: true })
+  notes?: string;
 
   @CreateDateColumn()
   createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt?: Date;
 }
 
 @Entity('commission_rules')
@@ -2204,8 +2264,47 @@ export class Commission {
   @Column({ type: 'varchar', length: 50 })
   status!: ConversionStatus;
 
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  approvalStatus?: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  approvedAt?: Date;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  approvedBy?: string;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  payoutStatus?: string;
+
+  @Column({ type: 'varchar', length: 36, nullable: true })
+  payoutItemId?: string;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  disputeStatus?: string;
+
+  @Column({ type: 'text', nullable: true })
+  disputeReason?: string;
+
+  @Column({ type: 'text', nullable: true })
+  disputeNotes?: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  adjustmentHistory?: any[];
+
+  @Column({ type: 'timestamp', nullable: true })
+  holdUntil?: Date;
+
+  @Column({ type: 'int', nullable: true })
+  riskScore?: number;
+
+  @Column({ type: 'text', nullable: true })
+  notes?: string;
+
   @CreateDateColumn()
   createdAt!: Date;
+
+  @UpdateDateColumn({ nullable: true })
+  updatedAt?: Date;
 }
 
 @Entity('ledger_accounts')
@@ -2614,6 +2713,18 @@ export class PayoutBatch {
   @Column({ type: 'uuid' })
   createdBy!: string;
 
+  @Column({ type: 'simple-json', nullable: true })
+  validationSummary?: { eligibleCount: number; blockedCount: number; warningCount: number };
+
+  @Column({ type: 'uuid', nullable: true })
+  approvedBy?: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  approvedAt?: Date;
+
+  @Column({ type: 'text', nullable: true })
+  notes?: string;
+
   @CreateDateColumn()
   createdAt!: Date;
 
@@ -2660,6 +2771,30 @@ export class PayoutItem {
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   providerReference?: string;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  failureReason?: string;
+
+  @Column({ type: 'int', default: 0 })
+  retryCount?: number;
+
+  @Column({ type: 'timestamp', nullable: true })
+  lastRetryAt?: Date;
+
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  idempotencyKey?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  beneficiaryName?: string;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  payoutMethod?: string;
+
+  @Column({ type: 'varchar', length: 50, default: 'MATCHED' })
+  reconciliationStatus?: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  reconciledAt?: Date;
 
   @CreateDateColumn()
   createdAt!: Date;
@@ -3334,8 +3469,8 @@ export class PartnerDeal {
   programId!: string;
 
   @Index()
-  @Column({ type: 'uuid' })
-  affiliateId!: string;
+  @Column({ type: 'uuid', nullable: true })
+  affiliateId?: string | null;
 
   @Column({ type: 'varchar', length: 120, nullable: true })
   campaignId?: string;

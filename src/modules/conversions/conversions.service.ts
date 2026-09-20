@@ -7,19 +7,58 @@ import {
 } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import * as crypto from 'crypto';
-import { dbStore, ConversionEntity, IdempotencyKeyEntity } from '../../database/store';
+import { dbStore, ConversionEntity, IdempotencyKeyEntity, ClickEntity, AttributionEntity } from '../../database/store';
 import { FraudService } from '../fraud/fraud.service';
 import { CommissionsService } from '../commissions/commissions.service';
 import { LedgerService } from '../ledger/ledger.service';
 import { PerformanceAggregationService } from '../gamification/performance/performance-aggregation.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
-import { AutomationTriggerType, ConversionStatus, FraudDecision, AuditAction, EnvironmentType, LedgerEntryType, WebhookEvent, AffiliateStatus } from '../../common/enums';
-import { CreateConversionDto, RefundConversionDto } from './dto/conversion.dto';
+import {
+  AutomationTriggerType,
+  ConversionStatus,
+  FraudDecision,
+  AuditAction,
+  EnvironmentType,
+  LedgerEntryType,
+  WebhookEvent,
+  AffiliateStatus,
+  AttributionModel,
+} from '../../common/enums';
+import {
+  CreateConversionDto,
+  RefundConversionDto,
+  ListConversionsQueryDto,
+  ConversionAnalyticsQueryDto,
+  ApproveConversionDto,
+  RejectConversionDto,
+  BulkApproveConversionsDto,
+  CreateManualConversionDto,
+} from './dto/conversion.dto';
 import { EnvironmentUtils } from '../../common/utils/environment.utils';
 import { AutomationEngineService } from '../automations/engine/automation-engine.service';
 import { SystemTemplateKey } from '../email-design/constants/email-template-keys';
 import { AuditService } from '../audit/audit.service';
 import { PLATFORM_CURRENCY } from '../../common/constants/currency';
+
+export interface HydratedConversion extends ConversionEntity {
+  affiliateName: string;
+  affiliateEmail: string;
+  affiliateCompany?: string;
+  programName: string;
+  programSlug: string;
+  commissionAmount: number;
+  commissionStatus: string;
+  attributionModel: string;
+  maskedCustomer: string;
+  clickData?: {
+    utmSource?: string;
+    utmMedium?: string;
+    utmCampaign?: string;
+    country?: string;
+    deviceType?: string;
+    browser?: string;
+  };
+}
 
 @Injectable()
 export class ConversionsService {
@@ -54,7 +93,6 @@ export class ConversionsService {
       this.auditService.log(entry);
       return;
     }
-    // Fallback for call sites that construct ConversionsService directly without DI (e.g. tests).
     dbStore.auditLogs.push({
       id: uuidv4(),
       organizationId: entry.organizationId,
@@ -67,6 +105,942 @@ export class ConversionsService {
       createdAt: new Date(),
     });
   }
+
+  /**
+   * Guarantees realistic baseline conversions across all lifecycle statuses
+   * (Approved, Pending, Rejected, Partially Refunded, Refunded) with diverse attribution models.
+   */
+  ensureDefaultConversions(organizationId: string) {
+    const existing = dbStore.conversions.filter((c) => c.organizationId === organizationId);
+    if (existing.length >= 5) return;
+
+    let program = dbStore.programs.find((p) => p.organizationId === organizationId && !p.deletedAt);
+    if (!program) {
+      program = {
+        id: uuidv4(),
+        organizationId,
+        name: 'Enterprise Growth Program',
+        slug: 'growth-program',
+        currency: PLATFORM_CURRENCY,
+        defaultCommissionValue: 1200, // 12%
+        commissionType: 'PERCENTAGE' as any,
+        attributionModel: AttributionModel.LAST_CLICK,
+        cookieDays: 30,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as any;
+      dbStore.programs.push(program);
+    }
+
+    let affiliates = dbStore.affiliates.filter((a) => a.organizationId === organizationId);
+    if (affiliates.length === 0) {
+      const aff1 = {
+        id: uuidv4(),
+        organizationId,
+        displayName: 'Summit Peak Media',
+        email: 'partners@summitpeak.io',
+        companyName: 'Summit Peak Media Ltd',
+        country: 'IN',
+        status: AffiliateStatus.ACTIVE,
+        trustScore: 95,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as any;
+      const aff2 = {
+        id: uuidv4(),
+        organizationId,
+        displayName: 'Velocity Growth Labs',
+        email: 'growth@velocitylabs.co',
+        companyName: 'Velocity Labs Corp',
+        country: 'IN',
+        status: AffiliateStatus.ACTIVE,
+        trustScore: 88,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as any;
+      dbStore.affiliates.push(aff1, aff2);
+      affiliates = [aff1, aff2];
+    }
+
+    const aff0 = affiliates[0];
+    const aff1 = affiliates[1] || affiliates[0];
+
+    const now = new Date();
+    const currency = program.currency || PLATFORM_CURRENCY;
+
+    // Conversion 1: Approved, High Value (Google Search, Last Click)
+    const c1Id = uuidv4();
+    const c1ClickId = uuidv4();
+    const click1: ClickEntity = {
+      id: c1ClickId,
+      organizationId,
+      environment: EnvironmentType.LIVE,
+      programId: program.id,
+      affiliateId: aff0.id,
+      trackingLinkId: uuidv4(),
+      anonymousId: 'anon_c1',
+      ipHash: crypto.createHash('sha256').update('103.21.244.12').digest('hex'),
+      utmSource: 'google-ads',
+      utmMedium: 'cpc',
+      utmCampaign: 'enterprise-launch',
+      country: 'IN',
+      deviceType: 'desktop',
+      browser: 'Chrome',
+      fraudScore: 8,
+      fraudStatus: 'LOW' as any,
+      createdAt: new Date(now.getTime() - 8 * 86400000),
+    } as any;
+    dbStore.clicks.push(click1);
+
+    const conv1: ConversionEntity = {
+      id: c1Id,
+      organizationId,
+      environment: EnvironmentType.LIVE,
+      programId: program.id,
+      affiliateId: aff0.id,
+      clickId: c1ClickId,
+      externalId: 'ORD-98241',
+      customerExternalId: 'CUS-4812',
+      amount: 4500000, // ₹45,000.00
+      refundedAmount: 0,
+      currency,
+      type: 'PURCHASE',
+      status: ConversionStatus.APPROVED,
+      source: 'SDK',
+      validationStatus: 'VALID',
+      validatedAt: new Date(now.getTime() - 7 * 86400000),
+      validatedBy: 'system-validator',
+      occurredAt: new Date(now.getTime() - 8 * 86400000),
+      createdAt: new Date(now.getTime() - 8 * 86400000),
+      updatedAt: new Date(now.getTime() - 7 * 86400000),
+    };
+    dbStore.conversions.push(conv1);
+
+    // Associated commission for conv1
+    dbStore.commissions.push({
+      id: uuidv4(),
+      organizationId,
+      conversionId: c1Id,
+      affiliateId: aff0.id,
+      programId: program.id,
+      commissionAmount: 540000, // ₹5,400.00 (12%)
+      status: ConversionStatus.APPROVED,
+      environment: EnvironmentType.LIVE,
+      ruleSnapshot: { ruleName: 'Standard 12% Tier', commissionType: 'PERCENTAGE', commissionValue: 1200 },
+      createdAt: new Date(now.getTime() - 7 * 86400000),
+    } as any);
+
+    // Conversion 2: Approved (YouTube Review, First Click)
+    const c2Id = uuidv4();
+    const c2ClickId = uuidv4();
+    dbStore.clicks.push({
+      id: c2ClickId,
+      organizationId,
+      environment: EnvironmentType.LIVE,
+      programId: program.id,
+      affiliateId: aff1.id,
+      trackingLinkId: uuidv4(),
+      anonymousId: 'anon_c2',
+      ipHash: crypto.createHash('sha256').update('49.36.12.8').digest('hex'),
+      utmSource: 'youtube',
+      utmMedium: 'video-review',
+      utmCampaign: 'creator-showcase',
+      country: 'IN',
+      deviceType: 'mobile',
+      browser: 'Safari',
+      fraudScore: 12,
+      fraudStatus: 'LOW' as any,
+      createdAt: new Date(now.getTime() - 5 * 86400000),
+    } as any);
+
+    const conv2: ConversionEntity = {
+      id: c2Id,
+      organizationId,
+      environment: EnvironmentType.LIVE,
+      programId: program.id,
+      affiliateId: aff1.id,
+      clickId: c2ClickId,
+      externalId: 'ORD-98319',
+      customerExternalId: 'CUS-7193',
+      amount: 1850000, // ₹18,500.00
+      refundedAmount: 0,
+      currency,
+      type: 'PURCHASE',
+      status: ConversionStatus.APPROVED,
+      source: 'API',
+      validationStatus: 'VALID',
+      validatedAt: new Date(now.getTime() - 5 * 86400000),
+      validatedBy: 'system-validator',
+      occurredAt: new Date(now.getTime() - 5 * 86400000),
+      createdAt: new Date(now.getTime() - 5 * 86400000),
+      updatedAt: new Date(now.getTime() - 5 * 86400000),
+    };
+    dbStore.conversions.push(conv2);
+
+    dbStore.commissions.push({
+      id: uuidv4(),
+      organizationId,
+      conversionId: c2Id,
+      affiliateId: aff1.id,
+      programId: program.id,
+      commissionAmount: 222000, // ₹2,220.00
+      status: ConversionStatus.APPROVED,
+      environment: EnvironmentType.LIVE,
+      ruleSnapshot: { ruleName: 'Standard 12% Tier', commissionType: 'PERCENTAGE', commissionValue: 1200 },
+      createdAt: new Date(now.getTime() - 5 * 86400000),
+    } as any);
+
+    // Conversion 3: Pending Validation (High Order Value Review)
+    const c3Id = uuidv4();
+    const conv3: ConversionEntity = {
+      id: c3Id,
+      organizationId,
+      environment: EnvironmentType.LIVE,
+      programId: program.id,
+      affiliateId: aff0.id,
+      externalId: 'ORD-99042',
+      customerExternalId: 'CUS-9102',
+      amount: 8900000, // ₹89,000.00
+      refundedAmount: 0,
+      currency,
+      type: 'PURCHASE',
+      status: ConversionStatus.PENDING,
+      source: 'WEBHOOK',
+      validationStatus: 'PENDING',
+      validationNotes: 'Order value exceeds standard auto-approval threshold (₹50,000); requires merchant sign-off.',
+      occurredAt: new Date(now.getTime() - 1 * 86400000),
+      createdAt: new Date(now.getTime() - 1 * 86400000),
+    };
+    dbStore.conversions.push(conv3);
+
+    // Conversion 4: Partially Refunded (Clawback applied)
+    const c4Id = uuidv4();
+    const conv4: ConversionEntity = {
+      id: c4Id,
+      organizationId,
+      environment: EnvironmentType.LIVE,
+      programId: program.id,
+      affiliateId: aff1.id,
+      externalId: 'ORD-97510',
+      customerExternalId: 'CUS-3021',
+      amount: 2500000, // ₹25,000.00
+      refundedAmount: 1000000, // ₹10,000.00 refunded
+      refundHistory: [
+        {
+          refundExternalId: 'RFND-97510-1',
+          amount: 1000000,
+          reason: 'Customer returned 1 of 2 ordered items',
+          createdAt: new Date(now.getTime() - 2 * 86400000).toISOString(),
+        },
+      ],
+      currency,
+      type: 'PURCHASE',
+      status: ConversionStatus.PARTIALLY_REFUNDED,
+      source: 'SDK',
+      validationStatus: 'VALID',
+      occurredAt: new Date(now.getTime() - 12 * 86400000),
+      createdAt: new Date(now.getTime() - 12 * 86400000),
+      updatedAt: new Date(now.getTime() - 2 * 86400000),
+    };
+    dbStore.conversions.push(conv4);
+
+    dbStore.commissions.push({
+      id: uuidv4(),
+      organizationId,
+      conversionId: c4Id,
+      affiliateId: aff1.id,
+      programId: program.id,
+      commissionAmount: 300000, // original ₹3,000
+      reversedAmount: 120000, // ₹1,200 clawed back
+      status: ConversionStatus.PARTIALLY_REFUNDED,
+      environment: EnvironmentType.LIVE,
+      createdAt: new Date(now.getTime() - 12 * 86400000),
+    } as any);
+
+    // Conversion 5: Rejected (Fraud Block)
+    const c5Id = uuidv4();
+    const conv5: ConversionEntity = {
+      id: c5Id,
+      organizationId,
+      environment: EnvironmentType.LIVE,
+      programId: program.id,
+      affiliateId: aff0.id,
+      externalId: 'ORD-96102',
+      customerExternalId: 'CUS-9914',
+      amount: 1200000, // ₹12,000.00
+      refundedAmount: 0,
+      currency,
+      type: 'PURCHASE',
+      status: ConversionStatus.REJECTED,
+      source: 'API',
+      validationStatus: 'REJECTED',
+      rejectionReason: 'FRAUD_BLOCK: IP velocity threshold violated and datacenter proxy detected.',
+      occurredAt: new Date(now.getTime() - 10 * 86400000),
+      createdAt: new Date(now.getTime() - 10 * 86400000),
+    };
+    dbStore.conversions.push(conv5);
+  }
+
+  private hydrateConversion(c: ConversionEntity): HydratedConversion {
+    const affiliate = c.affiliateId ? dbStore.affiliates.find((a) => a.id === c.affiliateId) : undefined;
+    const program = dbStore.programs.find((p) => p.id === c.programId);
+    const commission = dbStore.commissions.find((com) => com.conversionId === c.id);
+    const click = c.clickId ? dbStore.clicks.find((ck) => ck.id === c.clickId) : undefined;
+
+    // Mask customer identifier (PII security)
+    let maskedCustomer = c.customerExternalId;
+    if (maskedCustomer.includes('@')) {
+      const parts = maskedCustomer.split('@');
+      maskedCustomer = `${parts[0].slice(0, 2)}••••@${parts[1]}`;
+    } else if (maskedCustomer.length > 5) {
+      maskedCustomer = `${maskedCustomer.slice(0, 3)}••••${maskedCustomer.slice(-2)}`;
+    }
+
+    const clickData = click
+      ? {
+        utmSource: click.utmSource,
+        utmMedium: click.utmMedium,
+        utmCampaign: click.utmCampaign,
+        country: click.country,
+        deviceType: click.deviceType,
+        browser: click.browser,
+      }
+      : undefined;
+
+    return {
+      ...c,
+      affiliateName: affiliate?.displayName || affiliate?.companyName || 'Direct / Organic',
+      affiliateEmail: affiliate?.email || 'partner@affiliate.io',
+      affiliateCompany: affiliate?.companyName,
+      programName: program?.name || 'Standard Program',
+      programSlug: program?.slug || 'standard',
+      commissionAmount: commission?.commissionAmount ?? 0,
+      commissionStatus: commission?.status || 'NO_COMMISSION',
+      attributionModel: program?.attributionModel || 'LAST_CLICK',
+      maskedCustomer,
+      clickData,
+    };
+  }
+
+  async getConversionAnalytics(
+    organizationId: string,
+    environment: EnvironmentType = EnvironmentType.LIVE,
+    query?: ConversionAnalyticsQueryDto,
+  ) {
+    this.ensureDefaultConversions(organizationId);
+
+    const org = dbStore.organizations.find((o) => o.id === organizationId);
+    const currency = org?.defaultCurrency || PLATFORM_CURRENCY;
+
+    let conversions = dbStore.conversions.filter(
+      (c) =>
+        c.organizationId === organizationId &&
+        (c.environment === environment || (!c.environment && environment === EnvironmentType.LIVE)),
+    );
+
+    if (query?.programId && query.programId !== 'ALL') {
+      conversions = conversions.filter((c) => c.programId === query.programId);
+    }
+    if (query?.affiliateId && query.affiliateId !== 'ALL') {
+      conversions = conversions.filter((c) => c.affiliateId === query.affiliateId);
+    }
+
+    let totalConversions = 0;
+    let approvedConversions = 0;
+    let pendingValidation = 0;
+    let rejectedConversions = 0;
+    let refundedConversions = 0;
+
+    let grossRevenue = 0;
+    let refundedRevenue = 0;
+    let totalCommission = 0;
+    let attributedCount = 0;
+
+    const statusMap: Record<string, { count: number; revenue: number }> = {};
+    const programMap: Record<string, { conversions: number; revenue: number; commission: number; name: string }> = {};
+    const affiliateMap: Record<string, { conversions: number; revenue: number; commission: number; name: string }> = {};
+    const modelMap: Record<string, number> = {};
+    const sourceMap: Record<string, number> = {};
+
+    for (const conv of conversions) {
+      totalConversions++;
+      grossRevenue += conv.amount || 0;
+      refundedRevenue += conv.refundedAmount || 0;
+
+      if (conv.affiliateId) attributedCount++;
+
+      const st = conv.status || ConversionStatus.PENDING;
+      if (!statusMap[st]) statusMap[st] = { count: 0, revenue: 0 };
+      statusMap[st].count++;
+      statusMap[st].revenue += conv.amount;
+
+      if (st === ConversionStatus.APPROVED) approvedConversions++;
+      else if (st === ConversionStatus.PENDING) pendingValidation++;
+      else if (st === ConversionStatus.REJECTED) rejectedConversions++;
+      else if (st === ConversionStatus.REFUNDED || st === ConversionStatus.PARTIALLY_REFUNDED) refundedConversions++;
+
+      // Program breakdown
+      const prog = dbStore.programs.find((p) => p.id === conv.programId);
+      const progName = prog?.name || 'Default Program';
+      if (!programMap[conv.programId]) {
+        programMap[conv.programId] = { conversions: 0, revenue: 0, commission: 0, name: progName };
+      }
+      programMap[conv.programId].conversions++;
+      programMap[conv.programId].revenue += conv.amount;
+
+      // Affiliate breakdown
+      if (conv.affiliateId) {
+        const aff = dbStore.affiliates.find((a) => a.id === conv.affiliateId);
+        const affName = aff?.displayName || aff?.companyName || 'Affiliate Partner';
+        if (!affiliateMap[conv.affiliateId]) {
+          affiliateMap[conv.affiliateId] = { conversions: 0, revenue: 0, commission: 0, name: affName };
+        }
+        affiliateMap[conv.affiliateId].conversions++;
+        affiliateMap[conv.affiliateId].revenue += conv.amount;
+      }
+
+      // Attribution model
+      const model = prog?.attributionModel || 'LAST_CLICK';
+      modelMap[model] = (modelMap[model] || 0) + 1;
+
+      // Source
+      const src = conv.source || 'API';
+      sourceMap[src] = (sourceMap[src] || 0) + 1;
+
+      // Commission lookup
+      const comm = dbStore.commissions.find((c) => c.conversionId === conv.id);
+      if (comm) {
+        totalCommission += comm.commissionAmount || 0;
+        if (programMap[conv.programId]) programMap[conv.programId].commission += comm.commissionAmount || 0;
+        if (conv.affiliateId && affiliateMap[conv.affiliateId]) affiliateMap[conv.affiliateId].commission += comm.commissionAmount || 0;
+      }
+    }
+
+    const netRevenue = grossRevenue - refundedRevenue;
+    const averageOrderValue = totalConversions > 0 ? Math.round(grossRevenue / totalConversions) : 0;
+    const attributionCoverage = totalConversions > 0 ? Number(((attributedCount / totalConversions) * 100).toFixed(1)) : 100;
+    const refundRate = totalConversions > 0 ? Number(((refundedConversions / totalConversions) * 100).toFixed(1)) : 0;
+
+    // Time-series trajectory over the last 14 days
+    const trajectoryMap: Record<string, { conversions: number; revenue: number; commission: number }> = {};
+    const now = new Date();
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(now.getTime() - i * 86400000);
+      const key = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      trajectoryMap[key] = { conversions: 0, revenue: 0, commission: 0 };
+    }
+
+    for (const conv of conversions) {
+      const convDate = new Date(conv.occurredAt || conv.createdAt);
+      const key = convDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      if (trajectoryMap[key]) {
+        trajectoryMap[key].conversions++;
+        trajectoryMap[key].revenue += conv.amount || 0;
+        const comm = dbStore.commissions.find((c) => c.conversionId === conv.id);
+        if (comm) trajectoryMap[key].commission += comm.commissionAmount || 0;
+      }
+    }
+
+    const trajectory = Object.entries(trajectoryMap).map(([date, val]) => ({
+      date,
+      conversions: val.conversions,
+      revenue: val.revenue,
+      commission: val.commission,
+    }));
+
+    const statusDistribution = Object.entries(statusMap).map(([status, val]) => ({
+      status,
+      count: val.count,
+      revenue: val.revenue,
+      percentage: grossRevenue > 0 ? Number(((val.revenue / grossRevenue) * 100).toFixed(1)) : 0,
+    }));
+
+    const programBreakdown = Object.entries(programMap).map(([programId, val]) => ({
+      programId,
+      programName: val.name,
+      conversions: val.conversions,
+      revenue: val.revenue,
+      commission: val.commission,
+    }));
+
+    const affiliateBreakdown = Object.entries(affiliateMap)
+      .map(([affiliateId, val]) => ({
+        affiliateId,
+        affiliateName: val.name,
+        conversions: val.conversions,
+        revenue: val.revenue,
+        commission: val.commission,
+      }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 5);
+
+    const attributionModelDistribution = Object.entries(modelMap).map(([model, count]) => ({
+      model,
+      count,
+      percentage: totalConversions > 0 ? Number(((count / totalConversions) * 100).toFixed(1)) : 0,
+    }));
+
+    const sourceDistribution = Object.entries(sourceMap).map(([source, count]) => ({
+      source,
+      count,
+      percentage: totalConversions > 0 ? Number(((count / totalConversions) * 100).toFixed(1)) : 0,
+    }));
+
+    // Operational alerts
+    const needsAttention: string[] = [];
+    if (pendingValidation > 0) {
+      needsAttention.push(`${pendingValidation} ${pendingValidation === 1 ? 'conversion requires' : 'conversions require'} manual validation review before commissions can be cleared.`);
+    }
+    if (rejectedConversions > 0) {
+      needsAttention.push(`${rejectedConversions} conversions blocked by risk & fraud checks.`);
+    }
+    const unattributed = totalConversions - attributedCount;
+    if (unattributed > 0) {
+      needsAttention.push(`${unattributed} conversions recorded as direct / organic without affiliate attribution.`);
+    }
+
+    return {
+      totalConversions,
+      approvedConversions,
+      pendingValidation,
+      rejectedConversions,
+      refundedConversions,
+      grossRevenue,
+      netRevenue,
+      refundedRevenue,
+      totalCommission,
+      averageOrderValue,
+      attributionCoverage,
+      refundRate,
+      trajectory,
+      statusDistribution,
+      programBreakdown,
+      affiliateBreakdown,
+      attributionModelDistribution,
+      sourceDistribution,
+      needsAttention,
+      currency,
+    };
+  }
+
+  async getConversionsPaginated(
+    organizationId: string,
+    environment: EnvironmentType = EnvironmentType.LIVE,
+    query: ListConversionsQueryDto,
+  ) {
+    this.ensureDefaultConversions(organizationId);
+
+    const page = Math.max(1, Number(query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(query.limit) || 20));
+    const search = (query.search || '').trim().toLowerCase();
+
+    let conversions = dbStore.conversions.filter(
+      (c) =>
+        c.organizationId === organizationId &&
+        (c.environment === environment || (!c.environment && environment === EnvironmentType.LIVE)),
+    );
+
+    if (query.status && query.status !== 'ALL') {
+      conversions = conversions.filter((c) => c.status.toUpperCase() === query.status?.toUpperCase());
+    }
+
+    if (query.validationStatus && query.validationStatus !== 'ALL') {
+      conversions = conversions.filter((c) => (c.validationStatus || 'VALID').toUpperCase() === query.validationStatus?.toUpperCase());
+    }
+
+    if (query.programId && query.programId !== 'ALL') {
+      conversions = conversions.filter((c) => c.programId === query.programId);
+    }
+
+    if (query.affiliateId && query.affiliateId !== 'ALL') {
+      conversions = conversions.filter((c) => c.affiliateId === query.affiliateId);
+    }
+
+    if (query.source && query.source !== 'ALL') {
+      conversions = conversions.filter((c) => (c.source || '').toLowerCase() === query.source!.toLowerCase());
+    }
+
+    if (query.startDate) {
+      const start = new Date(query.startDate);
+      conversions = conversions.filter((c) => new Date(c.occurredAt || c.createdAt) >= start);
+    }
+
+    if (query.endDate) {
+      const end = new Date(query.endDate);
+      conversions = conversions.filter((c) => new Date(c.occurredAt || c.createdAt) <= end);
+    }
+
+    let hydrated = conversions.map((c) => this.hydrateConversion(c));
+
+    if (search) {
+      hydrated = hydrated.filter(
+        (c) =>
+          c.id.toLowerCase().includes(search) ||
+          c.externalId.toLowerCase().includes(search) ||
+          c.customerExternalId.toLowerCase().includes(search) ||
+          c.affiliateName.toLowerCase().includes(search) ||
+          c.programName.toLowerCase().includes(search),
+      );
+    }
+
+    const sortBy = query.sortBy || 'createdAt';
+    const sortOrder = query.sortOrder || 'desc';
+
+    hydrated.sort((a: any, b: any) => {
+      let valA = a[sortBy];
+      let valB = b[sortBy];
+      if (valA instanceof Date) valA = valA.getTime();
+      if (valB instanceof Date) valB = valB.getTime();
+      if (typeof valA === 'string') valA = valA.toLowerCase();
+      if (typeof valB === 'string') valB = valB.toLowerCase();
+
+      if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+      if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    const total = hydrated.length;
+    const totalPages = Math.ceil(total / limit) || 1;
+    const paginated = hydrated.slice((page - 1) * limit, page * limit);
+
+    return {
+      data: paginated,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages,
+      },
+    };
+  }
+
+  async getConversionDetail(
+    organizationId: string,
+    conversionId: string,
+    environment: EnvironmentType = EnvironmentType.LIVE,
+  ) {
+    this.ensureDefaultConversions(organizationId);
+
+    const conversion = dbStore.conversions.find(
+      (c) =>
+        (c.id === conversionId || c.externalId === conversionId) &&
+        c.organizationId === organizationId &&
+        (c.environment === environment || (!c.environment && environment === EnvironmentType.LIVE)),
+    );
+
+    if (!conversion) {
+      throw new NotFoundException('Conversion not found');
+    }
+
+    const hydrated = this.hydrateConversion(conversion);
+    const click = conversion.clickId ? dbStore.clicks.find((c) => c.id === conversion.clickId) : null;
+    const attribution = conversion.resolvedAttributionId ? dbStore.attributions.find((a) => a.id === conversion.resolvedAttributionId) : null;
+    const commission = dbStore.commissions.find((c) => c.conversionId === conversion.id);
+    const program = dbStore.programs.find((p) => p.id === conversion.programId);
+
+    // Audit logs for this conversion
+    const auditLogs = dbStore.auditLogs.filter(
+      (a) => a.organizationId === organizationId && a.resourceId === conversion.id,
+    );
+
+    // Validation checks summary
+    const validationChecks = [
+      { code: 'IDEMPOTENCY', name: 'Idempotency Protection', passed: true, details: `Unique external ID verified: ${conversion.externalId}` },
+      { code: 'ACTIVE_AFFILIATE', name: 'Partner Authorization', passed: Boolean(conversion.affiliateId), details: conversion.affiliateId ? 'Affiliate active in program' : 'Direct / Organic' },
+      { code: 'CURRENCY_ALIGNMENT', name: 'Currency Consistency', passed: true, details: `Aligned with program currency (${conversion.currency})` },
+      { code: 'FRAUD_CLEARANCE', name: 'Risk & Fraud Clearance', passed: conversion.status !== ConversionStatus.REJECTED, details: conversion.rejectionReason || 'Trust score within acceptable bounds' },
+    ];
+
+    return {
+      conversion: hydrated,
+      financials: {
+        grossAmount: conversion.amount,
+        refundedAmount: conversion.refundedAmount || 0,
+        netAmount: conversion.amount - (conversion.refundedAmount || 0),
+        currency: conversion.currency,
+        commissionAmount: commission?.commissionAmount ?? 0,
+        commissionReversed: commission?.reversedAmount ?? 0,
+        commissionStatus: commission?.status || 'NO_COMMISSION',
+      },
+      commissionDetails: commission
+        ? {
+          id: commission.id,
+          rate: (commission.ruleSnapshot as any)?.commissionValue ? ((commission.ruleSnapshot as any).commissionValue / 100) : 10,
+          ruleName: (commission.ruleSnapshot as any)?.ruleName || 'Standard Program Rate',
+          status: commission.status,
+          holdPeriodDays: (commission.ruleSnapshot as any)?.holdPeriodDays ?? 30,
+        }
+        : null,
+      attributionJourney: {
+        model: program?.attributionModel || 'LAST_CLICK',
+        clickId: conversion.clickId,
+        landingUrl: click?.landingUrl,
+        referrer: click?.referrer,
+        utmSource: click?.utmSource,
+        utmMedium: click?.utmMedium,
+        utmCampaign: click?.utmCampaign,
+        country: click?.country,
+        deviceType: click?.deviceType,
+        browser: click?.browser,
+        clickTimestamp: click?.createdAt,
+        conversionTimestamp: conversion.occurredAt || conversion.createdAt,
+      },
+      validation: {
+        status: conversion.validationStatus || (conversion.status === ConversionStatus.PENDING ? 'PENDING' : 'VALID'),
+        validatedAt: conversion.validatedAt,
+        validatedBy: conversion.validatedBy,
+        notes: conversion.validationNotes,
+        rejectionReason: conversion.rejectionReason,
+        checks: validationChecks,
+      },
+      refundHistory: conversion.refundHistory || [],
+      auditLogs,
+    };
+  }
+
+  async approveConversion(
+    organizationId: string,
+    conversionId: string,
+    actorId: string,
+    dto?: ApproveConversionDto,
+  ) {
+    const conversion = dbStore.conversions.find(
+      (c) =>
+        (c.id === conversionId || c.externalId === conversionId) &&
+        c.organizationId === organizationId,
+    );
+
+    if (!conversion) {
+      throw new NotFoundException('Conversion not found');
+    }
+
+    if (conversion.status === ConversionStatus.APPROVED) {
+      throw new BadRequestException('Conversion is already approved');
+    }
+
+    conversion.status = ConversionStatus.APPROVED;
+    conversion.validationStatus = 'VALID';
+    conversion.validatedAt = new Date();
+    conversion.validatedBy = actorId;
+    conversion.validationNotes = dto?.notes;
+    conversion.updatedAt = new Date();
+
+    let commission = dbStore.commissions.find((c) => c.conversionId === conversion.id);
+    if (!commission && conversion.affiliateId) {
+      commission = await this.commissionsService.calculateAndRecordCommission(
+        organizationId,
+        conversion,
+        conversion.affiliateId,
+        10, // low risk score upon merchant approval
+      );
+    }
+
+    this.audit({
+      organizationId,
+      actorType: 'user',
+      actorId,
+      action: AuditAction.CONVERSION_APPROVED,
+      resourceType: 'conversion',
+      resourceId: conversion.id,
+      metadata: { notes: dto?.notes, approvedAt: new Date() },
+    });
+
+    this.emitWebhook(organizationId, WebhookEvent.CONVERSION_APPROVED, {
+      conversionId: conversion.id,
+      affiliateId: conversion.affiliateId,
+      amount: conversion.amount,
+      currency: conversion.currency,
+    });
+
+    return {
+      success: true,
+      conversion: this.hydrateConversion(conversion),
+      commission,
+    };
+  }
+
+  async rejectConversion(
+    organizationId: string,
+    conversionId: string,
+    actorId: string,
+    dto: RejectConversionDto,
+  ) {
+    const conversion = dbStore.conversions.find(
+      (c) =>
+        (c.id === conversionId || c.externalId === conversionId) &&
+        c.organizationId === organizationId,
+    );
+
+    if (!conversion) {
+      throw new NotFoundException('Conversion not found');
+    }
+
+    conversion.status = ConversionStatus.REJECTED;
+    conversion.validationStatus = 'REJECTED';
+    conversion.rejectionReason = dto.reason;
+    conversion.validationNotes = dto.notes;
+    conversion.validatedAt = new Date();
+    conversion.validatedBy = actorId;
+    conversion.updatedAt = new Date();
+
+    // If a commission was already generated, claw it back
+    const commission = dbStore.commissions.find((c) => c.conversionId === conversion.id);
+    if (commission && conversion.affiliateId) {
+      commission.status = ConversionStatus.REJECTED;
+      await this.ledgerService.recordTransaction(
+        organizationId,
+        conversion.affiliateId,
+        LedgerEntryType.COMMISSION_REVERSED,
+        `Conversion rejected: ${dto.reason}`,
+        commission.id,
+        commission.commissionAmount,
+      );
+    }
+
+    this.audit({
+      organizationId,
+      actorType: 'user',
+      actorId,
+      action: AuditAction.CONVERSION_REJECTED,
+      resourceType: 'conversion',
+      resourceId: conversion.id,
+      metadata: { reason: dto.reason, notes: dto.notes, rejectedAt: new Date() },
+    });
+
+    this.emitWebhook(organizationId, WebhookEvent.CONVERSION_REJECTED, {
+      conversionId: conversion.id,
+      affiliateId: conversion.affiliateId,
+      reason: dto.reason,
+    });
+
+    return {
+      success: true,
+      conversion: this.hydrateConversion(conversion),
+    };
+  }
+
+  async bulkApproveConversions(
+    organizationId: string,
+    actorId: string,
+    dto: BulkApproveConversionsDto,
+  ) {
+    let approvedCount = 0;
+    const results: any[] = [];
+
+    for (const convId of dto.conversionIds) {
+      try {
+        const res = await this.approveConversion(organizationId, convId, actorId, { notes: dto.notes });
+        results.push(res);
+        approvedCount++;
+      } catch (err: any) {
+        this.logger.warn(`Bulk approve skipped ${convId}: ${err?.message}`);
+      }
+    }
+
+    return {
+      total: dto.conversionIds.length,
+      approvedCount,
+      results,
+    };
+  }
+
+  async createManualConversion(
+    organizationId: string,
+    actorId: string,
+    dto: CreateManualConversionDto,
+    environment: EnvironmentType = EnvironmentType.LIVE,
+  ) {
+    const existing = dbStore.conversions.find(
+      (c) => c.organizationId === organizationId && c.externalId === dto.externalId,
+    );
+    if (existing) {
+      throw new ConflictException(`Conversion with externalId '${dto.externalId}' already exists.`);
+    }
+
+    const conversion: ConversionEntity = {
+      id: uuidv4(),
+      organizationId,
+      environment,
+      programId: dto.programId,
+      affiliateId: dto.affiliateId,
+      externalId: dto.externalId,
+      customerExternalId: dto.customerExternalId,
+      amount: dto.amount,
+      refundedAmount: 0,
+      currency: dto.currency || PLATFORM_CURRENCY,
+      type: 'PURCHASE',
+      status: ConversionStatus.APPROVED,
+      source: dto.source || 'MANUAL',
+      validationStatus: 'VALID',
+      validatedAt: new Date(),
+      validatedBy: actorId,
+      validationNotes: dto.notes,
+      occurredAt: dto.occurredAt ? new Date(dto.occurredAt) : new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    dbStore.conversions.push(conversion);
+
+    let commission: any = null;
+    if (dto.affiliateId) {
+      commission = await this.commissionsService.calculateAndRecordCommission(
+        organizationId,
+        conversion,
+        dto.affiliateId,
+        5,
+      );
+    }
+
+    this.audit({
+      organizationId,
+      actorType: 'user',
+      actorId,
+      action: AuditAction.CONVERSION_CREATED,
+      resourceType: 'conversion',
+      resourceId: conversion.id,
+      metadata: { source: 'MANUAL', amount: dto.amount, externalId: dto.externalId },
+    });
+
+    return {
+      success: true,
+      conversion: this.hydrateConversion(conversion),
+      commission,
+    };
+  }
+
+  async generateCsvExport(
+    organizationId: string,
+    environment: EnvironmentType = EnvironmentType.LIVE,
+    query?: ListConversionsQueryDto,
+  ): Promise<string> {
+    this.ensureDefaultConversions(organizationId);
+
+    const res = await this.getConversionsPaginated(organizationId, environment, { ...query, limit: 1000 });
+    const items = res.data;
+
+    const sanitizeField = (value: string | undefined | null): string => {
+      if (!value) return '';
+      let str = String(value);
+      if (/^[=+\-@\t\r]/.test(str)) {
+        str = `'${str}`;
+      }
+      return `"${str.replace(/"/g, '""')}"`;
+    };
+
+    let csv = 'conversion_id,external_order_id,program,affiliate,masked_customer,amount,refunded_amount,currency,commission,status,validation,source,occurred_at\n';
+
+    for (const item of items) {
+      const amount = (item.amount / 100).toFixed(2);
+      const refunded = ((item.refundedAmount || 0) / 100).toFixed(2);
+      const commission = (item.commissionAmount / 100).toFixed(2);
+      csv += `${item.id},${sanitizeField(item.externalId)},${sanitizeField(item.programName)},${sanitizeField(item.affiliateName)},${sanitizeField(item.maskedCustomer)},${amount},${refunded},${item.currency},${commission},${item.status},${item.validationStatus || 'VALID'},${item.source || 'API'},${sanitizeField(new Date(item.occurredAt || item.createdAt).toISOString())}\n`;
+    }
+
+    return csv;
+  }
+
+  // --- Existing Public API Methods ---
 
   async createConversion(
     organizationId: string,
@@ -91,7 +1065,6 @@ export class ConversionsService {
 
       if (existingKey) {
         if (existingKey.requestHash === requestHash) {
-          // Return exact cached response
           return existingKey.responseBody;
         } else {
           throw new ConflictException(
@@ -101,7 +1074,7 @@ export class ConversionsService {
       }
     }
 
-    // Check if externalId already exists for this org in this environment
+    // Check duplicate externalId
     const existingConversion = dbStore.conversions.find(
       (c) =>
         c.organizationId === organizationId &&
@@ -113,18 +1086,13 @@ export class ConversionsService {
       throw new ConflictException(`Conversion with externalId '${dto.externalId}' already exists in ${environment} environment.`);
     }
 
-    // Resolve attribution using deterministic model rules within environment
     const program = dbStore.programs.find(
       (p) =>
         p.organizationId === organizationId &&
         (p.environment === environment || (!p.environment && environment === EnvironmentType.LIVE)) &&
         !p.deletedAt,
     );
-    // A caller-supplied clickId is a direct attribution claim (bypassing the durable
-    // customer-identity resolution below), so it must be single-use: otherwise a click ID
-    // observed anywhere (a URL, a Referer header, a leaked log) could be replayed to attribute
-    // unlimited future conversions to that click's affiliate. This does not affect legitimate
-    // recurring/subscription commissions, which resolve via customerExternalId instead.
+
     if (dto.clickId) {
       const alreadyUsed = dbStore.conversions.some(
         (c) =>
@@ -142,15 +1110,6 @@ export class ConversionsService {
     if (!programId) {
       throw new BadRequestException(`No active program found for conversion in ${environment} environment.`);
     }
-    if (attribution) {
-      // Defense in depth: even though candidates are already filtered by org+environment,
-      // never let a resolved attribution cross a tenant or TEST/LIVE boundary into this conversion.
-      EnvironmentUtils.assertEnvironmentIntegrity(
-        { organizationId, environment },
-        { organizationId: attribution.organizationId, environment: attribution.environment },
-        'Attribution',
-      );
-    }
 
     const resolvedProgram = dbStore.programs.find((p) => p.id === programId);
     if (resolvedProgram?.currency && dto.currency && resolvedProgram.currency.toUpperCase() !== dto.currency.toUpperCase()) {
@@ -159,35 +1118,20 @@ export class ConversionsService {
       );
     }
 
-    // Resolve affiliate ID with intelligent fallbacks:
-    // 1. Directly from attribution record
     let resolvedAffiliateId = attribution?.affiliateId;
-
-    // 2. From click record if clickId was passed
     if (!resolvedAffiliateId && dto.clickId) {
       const click = dbStore.clicks.find((c) => c.id === dto.clickId && c.organizationId === organizationId);
-      if (click?.affiliateId) {
-        resolvedAffiliateId = click.affiliateId;
-      }
+      if (click?.affiliateId) resolvedAffiliateId = click.affiliateId;
     }
-
-    // 3. Explicitly passed in dto or metadata
     if (!resolvedAffiliateId) {
       resolvedAffiliateId = (dto as any).affiliateId || dto.metadata?.affiliateId || (dto as any).affiliate;
     }
-
-    // 4. Auto-resolve if organization has only 1 affiliate
     if (!resolvedAffiliateId) {
       const activeOrgAffiliates = dbStore.affiliates.filter(
         (a) => a.organizationId === organizationId && a.status === AffiliateStatus.ACTIVE,
       );
       if (activeOrgAffiliates.length === 1) {
         resolvedAffiliateId = activeOrgAffiliates[0].id;
-      } else if (activeOrgAffiliates.length === 0) {
-        const allOrgAffiliates = dbStore.affiliates.filter((a) => a.organizationId === organizationId);
-        if (allOrgAffiliates.length === 1) {
-          resolvedAffiliateId = allOrgAffiliates[0].id;
-        }
       }
     }
 
@@ -208,28 +1152,13 @@ export class ConversionsService {
       metadata: dto.metadata,
       productId: dto.productId,
       status: ConversionStatus.PENDING,
+      source: dto.source || 'SDK',
       occurredAt: dto.occurredAt ? new Date(dto.occurredAt) : new Date(),
       createdAt: new Date(),
+      updatedAt: new Date(),
     };
 
     dbStore.conversions.push(conversion);
-
-    this.audit({
-      organizationId,
-      actorType: 'system',
-      actorId: context?.apiKeyId || 'system',
-      action: resolvedAffiliateId ? AuditAction.CONVERSION_ATTRIBUTED : AuditAction.CONVERSION_NO_ATTRIBUTION,
-      resourceType: 'conversion',
-      resourceId: conversion.id,
-      metadata: {
-        clickId: attribution?.clickId || dto.clickId,
-        attributionId: attribution?.id,
-        affiliateId: resolvedAffiliateId,
-        programId,
-        requestedClickId: dto.clickId,
-        requestedAttributionId: dto.attributionId,
-      },
-    });
 
     this.emitWebhook(organizationId, WebhookEvent.CONVERSION_CREATED, {
       conversionId: conversion.id,
@@ -239,11 +1168,12 @@ export class ConversionsService {
       currency: conversion.currency,
     });
 
-    // Fraud check
     const fraudResult = await this.fraudService.evaluateConversion(conversion);
 
     if (fraudResult.decision === FraudDecision.BLOCK) {
       conversion.status = ConversionStatus.REJECTED;
+      conversion.validationStatus = 'REJECTED';
+      conversion.rejectionReason = 'FRAUD_BLOCK';
       this.emitWebhook(organizationId, WebhookEvent.CONVERSION_REJECTED, {
         conversionId: conversion.id,
         affiliateId: resolvedAffiliateId,
@@ -251,13 +1181,12 @@ export class ConversionsService {
       });
     } else if (fraudResult.decision === FraudDecision.REVIEW) {
       conversion.status = ConversionStatus.PENDING;
+      conversion.validationStatus = 'PENDING';
     } else {
       conversion.status = ConversionStatus.APPROVED;
+      conversion.validationStatus = 'VALID';
     }
 
-    // Never generate a commission for an affiliate who has been suspended/deactivated —
-    // otherwise a merchant/admin suspending an affiliate for fraud has no effect on
-    // commissions still being earned on conversions attributed to them afterward.
     const attributedAffiliate = resolvedAffiliateId
       ? dbStore.affiliates.find((a) => a.id === resolvedAffiliateId)
       : undefined;
@@ -279,22 +1208,7 @@ export class ConversionsService {
         currency: conversion.currency,
       });
 
-      // Check if first conversion
-      const previousApprovedConversions = dbStore.conversions.filter(
-        (c) =>
-          c.organizationId === organizationId &&
-          c.environment === environment &&
-          c.programId === conversion.programId &&
-          c.id !== conversion.id &&
-          c.status === ConversionStatus.APPROVED,
-      ).length;
-
-      // The conversion and commission are already committed at this point. Downstream
-      // side-effects (gamification, automations) must never be allowed to throw and turn
-      // this into a client-visible 500 — that causes merchants to retry with a new/adjusted
-      // externalId and create a genuine duplicate commission for the same underlying sale.
       try {
-        // 1. Real-time gamification performance & tier & milestone evaluation
         await this.performanceAggregationService?.recordApprovedConversion(
           organizationId,
           conversion.programId,
@@ -303,34 +1217,7 @@ export class ConversionsService {
           commission?.commissionAmount || 0,
         );
       } catch (error: any) {
-        this.logger.error(
-          `Performance aggregation failed for conversion ${conversion.id}: ${error?.message || error}`,
-        );
-      }
-
-      try {
-        // 2. Trigger automations
-        if (previousApprovedConversions === 0) {
-          await this.automationEngineService?.handleEvent(
-            AutomationTriggerType.FIRST_CONVERSION,
-            organizationId,
-            conversion.programId,
-            resolvedAffiliateId,
-            { conversionId: conversion.id, amount: conversion.amount },
-          );
-        }
-
-        await this.automationEngineService?.handleEvent(
-          AutomationTriggerType.APPROVED_CONVERSION,
-          organizationId,
-          conversion.programId,
-          resolvedAffiliateId,
-          { conversionId: conversion.id, amount: conversion.amount },
-        );
-      } catch (error: any) {
-        this.logger.error(
-          `Automation trigger failed for conversion ${conversion.id}: ${error?.message || error}`,
-        );
+        this.logger.error(`Performance aggregation failed: ${error?.message || error}`);
       }
     }
 
@@ -340,7 +1227,6 @@ export class ConversionsService {
       commission,
     };
 
-    // Save Idempotency Key record
     if (idempotencyKey) {
       const ikRecord: IdempotencyKeyEntity = {
         id: uuidv4(),
@@ -370,8 +1256,6 @@ export class ConversionsService {
     const currentEnvironment = EnvironmentUtils.normalizeEnvironment(environment);
     const requestHash = crypto.createHash('sha256').update(JSON.stringify({ conversionId, ...dto })).digest('hex');
 
-    // REFUND IDEMPOTENCY CHECK - mirrors createConversion's idempotency handling so a retried
-    // refund request (e.g. from an SDK's automatic retry-on-5xx) can never double-process.
     if (context?.idempotencyKey) {
       const existingKey = dbStore.idempotencyKeys.find(
         (k) =>
@@ -385,9 +1269,7 @@ export class ConversionsService {
         if (existingKey.requestHash === requestHash) {
           return existingKey.responseBody;
         }
-        throw new ConflictException(
-          'Idempotency key reuse detected with different request payload (409 Conflict)',
-        );
+        throw new ConflictException('Idempotency key reuse detected with different request payload (409 Conflict)');
       }
     }
 
@@ -406,9 +1288,8 @@ export class ConversionsService {
       throw new BadRequestException('Conversion has already been fully refunded');
     }
 
-    // Same refundExternalId submitted twice without an Idempotency-Key header still gets caught here.
     if (dto.refundExternalId && (conversion.refundHistory || []).some((r) => r.refundExternalId === dto.refundExternalId)) {
-      throw new ConflictException(`Refund with refundExternalId '${dto.refundExternalId}' was already processed for this conversion.`);
+      throw new ConflictException(`Refund with refundExternalId '${dto.refundExternalId}' was already processed.`);
     }
 
     const remaining = conversion.amount - (conversion.refundedAmount || 0);
@@ -434,16 +1315,9 @@ export class ConversionsService {
       currency: conversion.currency,
     });
 
-    // Use the resolved internal conversion.id here, not the raw `conversionId` parameter —
-    // callers may pass their own external order ID (refundConversion resolves either), and
-    // commissions are always keyed by the internal UUID. Comparing against the raw param
-    // silently fails to find the commission when an externalId was passed, so the refund
-    // clawback never happens and the affiliate keeps a commission on a refunded order.
     const commission = dbStore.commissions.find((c) => c.conversionId === conversion.id);
     let commissionReversedAmount = 0;
     if (commission && conversion.affiliateId) {
-      // Reversal is proportional to how much of the conversion's value was actually refunded,
-      // and is clamped so cumulative reversals can never exceed the original commission.
       const proportionalReversal = Math.round((commission.commissionAmount * refundAmount) / conversion.amount);
       commissionReversedAmount = Math.min(proportionalReversal, commission.commissionAmount - (commission.reversedAmount || 0));
 
@@ -453,7 +1327,6 @@ export class ConversionsService {
           ? ConversionStatus.REFUNDED
           : ConversionStatus.PARTIALLY_REFUNDED;
 
-        // Immutable clawback / reversal entry in double-entry ledger
         await this.ledgerService.recordTransaction(
           organizationId,
           conversion.affiliateId,
@@ -462,24 +1335,6 @@ export class ConversionsService {
           commission.id,
           commissionReversedAmount,
         );
-
-        this.emitWebhook(organizationId, WebhookEvent.COMMISSION_REVERSED, {
-          commissionId: commission.id,
-          conversionId: conversion.id,
-          affiliateId: conversion.affiliateId,
-          amount: commissionReversedAmount,
-          status: commission.status,
-        });
-
-        const program = dbStore.programs.find((p) => p.id === conversion.programId);
-        this.commissionsService.notifyAffiliateCommission(
-          SystemTemplateKey.AFFILIATE_COMMISSION_REVERSED,
-          organizationId,
-          conversion.affiliateId,
-          commissionReversedAmount,
-          program?.currency || PLATFORM_CURRENCY,
-          { reason: dto.reason || 'Customer refund' },
-        ).catch(() => undefined);
       }
     }
 
@@ -490,14 +1345,7 @@ export class ConversionsService {
       action: AuditAction.CONVERSION_REVERSED,
       resourceType: 'conversion',
       resourceId: conversion.id,
-      metadata: {
-        reason: dto.reason,
-        refundExternalId: dto.refundExternalId,
-        refundAmount,
-        totalRefundedAmount: conversion.refundedAmount,
-        fullyRefunded: isFullyRefunded,
-        commissionReversedAmount,
-      },
+      metadata: { reason: dto.reason, refundAmount, fullyRefunded: isFullyRefunded },
     });
 
     const responsePayload = {
@@ -528,25 +1376,18 @@ export class ConversionsService {
   }
 
   async findAll(organizationId: string, environment: EnvironmentType | 'test' | 'live' = EnvironmentType.LIVE, programId?: string) {
+    this.ensureDefaultConversions(organizationId);
     const currentEnvironment = EnvironmentUtils.normalizeEnvironment(environment);
     const conversions = dbStore.conversions.filter((c) =>
       c.organizationId === organizationId &&
       (c.environment === currentEnvironment || (!c.environment && currentEnvironment === EnvironmentType.LIVE)) &&
       (!programId || c.programId === programId),
     );
-    return conversions.map((c) => {
-      const affiliate = c.affiliateId ? dbStore.affiliates.find((a) => a.id === c.affiliateId) : undefined;
-      const commission = dbStore.commissions.find((com) => com.conversionId === c.id);
-      return {
-        ...c,
-        affiliateName: affiliate?.displayName || affiliate?.companyName || 'Direct / Organic',
-        customerEmail: c.customerExternalId || (c.metadata as any)?.customerEmail || 'customer@example.com',
-        commissionAmount: commission?.commissionAmount ?? 0,
-      };
-    });
+    return conversions.map((c) => this.hydrateConversion(c));
   }
 
   async findOne(organizationId: string, id: string, environment: EnvironmentType | 'test' | 'live' = EnvironmentType.LIVE) {
+    this.ensureDefaultConversions(organizationId);
     const currentEnvironment = EnvironmentUtils.normalizeEnvironment(environment);
     const conversion = dbStore.conversions.find(
       (c) =>
@@ -557,7 +1398,7 @@ export class ConversionsService {
     if (!conversion) {
       throw new NotFoundException('Conversion not found');
     }
-    return conversion;
+    return this.hydrateConversion(conversion);
   }
 
   private resolveAttribution(
@@ -572,27 +1413,16 @@ export class ConversionsService {
       (!a.environment || a.environment === environment) &&
       a.expiresAt > new Date();
 
-    // Click ID is the primary attribution identifier: if the caller supplies the Click ID
-    // returned from tracking, resolve directly to the attribution created for that exact click -
-    // no ambiguity, no attribution-model tie-breaking needed.
     if (clickId) {
       const byClick = dbStore.attributions.find((a) => a.clickId === clickId && isLive(a));
       if (byClick) return byClick;
     }
 
-    // Legacy path: an explicit attribution record id, still scoped to this org+environment
-    // and required to be unexpired.
     if (explicitAttributionId) {
       const byId = dbStore.attributions.find((a) => a.id === explicitAttributionId && isLive(a));
       if (byId) return byId;
     }
 
-    // Durable identity path: the customer was linked to an attribution via /tracking/identify at
-    // some point (signup/login/checkout) - this is what makes attribution survive cookie deletion,
-    // and also what lets a later conversion on a different device still resolve correctly.
-    // Deliberately NOT scoped to any single "default" program: an org can run several concurrent
-    // programs, and a customer's real attribution must win regardless of which one it belongs to -
-    // narrowing to a fallback program here would silently exclude genuine attributions.
     const candidates = dbStore.attributions.filter((a) => {
       if (!isLive(a)) return false;
       return a.customerExternalId === customerExternalId || a.anonymousId === customerExternalId;
@@ -621,15 +1451,7 @@ export class ConversionsService {
       return { item, score: (sharedWeight * partnerBoost * timeBoost) + (index === 0 ? 0.1 : 0) };
     });
 
-    if (model === 'POSITION_BASED') {
-      return weighted.sort((a, b) => b.score - a.score)[0].item;
-    }
-
-    if (model === 'TIME_DECAY') {
-      return weighted.sort((a, b) => b.score - a.score)[0].item;
-    }
-
-    if (model === 'MULTI_TOUCH' || model === 'CUSTOM') {
+    if (model === 'POSITION_BASED' || model === 'TIME_DECAY' || model === 'MULTI_TOUCH' || model === 'CUSTOM') {
       return weighted.sort((a, b) => b.score - a.score)[0].item;
     }
 

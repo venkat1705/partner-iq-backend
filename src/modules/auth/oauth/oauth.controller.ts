@@ -22,6 +22,7 @@ import {
   SetPasswordDto,
 } from './dto/oauth.dto';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { safeReturnPath } from '../../../common/utils/safe-redirect.utils';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import type { AuthUserPayload } from '../../../common/interfaces/request-with-user.interface';
 import { getAppConfig } from '../../../config/app.config';
@@ -112,7 +113,7 @@ export class OAuthController {
 
         // Redirect to frontend destination with token / status
         const frontendBase = appConfig.frontendUrl.replace(/\/$/, '');
-        const targetPath = result.returnUrl.startsWith('/') ? result.returnUrl : `/${result.returnUrl}`;
+        const targetPath = safeReturnPath(result.returnUrl, '/app/dashboard');
         const redirectUrl = `${frontendBase}/auth/google/callback?token=${encodeURIComponent(result.accessToken)}&returnUrl=${encodeURIComponent(targetPath)}&isNew=${result.isNewUser ? 'true' : 'false'}`;
 
         return res.redirect(redirectUrl);
@@ -120,7 +121,7 @@ export class OAuthController {
 
       // Account Linking flow redirect
       const frontendBase = appConfig.frontendUrl.replace(/\/$/, '');
-      const targetPath = result.returnUrl.startsWith('/') ? result.returnUrl : `/${result.returnUrl}`;
+      const targetPath = safeReturnPath(result.returnUrl, '/app/dashboard');
       const redirectUrl = `${frontendBase}${targetPath}?googleLinked=true`;
       return res.redirect(redirectUrl);
     } catch (err: any) {

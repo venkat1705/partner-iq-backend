@@ -370,6 +370,8 @@ export class OrganizationsService {
     if (dto.website) org.website = dto.website;
     if (dto.industry) org.industry = dto.industry;
     if (dto.companySize) org.companySize = dto.companySize;
+    if (dto.country) org.country = dto.country;
+    if (dto.logo !== undefined) (org as any).logo = dto.logo;
     if (dto.status) org.status = dto.status;
 
     org.updatedAt = new Date();

@@ -15,6 +15,7 @@ import { Affiliate, AffiliateInvitation, AffiliatePortalProfile, AuditLog, User,
 import { dbStore } from '../../../database/store';
 import { AuditAction, PlatformRole, UserStatus } from '../../../common/enums';
 import { SecurityUtils } from '../../../common/utils/security.utils';
+import { safeReturnPath } from '../../../common/utils/safe-redirect.utils';
 import { getAppConfig } from '../../../config/app.config';
 import { AuthService } from '../../auth/auth.service';
 import { GoogleOAuthService } from '../../auth/oauth/providers/google/google-oauth.service';
@@ -670,13 +671,13 @@ export class AffiliateAuthService {
     return this.authService.resetPassword(dto);
   }
 
+  /**
+   * This check was already correct; it now delegates to the shared validator so
+   * the affiliate and organization OAuth flows use one implementation and cannot
+   * drift apart again (they had, in three different directions).
+   */
   private sanitizeAffiliateReturnUrl(value?: string) {
-    if (!value) return '/dashboard';
-    const trimmed = value.trim();
-    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed) || trimmed.startsWith('//') || trimmed.includes('\\')) {
-      return '/dashboard';
-    }
-    return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+    return safeReturnPath(value, '/dashboard');
   }
 
   private async audit(actorId: string, action: AuditAction, resourceType: string, resourceId: string, metadata?: Record<string, any>) {

@@ -19,7 +19,7 @@ const formatDiscount = (coupon: { discountType: string; discountValue: number })
 
 @Injectable()
 export class CouponsService {
-  constructor(private readonly emailDispatch?: SystemEmailDispatchService) {}
+  constructor(private readonly emailDispatch?: SystemEmailDispatchService) { }
 
   // ─────────────────────────────────────────────────────────
   // Settings — "does your product support coupons at all?"
@@ -279,8 +279,504 @@ export class CouponsService {
   }
 
   // ─────────────────────────────────────────────────────────
+  // Analytics & Intelligence Aggregations
+  // ─────────────────────────────────────────────────────────
+
+  getAnalyticsOverview(
+    organizationId: string,
+    filter?: { programId?: string; affiliateId?: string; period?: string; dateFrom?: string; dateTo?: string },
+  ) {
+    this.assertCouponsEnabled(organizationId);
+
+    const coupons = dbStore.organizationCoupons.filter((c) => c.organizationId === organizationId);
+    const now = new Date();
+
+    const activeCoupons = coupons.filter((c) => c.status === 'ACTIVE');
+    const pausedCoupons = coupons.filter((c) => c.status === 'PAUSED');
+    const archivedCoupons = coupons.filter((c) => c.status === 'ARCHIVED');
+    const expiredCoupons = coupons.filter((c) => c.validUntil && new Date(c.validUntil) < now && c.status !== 'ARCHIVED');
+
+    // Filter conversions for this organization
+    let conversions = dbStore.conversions.filter((c) => c.organizationId === organizationId);
+    if (filter?.programId) {
+      conversions = conversions.filter((c) => c.programId === filter.programId);
+    }
+    if (filter?.affiliateId) {
+      conversions = conversions.filter((c) => c.affiliateId === filter.affiliateId);
+    }
+
+    // Date range filter
+    const { startDate, endDate } = this.resolveDateRange(filter?.period, filter?.dateFrom, filter?.dateTo);
+    if (startDate) {
+      conversions = conversions.filter((c) => new Date(c.occurredAt || c.createdAt) >= startDate);
+    }
+    if (endDate) {
+      conversions = conversions.filter((c) => new Date(c.occurredAt || c.createdAt) <= endDate);
+    }
+
+    // Map coupons to their matching conversions
+    let totalRedemptions = 0;
+    let attributedConversions = 0;
+    let couponDrivenRevenue = 0; // in cents
+    let discountGiven = 0; // in cents
+    let commissionGenerated = 0; // in cents
+
+    // Day bucket map for activity trend
+    const dayBucketMap = new Map<string, { redemptions: number; conversions: number; revenue: number; discount: number; commission: number }>();
+
+    for (const coupon of coupons) {
+      const couponConvs = this.getConversionsForCoupon(organizationId, coupon, conversions);
+      totalRedemptions += couponConvs.length;
+
+      for (const conv of couponConvs) {
+        if (conv.status === 'APPROVED' || conv.status === 'CONFIRMED' || conv.status === 'PENDING') {
+          attributedConversions += 1;
+          couponDrivenRevenue += Number(conv.amount || 0);
+
+          // Calculate discount
+          const discount = this.calculateDiscount(coupon, Number(conv.amount || 0));
+          discountGiven += discount;
+
+          // Find associated commissions
+          const comms = dbStore.commissions.filter((cm: any) => cm.conversionId === conv.id);
+          const convComm = comms.reduce((sum: number, cm: any) => sum + Number(cm.commissionAmount || cm.amount || 0), 0);
+          commissionGenerated += convComm;
+
+          // Date key YYYY-MM-DD
+          const d = new Date(conv.occurredAt || conv.createdAt).toISOString().split('T')[0];
+          const bucket = dayBucketMap.get(d) || { redemptions: 0, conversions: 0, revenue: 0, discount: 0, commission: 0 };
+          bucket.redemptions += 1;
+          bucket.conversions += 1;
+          bucket.revenue += Number(conv.amount || 0);
+          bucket.discount += discount;
+          bucket.commission += convComm;
+          dayBucketMap.set(d, bucket);
+        }
+      }
+    }
+
+    // Convert map to sorted trend array
+    const activityTrend = Array.from(dayBucketMap.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([date, data]) => ({
+        date,
+        redemptions: data.redemptions,
+        conversions: data.conversions,
+        revenue: data.revenue / 100, // in major currency units
+        discount: data.discount / 100,
+        commission: data.commission / 100,
+      }));
+
+    const averageOrderValue = attributedConversions > 0 ? Math.round(couponDrivenRevenue / attributedConversions) / 100 : 0;
+    const netRevenue = Math.max(0, couponDrivenRevenue - discountGiven) / 100;
+    const redemptionRate = conversions.length > 0 ? Math.round((totalRedemptions / conversions.length) * 1000) / 10 : 0;
+
+    return {
+      totalCoupons: coupons.length,
+      activeCoupons: activeCoupons.length,
+      pausedCoupons: pausedCoupons.length,
+      archivedCoupons: archivedCoupons.length,
+      expiredCoupons: expiredCoupons.length,
+      totalRedemptions,
+      attributedConversions,
+      couponDrivenRevenue: couponDrivenRevenue / 100,
+      discountGiven: discountGiven / 100,
+      commissionGenerated: commissionGenerated / 100,
+      netRevenue,
+      averageOrderValue,
+      redemptionRate,
+      statusDistribution: [
+        { status: 'ACTIVE', count: activeCoupons.length, label: 'Active' },
+        { status: 'PAUSED', count: pausedCoupons.length, label: 'Paused' },
+        { status: 'EXPIRED', count: expiredCoupons.length, label: 'Expired' },
+        { status: 'ARCHIVED', count: archivedCoupons.length, label: 'Archived' },
+      ],
+      activityTrend,
+    };
+  }
+
+  getPerformanceAnalytics(
+    organizationId: string,
+    filter?: { programId?: string; affiliateId?: string; sortBy?: string },
+  ) {
+    this.assertCouponsEnabled(organizationId);
+
+    const coupons = dbStore.organizationCoupons.filter((c) => c.organizationId === organizationId);
+    let conversions = dbStore.conversions.filter((c) => c.organizationId === organizationId);
+    if (filter?.programId) conversions = conversions.filter((c) => c.programId === filter.programId);
+    if (filter?.affiliateId) conversions = conversions.filter((c) => c.affiliateId === filter.affiliateId);
+
+    const performance = coupons.map((coupon) => {
+      const couponConvs = this.getConversionsForCoupon(organizationId, coupon, conversions);
+      const assignments = dbStore.organizationCouponAssignments.filter((a) => a.couponId === coupon.id);
+
+      const redemptions = couponConvs.length;
+      let revenue = 0;
+      let discount = 0;
+      let commission = 0;
+
+      for (const conv of couponConvs) {
+        revenue += Number(conv.amount || 0);
+        discount += this.calculateDiscount(coupon, Number(conv.amount || 0));
+        const comms = dbStore.commissions.filter((cm: any) => cm.conversionId === conv.id);
+        commission += comms.reduce((sum: number, cm: any) => sum + Number(cm.commissionAmount || cm.amount || 0), 0);
+      }
+
+      const aov = redemptions > 0 ? Math.round(revenue / redemptions) / 100 : 0;
+      const maxRedemptions = coupon.maxRedemptions || null;
+      const remainingRedemptions = maxRedemptions ? Math.max(0, maxRedemptions - redemptions) : null;
+      const usagePercentage = maxRedemptions ? Math.min(100, Math.round((redemptions / maxRedemptions) * 100)) : 0;
+
+      return {
+        id: coupon.id,
+        code: coupon.code,
+        name: coupon.name,
+        description: coupon.description,
+        discountType: coupon.discountType,
+        discountValue: coupon.discountValue,
+        status: coupon.status,
+        validFrom: coupon.validFrom,
+        validUntil: coupon.validUntil,
+        maxRedemptions,
+        assignedAffiliatesCount: assignments.length,
+        redemptions,
+        conversions: redemptions,
+        revenue: revenue / 100,
+        discount: discount / 100,
+        commission: commission / 100,
+        aov,
+        usagePercentage,
+        remainingRedemptions,
+      };
+    });
+
+    const sortBy = filter?.sortBy || 'revenue';
+    return performance.sort((a: any, b: any) => (Number(b[sortBy]) || 0) - (Number(a[sortBy]) || 0));
+  }
+
+  getAffiliatePerformance(organizationId: string, filter?: { programId?: string }) {
+    this.assertCouponsEnabled(organizationId);
+
+    const affiliates = dbStore.affiliates.filter((a) => a.organizationId === organizationId);
+    let conversions = dbStore.conversions.filter((c) => c.organizationId === organizationId);
+    if (filter?.programId) conversions = conversions.filter((c) => c.programId === filter.programId);
+
+    return affiliates.map((aff) => {
+      const assignments = dbStore.organizationCouponAssignments.filter((a) => a.affiliateId === aff.id);
+      const assignedCoupons = assignments
+        .map((a) => dbStore.organizationCoupons.find((c) => c.id === a.couponId))
+        .filter(Boolean);
+
+      const affConvs = conversions.filter((c) => c.affiliateId === aff.id);
+      let redemptions = 0;
+      let revenue = 0;
+      let discount = 0;
+      let commission = 0;
+
+      for (const coupon of assignedCoupons) {
+        if (!coupon) continue;
+        const couponConvs = this.getConversionsForCoupon(organizationId, coupon, affConvs);
+        redemptions += couponConvs.length;
+
+        for (const conv of couponConvs) {
+          revenue += Number(conv.amount || 0);
+          discount += this.calculateDiscount(coupon, Number(conv.amount || 0));
+          const comms = dbStore.commissions.filter((cm: any) => cm.conversionId === conv.id);
+          commission += comms.reduce((sum: number, cm: any) => sum + Number(cm.commissionAmount || cm.amount || 0), 0);
+        }
+      }
+
+      const aov = redemptions > 0 ? Math.round(revenue / redemptions) / 100 : 0;
+
+      return {
+        affiliateId: aff.id,
+        affiliateName: aff.displayName || 'Unnamed Partner',
+        email: aff.email,
+        assignedCouponsCount: assignedCoupons.length,
+        redemptions,
+        conversions: redemptions,
+        revenue: revenue / 100,
+        discount: discount / 100,
+        commission: commission / 100,
+        aov,
+      };
+    }).sort((a, b) => b.revenue - a.revenue);
+  }
+
+  getProgramPerformance(organizationId: string) {
+    this.assertCouponsEnabled(organizationId);
+
+    const programs = dbStore.programs.filter((p) => p.organizationId === organizationId);
+    const conversions = dbStore.conversions.filter((c) => c.organizationId === organizationId);
+    const coupons = dbStore.organizationCoupons.filter((c) => c.organizationId === organizationId);
+
+    return programs.map((prog) => {
+      const progConvs = conversions.filter((c) => c.programId === prog.id);
+      let redemptions = 0;
+      let revenue = 0;
+      let discount = 0;
+      let commission = 0;
+
+      for (const coupon of coupons) {
+        const couponConvs = this.getConversionsForCoupon(organizationId, coupon, progConvs);
+        redemptions += couponConvs.length;
+
+        for (const conv of couponConvs) {
+          revenue += Number(conv.amount || 0);
+          discount += this.calculateDiscount(coupon, Number(conv.amount || 0));
+          const comms = dbStore.commissions.filter((cm: any) => cm.conversionId === conv.id);
+          commission += comms.reduce((sum: number, cm: any) => sum + Number(cm.commissionAmount || cm.amount || 0), 0);
+        }
+      }
+
+      return {
+        programId: prog.id,
+        programName: prog.name,
+        activeCouponsCount: coupons.filter((c) => c.status === 'ACTIVE').length,
+        redemptions,
+        conversions: redemptions,
+        revenue: revenue / 100,
+        discount: discount / 100,
+        commission: commission / 100,
+      };
+    }).sort((a, b) => b.revenue - a.revenue);
+  }
+
+  getActivityLog(organizationId: string, couponId?: string) {
+    this.assertCouponsEnabled(organizationId);
+
+    let logs = dbStore.auditLogs.filter(
+      (log) => log.organizationId === organizationId && log.resourceType === 'organization_coupon',
+    );
+
+    if (couponId) {
+      logs = logs.filter((log) => log.resourceId === couponId);
+    }
+
+    return logs
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 50)
+      .map((log) => {
+        const coupon = dbStore.organizationCoupons.find((c) => c.id === log.resourceId);
+        const user = dbStore.users.find((u) => u.id === log.actorId);
+        return {
+          id: log.id,
+          action: log.action,
+          couponId: log.resourceId,
+          couponCode: coupon?.code || (log.metadata as any)?.code || 'COUPON',
+          actorName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'System',
+          metadata: log.metadata,
+          createdAt: log.createdAt,
+        };
+      });
+  }
+
+  getCouponDetailAnalytics(organizationId: string, couponId: string) {
+    this.assertCouponsEnabled(organizationId);
+    const coupon = this.requireCoupon(organizationId, couponId);
+
+    const conversions = dbStore.conversions.filter((c) => c.organizationId === organizationId);
+    const couponConvs = this.getConversionsForCoupon(organizationId, coupon, conversions);
+
+    let revenue = 0;
+    let discount = 0;
+    let commission = 0;
+
+    const dayMap = new Map<string, { redemptions: number; revenue: number }>();
+
+    for (const conv of couponConvs) {
+      revenue += Number(conv.amount || 0);
+      discount += this.calculateDiscount(coupon, Number(conv.amount || 0));
+      const comms = dbStore.commissions.filter((cm: any) => cm.conversionId === conv.id);
+      commission += comms.reduce((sum: number, cm: any) => sum + Number(cm.commissionAmount || cm.amount || 0), 0);
+
+      const d = new Date(conv.occurredAt || conv.createdAt).toISOString().split('T')[0];
+      const bucket = dayMap.get(d) || { redemptions: 0, revenue: 0 };
+      bucket.redemptions += 1;
+      bucket.revenue += Number(conv.amount || 0);
+      dayMap.set(d, bucket);
+    }
+
+    const redemptions = couponConvs.length;
+    const aov = redemptions > 0 ? Math.round(revenue / redemptions) / 100 : 0;
+    const netRevenue = Math.max(0, revenue - discount) / 100;
+    const maxRedemptions = coupon.maxRedemptions || null;
+    const remainingRedemptions = maxRedemptions ? Math.max(0, maxRedemptions - redemptions) : null;
+    const usagePercentage = maxRedemptions ? Math.min(100, Math.round((redemptions / maxRedemptions) * 100)) : 0;
+
+    const redemptionsTrend = Array.from(dayMap.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([date, data]) => ({
+        date,
+        redemptions: data.redemptions,
+        revenue: data.revenue / 100,
+      }));
+
+    // Recent 10 conversions
+    const recentConversions = couponConvs
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 10)
+      .map((conv) => {
+        const affiliate = dbStore.affiliates.find((a) => a.id === conv.affiliateId);
+        const program = dbStore.programs.find((p) => p.id === conv.programId);
+        const convDiscount = this.calculateDiscount(coupon, Number(conv.amount || 0)) / 100;
+        return {
+          id: conv.id,
+          orderId: conv.externalId || (conv as any).externalOrderId || conv.id.slice(0, 8),
+          customerEmail: (conv as any).customerEmail || (conv as any).customerExternalId || 'customer@partneriq.in',
+          amount: Number(conv.amount || 0) / 100,
+          discountAmount: convDiscount,
+          status: conv.status,
+          affiliateName: affiliate?.displayName || 'Direct',
+          programName: program?.name || 'Program',
+          occurredAt: conv.occurredAt || conv.createdAt,
+        };
+      });
+
+    return {
+      coupon: this.decorate(coupon),
+      metrics: {
+        redemptions,
+        conversions: redemptions,
+        revenue: revenue / 100,
+        discount: discount / 100,
+        commission: commission / 100,
+        netRevenue,
+        aov,
+        usagePercentage,
+        remainingRedemptions,
+        maxRedemptions,
+      },
+      redemptionsTrend,
+      recentConversions,
+      activity: this.getActivityLog(organizationId, couponId),
+    };
+  }
+
+  validateCouponCode(organizationId: string, code: string) {
+    this.assertCouponsEnabled(organizationId);
+
+    if (!code?.trim()) {
+      return {
+        isValid: false,
+        reason: 'Coupon code is required.',
+        coupon: null,
+      };
+    }
+
+    const normalized = normalizeCode(code);
+    const coupon = dbStore.organizationCoupons.find(
+      (c) => c.organizationId === organizationId && c.normalizedCode === normalized,
+    );
+
+    if (!coupon) {
+      return {
+        isValid: false,
+        reason: `Coupon code "${code.trim().toUpperCase()}" does not exist.`,
+        coupon: null,
+      };
+    }
+
+    if (coupon.status !== 'ACTIVE') {
+      return {
+        isValid: false,
+        reason: `Coupon "${coupon.code}" is currently ${coupon.status.toLowerCase()}.`,
+        coupon: this.decorate(coupon),
+      };
+    }
+
+    const now = new Date();
+    if (coupon.validFrom && new Date(coupon.validFrom) > now) {
+      return {
+        isValid: false,
+        reason: `Coupon "${coupon.code}" is not yet active (scheduled for ${new Date(coupon.validFrom).toLocaleDateString()}).`,
+        coupon: this.decorate(coupon),
+      };
+    }
+
+    if (coupon.validUntil && new Date(coupon.validUntil) < now) {
+      return {
+        isValid: false,
+        reason: `Coupon "${coupon.code}" expired on ${new Date(coupon.validUntil).toLocaleDateString()}.`,
+        coupon: this.decorate(coupon),
+      };
+    }
+
+    // Check redemption count
+    const conversions = dbStore.conversions.filter((c) => c.organizationId === organizationId);
+    const redemptions = this.getConversionsForCoupon(organizationId, coupon, conversions).length;
+    if (coupon.maxRedemptions && redemptions >= coupon.maxRedemptions) {
+      return {
+        isValid: false,
+        reason: `Coupon "${coupon.code}" has reached its maximum redemption limit (${coupon.maxRedemptions}).`,
+        coupon: this.decorate(coupon),
+      };
+    }
+
+    return {
+      isValid: true,
+      reason: 'Valid and active coupon.',
+      coupon: {
+        ...this.decorate(coupon),
+        currentRedemptions: redemptions,
+      },
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────
   // Helpers
   // ─────────────────────────────────────────────────────────
+
+  private getConversionsForCoupon(organizationId: string, coupon: any, conversions: any[]): any[] {
+    const normalized = coupon.normalizedCode || normalizeCode(coupon.code);
+    const assignments = dbStore.organizationCouponAssignments.filter((a) => a.couponId === coupon.id);
+    const assignedAffiliateIds = new Set(assignments.map((a) => a.affiliateId));
+
+    return conversions.filter((c) => {
+      if (c.organizationId !== organizationId) return false;
+      const meta = c.metadata || {};
+      const metaCode = meta.couponCode || meta.promoCode || meta.coupon_code || meta.code || meta.coupon;
+      if (metaCode && normalizeCode(String(metaCode)) === normalized) {
+        return true;
+      }
+      // If affiliate is assigned to this coupon and metadata doesn't specify another coupon
+      if (assignedAffiliateIds.has(c.affiliateId) && !metaCode) {
+        return true;
+      }
+      return false;
+    });
+  }
+
+  private calculateDiscount(coupon: any, conversionAmountCents: number): number {
+    if (coupon.discountType === 'PERCENTAGE') {
+      return Math.round(conversionAmountCents * (Number(coupon.discountValue) / 100));
+    }
+    // FIXED_AMOUNT in major units (e.g. 20 for $20 / ₹20) -> convert to cents
+    const fixedCents = Number(coupon.discountValue) * 100;
+    return Math.min(conversionAmountCents, fixedCents);
+  }
+
+  private resolveDateRange(period?: string, dateFrom?: string, dateTo?: string): { startDate?: Date; endDate?: Date } {
+    if (dateFrom || dateTo) {
+      return {
+        startDate: dateFrom ? new Date(dateFrom) : undefined,
+        endDate: dateTo ? new Date(dateTo) : undefined,
+      };
+    }
+
+    const now = new Date();
+    switch (period) {
+      case '7D':
+        return { startDate: new Date(now.getTime() - 7 * 86400000) };
+      case '30D':
+        return { startDate: new Date(now.getTime() - 30 * 86400000) };
+      case '90D':
+        return { startDate: new Date(now.getTime() - 90 * 86400000) };
+      case 'LIFETIME':
+      default:
+        return {};
+    }
+  }
 
   private requireCoupon(organizationId: string, couponId: string) {
     const coupon = dbStore.organizationCoupons.find((item) => item.id === couponId && item.organizationId === organizationId);
@@ -341,3 +837,4 @@ export class CouponsService {
     });
   }
 }
+

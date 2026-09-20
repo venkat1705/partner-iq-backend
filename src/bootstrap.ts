@@ -111,6 +111,7 @@ export async function createPartnerIqApp() {
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
+      transformOptions: { enableImplicitConversion: true },
     }),
   );
   app.useGlobalFilters(new GlobalExceptionFilter());

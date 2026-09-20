@@ -13,13 +13,31 @@ import { EnvironmentType } from '../../common/enums';
 @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
 @ApiBearerAuth()
 export class AnalyticsController {
-  constructor(private readonly analyticsService: AnalyticsService) {}
+  constructor(private readonly analyticsService: AnalyticsService) { }
 
   @Get('overview')
   @RequirePermissions('view.organization')
   @ApiOperation({ summary: 'Single source-of-truth organization dashboard overview' })
-  getOverview(@Param('organizationId') organizationId: string, @CurrentEnvironment() environment: EnvironmentType) {
-    return this.analyticsService.getOrganizationOverview(organizationId, environment);
+  getOverview(
+    @Param('organizationId') organizationId: string,
+    @CurrentEnvironment() environment: EnvironmentType,
+    @Query('range') range?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('compare') compare?: string,
+    @Query('programId') programId?: string,
+    @Query('affiliateId') affiliateId?: string,
+    @Query('months') months?: string,
+  ) {
+    return this.analyticsService.getOrganizationOverview(organizationId, environment, {
+      range,
+      startDate,
+      endDate,
+      compare,
+      programId,
+      affiliateId,
+      months: months ? Number(months) : undefined,
+    });
   }
 
   @Get('analytics/revenue')
@@ -46,8 +64,16 @@ export class AnalyticsController {
   @Get('analytics/affiliates')
   @RequirePermissions('view.organization')
   @ApiOperation({ summary: 'Organization affiliate metrics' })
-  getAffiliateMetrics(@Param('organizationId') organizationId: string, @CurrentEnvironment() environment: EnvironmentType) {
-    return this.analyticsService.getOrganizationAffiliateMetrics(organizationId, environment);
+  getAffiliateMetrics(
+    @Param('organizationId') organizationId: string,
+    @CurrentEnvironment() environment: EnvironmentType,
+    @Query('programId') programId?: string,
+    @Query('affiliateId') affiliateId?: string,
+  ) {
+    return this.analyticsService.getOrganizationAffiliateMetrics(organizationId, environment, {
+      programId,
+      affiliateId,
+    });
   }
 
   @Get('analytics/payouts')
@@ -57,6 +83,13 @@ export class AnalyticsController {
     return this.analyticsService.getOrganizationPayoutMetrics(organizationId, environment);
   }
 
+  @Get('analytics/incentives')
+  @RequirePermissions('view.organization')
+  @ApiOperation({ summary: 'Organization incentive and gamification metrics' })
+  getIncentives(@Param('organizationId') organizationId: string, @CurrentEnvironment() environment: EnvironmentType) {
+    return this.analyticsService.getOrganizationIncentiveMetrics(organizationId, environment);
+  }
+
   @Get('analytics/timeseries')
   @RequirePermissions('view.organization')
   @ApiOperation({ summary: 'Monthly revenue/commission/conversion time series for dashboard charts' })
@@ -64,16 +97,40 @@ export class AnalyticsController {
     @Param('organizationId') organizationId: string,
     @CurrentEnvironment() environment: EnvironmentType,
     @Query('months') months?: string,
+    @Query('range') range?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('compare') compare?: string,
+    @Query('programId') programId?: string,
+    @Query('affiliateId') affiliateId?: string,
   ) {
     const parsedMonths = Math.min(24, Math.max(1, Number(months) || 6));
-    return this.analyticsService.getOrganizationRevenueTimeSeries(organizationId, environment, parsedMonths);
+    return this.analyticsService.getOrganizationRevenueTimeSeries(organizationId, environment, {
+      months: parsedMonths,
+      range,
+      startDate,
+      endDate,
+      compare,
+      programId,
+      affiliateId,
+    });
   }
 
   @Get('analytics/top-programs')
   @RequirePermissions('view.organization')
   @ApiOperation({ summary: 'Top-performing programs by real attributed revenue' })
-  getTopPrograms(@Param('organizationId') organizationId: string, @CurrentEnvironment() environment: EnvironmentType) {
-    return this.analyticsService.getOrganizationTopPrograms(organizationId, environment);
+  getTopPrograms(
+    @Param('organizationId') organizationId: string,
+    @CurrentEnvironment() environment: EnvironmentType,
+    @Query('limit') limit?: string,
+    @Query('programId') programId?: string,
+    @Query('affiliateId') affiliateId?: string,
+  ) {
+    const parsedLimit = Math.min(50, Math.max(1, Number(limit) || 10));
+    return this.analyticsService.getOrganizationTopPrograms(organizationId, environment, parsedLimit, {
+      programId,
+      affiliateId,
+    });
   }
 
   @Get('analytics/mrr')

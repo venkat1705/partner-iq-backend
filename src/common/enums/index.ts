@@ -436,6 +436,9 @@ export enum AffiliateAssetActivityType {
 export enum TrackingLinkStatus {
   ACTIVE = 'ACTIVE',
   INACTIVE = 'INACTIVE',
+  PAUSED = 'PAUSED',
+  EXPIRED = 'EXPIRED',
+  ARCHIVED = 'ARCHIVED',
 }
 
 export enum WebhookEvent {

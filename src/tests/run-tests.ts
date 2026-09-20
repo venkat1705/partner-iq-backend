@@ -242,8 +242,8 @@ async function runTestSuite() {
     {
       externalId: 'ORD-99001',
       customerExternalId: redirectRes.anonymousId,
-      amount: 2500, // $25.00 in cents
-      currency: 'USD',
+      amount: 2500, // in cents
+      currency: seedPrograms[0]?.currency || 'INR',
     },
     'idempotency_key_test_123',
   );
@@ -257,7 +257,7 @@ async function runTestSuite() {
       externalId: 'ORD-99001',
       customerExternalId: redirectRes.anonymousId,
       amount: 2500,
-      currency: 'USD',
+      currency: seedPrograms[0]?.currency || 'INR',
     },
     'idempotency_key_test_123',
   );
@@ -295,7 +295,7 @@ async function runTestSuite() {
       externalId: 'ORD-MULTI-TOUCH-01',
       customerExternalId: viaLegacy,
       amount: 25000,
-      currency: 'USD',
+      currency: multiTouchProgram.currency || 'INR',
       metadata: { promoCode: 'SAVE20' },
     },
     'multi_touch_test_key',

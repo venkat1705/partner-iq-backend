@@ -34,7 +34,7 @@ export class FraudService {
     private readonly commissionsService: CommissionsService,
     private readonly ledgerService: LedgerService,
     private readonly webhooksService?: WebhooksService,
-  ) {}
+  ) { }
 
   async evaluateClick(clickId: string, rawIp?: string) {
     const click = dbStore.clicks.find((item) => item.id === clickId);
@@ -288,25 +288,88 @@ export class FraudService {
     const assessments = dbStore.fraudAssessments.filter((item) => item.organizationId === organizationId);
     const reviews = dbStore.fraudReviews.filter((item) => item.organizationId === organizationId);
     const signals = dbStore.fraudSignals.filter((signal) => assessments.some((assessment) => assessment.id === signal.assessmentId));
+
+    const reviewRows = reviews.map((review) => this.expandReview(review));
+    const reviewedAssessmentIds = new Set(reviewRows.map((review) => review.assessmentId).filter(Boolean));
+    const assessmentRows = assessments
+      .filter((assessment) => !reviewedAssessmentIds.has(assessment.id))
+      .map((assessment) => this.expandAssessment(assessment));
+
+    const allReviews = [...reviewRows, ...assessmentRows].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+
+    const settings = dbStore.fraudSettings.find((item) => item.organizationId === organizationId && !item.programId) || null;
+
+    const amountFlagged = allReviews.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const amountBlocked = allReviews
+      .filter((item) => item.status === FraudReviewStatus.REJECTED || item.reviewDecision === FraudDecision.BLOCK)
+      .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const amountOnHold = allReviews
+      .filter((item) => item.status === FraudReviewStatus.PENDING || item.status === FraudReviewStatus.IN_REVIEW || item.reviewDecision === FraudDecision.HOLD)
+      .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const amountCleared = allReviews
+      .filter((item) => item.status === FraudReviewStatus.APPROVED || item.reviewDecision === FraudDecision.ALLOW)
+      .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+
+    // Time-series activity trend (aggregated daily buckets from real data)
+    const trendMap = new Map<string, { date: string; flagged: number; blocked: number; cleared: number; total: number }>();
+    for (const r of allReviews) {
+      const date = new Date(r.createdAt).toISOString().slice(0, 10);
+      const entry = trendMap.get(date) || { date, flagged: 0, blocked: 0, cleared: 0, total: 0 };
+      entry.total += 1;
+      if (r.fraudScore >= 31 || r.reviewDecision !== FraudDecision.ALLOW) entry.flagged += 1;
+      if (r.status === FraudReviewStatus.REJECTED || r.reviewDecision === FraudDecision.BLOCK) entry.blocked += 1;
+      if (r.status === FraudReviewStatus.APPROVED || r.reviewDecision === FraudDecision.ALLOW) entry.cleared += 1;
+      trendMap.set(date, entry);
+    }
+    const activityTrend = Array.from(trendMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+
+    // Signal Matrix aggregation
+    const signalMap = new Map<string, { code: string; category: string; count: number; totalScore: number; maxScore: number }>();
+    for (const s of signals) {
+      const code = s.signalCode;
+      const existing = signalMap.get(code) || { code, category: s.category, count: 0, totalScore: 0, maxScore: 0 };
+      existing.count += 1;
+      existing.totalScore += Number(s.score || 0);
+      existing.maxScore = Math.max(existing.maxScore, Number(s.score || 0));
+      signalMap.set(code, existing);
+    }
+    const signalMatrix = Array.from(signalMap.values())
+      .map((s) => ({
+        code: s.code,
+        category: s.category,
+        count: s.count,
+        averageScore: Math.round(s.totalScore / s.count),
+        maxScore: s.maxScore,
+        severity: s.maxScore >= 80 ? 'CRITICAL' : s.maxScore >= 60 ? 'HIGH' : s.maxScore >= 30 ? 'MEDIUM' : 'LOW',
+      }))
+      .sort((a, b) => b.count - a.count);
+
     return {
       metrics: {
         assessments: assessments.length,
-        fraudPrevented: assessments
-          .filter((item) => item.decision === FraudDecision.BLOCK || item.decision === FraudDecision.HOLD)
-          .reduce((total, item) => total + Number(item.amount || 0), 0),
+        fraudPrevented: amountBlocked + amountOnHold,
         highRiskEvents: assessments.filter((item) => item.score >= 71).length,
-        pendingReviews: reviews.filter((item) => item.status === FraudReviewStatus.PENDING || item.status === FraudReviewStatus.IN_REVIEW).length,
+        pendingReviews: allReviews.filter((item) => item.status === FraudReviewStatus.PENDING || item.status === FraudReviewStatus.IN_REVIEW).length,
         fraudRate: assessments.length ? Math.round((assessments.filter((item) => item.score >= 71).length / assessments.length) * 1000) / 10 : 0,
         averageRiskScore: assessments.length ? Math.round(assessments.reduce((sum, item) => sum + item.score, 0) / assessments.length) : 0,
+      },
+      financialImpact: {
+        amountFlagged,
+        amountBlocked,
+        amountOnHold,
+        amountCleared,
       },
       riskDistribution: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].map((riskLevel) => ({
         riskLevel,
         count: assessments.filter((item) => item.riskLevel === riskLevel).length,
       })),
-      topSignals: Object.entries(
-        signals.reduce((map, signal) => ({ ...map, [signal.signalCode]: ((map as any)[signal.signalCode] || 0) + 1 }), {} as Record<string, number>),
-      ).map(([code, count]) => ({ code, count })),
-      reviews: reviews.map((review) => this.expandReview(review)),
+      topSignals: signalMatrix.map((s) => ({ code: s.code, count: s.count })),
+      signalMatrix,
+      activityTrend,
+      settings,
+      reviews: allReviews,
     };
   }
 

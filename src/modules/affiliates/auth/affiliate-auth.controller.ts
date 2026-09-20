@@ -5,6 +5,7 @@ import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { MfaRateLimiterGuard } from '../../../common/guards/mfa-rate-limiter.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { getAppConfig } from '../../../config/app.config';
+import { safeReturnPath } from '../../../common/utils/safe-redirect.utils';
 import { AffiliateAuthService } from './affiliate-auth.service';
 
 function affiliateRefreshCookieOptions(maxAge = 30 * 24 * 3600 * 1000): CookieOptions {
@@ -173,7 +174,10 @@ export class AffiliateAuthController {
       const result = await this.affiliateAuthService.handleGoogleCallback(query);
       const affiliateBase = config.affiliateFrontendUrl.replace(/\/$/, '');
       res.cookie('affiliateRefreshToken', result.refreshToken, affiliateRefreshCookieOptions());
-      const targetPath = result.returnUrl?.startsWith('/') ? result.returnUrl : '/dashboard';
+      // The service already sanitised this; re-validating here keeps the guarantee
+      // local to the line that builds the redirect, so a future change to the
+      // service cannot quietly widen what ends up in the Location header.
+      const targetPath = safeReturnPath(result.returnUrl, '/dashboard');
       const redirectUrl = `${affiliateBase}/auth/google/callback?token=${encodeURIComponent(result.accessToken)}&refreshToken=${encodeURIComponent(result.refreshToken || '')}&returnUrl=${encodeURIComponent(targetPath)}&isNew=${result.isNewUser ? 'true' : 'false'}`;
       return res.redirect(redirectUrl);
     } catch (err: any) {

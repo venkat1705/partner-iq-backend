@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Delete,
   Body,
   Param,
@@ -23,6 +24,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { MfaRateLimiterGuard } from '../../common/guards/mfa-rate-limiter.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { getAppConfig } from '../../config/app.config';
+import { safeReturnPath } from '../../common/utils/safe-redirect.utils';
 import {
   RegisterDto,
   LoginDto,
@@ -584,6 +586,19 @@ export class AuthController {
     return { success: true, data: result };
   }
 
+  @Patch('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT')
+  @ApiOperation({ summary: 'Update current user profile info and avatar' })
+  async updateMe(
+    @CurrentUser() user: any,
+    @Body() dto: { firstName?: string; lastName?: string; avatarUrl?: string },
+  ) {
+    const userId = user?.userId || user?.id || user?.sub;
+    const result = await this.authService.updateProfile(userId, dto);
+    return { success: true, data: result };
+  }
+
   // ─────────────────────────────────────────────────────────
   // Google OAuth
   // ─────────────────────────────────────────────────────────
@@ -633,19 +648,19 @@ export class AuthController {
       }
 
       if (result && typeof result === 'object' && 'accessToken' in result) {
-        const targetPath = (result as any).returnUrl?.startsWith('/')
-          ? (result as any).returnUrl
-          : `/${(result as any).returnUrl || 'app/dashboard'}`;
+        // startsWith('/') on its own admitted `//attacker.test`, which is a
+        // protocol-relative URL pointing at another host. This value is handed to
+        // the frontend as ?returnUrl= alongside the access token, so a weak check
+        // here reopens the same token-leak path the audit recorded against the
+        // affiliate flow.
+        const targetPath = safeReturnPath((result as any).returnUrl, '/app/dashboard');
         const redirectUrl = `${frontendBase}/auth/google/callback?token=${encodeURIComponent((result as any).accessToken)}&returnUrl=${encodeURIComponent(targetPath)}&isNew=${(result as any).isNewUser ? 'true' : 'false'}`;
         return res.redirect(redirectUrl);
       }
 
       if (result && typeof result === 'object' && 'returnUrl' in result && (result as any).returnUrl) {
-        const rawReturnUrl = (result as any).returnUrl as string;
-        // Only allow same-origin relative paths; never redirect to an absolute/external URL.
-        const safePath = rawReturnUrl.startsWith('/') && !rawReturnUrl.startsWith('//') && !rawReturnUrl.includes('\\')
-          ? rawReturnUrl
-          : '/app/dashboard';
+        // Only same-origin relative paths; never an absolute or external URL.
+        const safePath = safeReturnPath((result as any).returnUrl as string, '/app/dashboard');
         return res.redirect(`${frontendBase}${safePath}`);
       }
 
