@@ -24,8 +24,11 @@ async function runTests() {
   const testOrgId = uuidv4();
   const testProgramId = uuidv4();
 
-  // Initialize tier evaluator and tier service
-  const tierEvaluator = new TierEvaluatorService();
+  // Initialize tier evaluator and tier service. TierEvaluatorService takes a
+  // reward executor and the commissions service; these tests never trigger a
+  // tier transition, so the collaborators are stubbed rather than standing up
+  // the full reward/ledger/notification chain behind them.
+  const tierEvaluator = new TierEvaluatorService({} as any, {} as any);
   const tierService = new TierService(tierEvaluator);
 
   // Initialize service with dependencies

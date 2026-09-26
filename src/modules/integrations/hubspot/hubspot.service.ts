@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { createHash, randomBytes, timingSafeEqual } from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
-import { dbStore } from '../../../database/store';
+import { dbStore, awaitPersist } from '../../../database/store';
 import {
   CrmHealthStatus,
   IntegrationEnvironment,
@@ -24,8 +24,16 @@ import {
 import {
   UpdateHubSpotFieldMappingsDto,
   UpdateHubSpotPipelineMappingDto,
+  UpdateHubSpotSyncSettingsDto,
   UpsertHubSpotPlatformConfigDto,
 } from './dto/hubspot.dto';
+
+export const DEFAULT_HUBSPOT_SYNC_SETTINGS = {
+  syncDirection: 'bidirectional' as const,
+  autoConvertOnWon: true,
+  autoCreateDealInCrm: true,
+  tagPartnerAttribution: true,
+};
 
 @Injectable()
 export class HubSpotService {
@@ -71,23 +79,40 @@ export class HubSpotService {
     };
   }
 
+  // NOTE: kept synchronous (not awaiting the credential/config persistence) — several
+  // out-of-scope test callers (src/tests/integrations-admin-oauth.test.ts,
+  // src/tests/razorpay-oauth.test.ts) invoke this without `await` and read the return value
+  // synchronously. Making this `async` would turn the return into a Promise for them and break
+  // those tests; see report for details.
   upsertPlatformConfig(user: AuthUserPayload, dto: UpsertHubSpotPlatformConfigDto) {
     this.assertSuperAdmin(user);
     const existing = this.platformConfig();
+    const hasStoredClientId = Boolean(existing && this.safeSecret(existing.id, 'client_id'));
+    if (!hasStoredClientId && !dto.clientId?.trim()) {
+      throw new BadRequestException('Client ID is required for initial configuration');
+    }
+    if (!existing?.secretReferenceId && !dto.clientSecret?.trim()) {
+      throw new BadRequestException('Client Secret is required for initial configuration');
+    }
     const config = {
       ...(existing || { id: uuidv4(), provider: HUBSPOT_PROVIDER, createdAt: new Date() }),
       status: IntegrationStatus.ACTIVE,
-      redirectUri: dto.redirectUri,
-      requiredScopes: dto.requiredScopes?.length ? dto.requiredScopes : HUBSPOT_REQUIRED_SCOPES,
-      optionalScopes: dto.optionalScopes || [],
-      appId: dto.appId,
-      environment: dto.environment || IntegrationEnvironment.LIVE,
+      redirectUri: dto.redirectUri || existing?.redirectUri,
+      requiredScopes: dto.requiredScopes?.length ? dto.requiredScopes : (existing?.requiredScopes || HUBSPOT_REQUIRED_SCOPES),
+      optionalScopes: dto.optionalScopes || existing?.optionalScopes || [],
+      appId: dto.appId !== undefined ? dto.appId : existing?.appId,
+      environment: dto.environment || existing?.environment || IntegrationEnvironment.LIVE,
       updatedBy: user.userId,
       updatedAt: new Date(),
       secretReferenceId: existing?.secretReferenceId,
       clientSecretLast4: existing?.clientSecretLast4,
     };
-    this.credentials.storeCredential(config.id, 'client_id', dto.clientId);
+    if (!config.redirectUri) {
+      throw new BadRequestException('Redirect URI is required for initial configuration');
+    }
+    if (dto.clientId?.trim()) {
+      this.credentials.storeCredential(config.id, 'client_id', dto.clientId.trim());
+    }
     if (dto.clientSecret) {
       this.credentials.storeCredential(config.id, 'client_secret', dto.clientSecret);
       config.secretReferenceId = config.id;
@@ -142,6 +167,7 @@ export class HubSpotService {
         lastErrorCode: config.lastHealthErrorCode,
       },
       lastSuccessfulSyncAt: config.lastSuccessfulSyncAt,
+      syncSettings: { ...DEFAULT_HUBSPOT_SYNC_SETTINGS, ...(config.syncSettings || {}) },
       lastFailedSyncAt: config.lastFailedSyncAt,
       lastWebhookAt: connection?.lastWebhookAt,
       integrationId: integration.id,
@@ -177,6 +203,7 @@ export class HubSpotService {
     const state = dbStore.integrationOAuthStates.find((item) => item.state === stateValue);
     if (!state || state.consumedAt || state.expiresAt < new Date()) throw new ForbiddenException('Invalid or expired HubSpot OAuth state');
     state.consumedAt = new Date();
+    await awaitPersist(state);
 
     const config = this.requirePlatformConfig();
     const integration = this.requireIntegration();
@@ -220,6 +247,7 @@ export class HubSpotService {
       grantedScopes: tokenInfo.scopes || token.scopes || String(token.scope || '').split(/\s+/).filter(Boolean),
     };
     connection.connectedAt = new Date();
+    await awaitPersist(connection);
     await this.ensureDefaultFieldMappings(connection.id, connection.organizationId);
     const health = await this.testConnection(connection.organizationId);
     this.audit(connection.organizationId, state.userId || 'system', 'HUBSPOT_CONNECTED', connection.id, { externalAccountId: connection.config.externalAccountId, health: health.status });
@@ -285,6 +313,7 @@ export class HubSpotService {
     };
     connection.lastError = status === CrmHealthStatus.HEALTHY ? undefined : 'HubSpot connection needs attention.';
     connection.lastSyncAt = status === CrmHealthStatus.HEALTHY ? new Date() : connection.lastSyncAt;
+    await awaitPersist(connection);
     this.syncLog(connection, 'connection_test', 'CONNECTION', 'HEALTH', status === CrmHealthStatus.UNHEALTHY ? 'FAILED' : 'SUCCEEDED', { missingScopes: missingCriticalScopes });
     return {
       provider: HUBSPOT_PROVIDER,
@@ -342,8 +371,13 @@ export class HubSpotService {
       isActive: true,
       updatedAt: new Date(),
     };
-    if (existing) Object.assign(existing, mapping);
-    else dbStore.crmPipelineMappings.push(mapping);
+    if (existing) {
+      Object.assign(existing, mapping);
+      await awaitPersist(existing);
+    } else {
+      dbStore.crmPipelineMappings.push(mapping);
+      await awaitPersist(mapping);
+    }
     this.audit(organizationId, 'system', 'HUBSPOT_PIPELINE_MAPPING_CHANGED', mapping.id, { externalPipelineId: dto.externalPipelineId });
     await this.ensureDealCustomProperties(connection.id);
     return mapping;
@@ -379,6 +413,7 @@ export class HubSpotService {
 
   async updateFieldMappings(organizationId: string, dto: UpdateHubSpotFieldMappingsDto) {
     const connection = this.requireConnection(organizationId);
+    const pending: Promise<unknown>[] = [];
     for (const item of dto.mappings || []) {
       const existing = dbStore.crmFieldMappings.find((mapping) => mapping.organizationIntegrationId === connection.id && mapping.partnerIqField === item.partnerIqField);
       const next = {
@@ -390,20 +425,48 @@ export class HubSpotService {
         required: Boolean(item.required),
         updatedAt: new Date(),
       };
-      if (existing) Object.assign(existing, next);
-      else dbStore.crmFieldMappings.push(next);
+      if (existing) {
+        Object.assign(existing, next);
+        pending.push(awaitPersist(existing));
+      } else {
+        dbStore.crmFieldMappings.push(next);
+        pending.push(awaitPersist(next));
+      }
     }
+    await Promise.all(pending);
     this.audit(organizationId, 'system', 'HUBSPOT_FIELD_MAPPING_CHANGED', connection.id, {});
     return this.getFieldMappings(organizationId);
   }
 
-  disconnect(organizationId: string, user: AuthUserPayload) {
+  async disconnect(organizationId: string, user: AuthUserPayload) {
     const connection = this.requireConnection(organizationId);
     connection.status = OrganizationIntegrationStatus.DISCONNECTED;
     connection.config = { ...(connection.config || {}), disconnectedAt: new Date() };
     connection.lastError = undefined;
+    await awaitPersist(connection);
     this.audit(organizationId, user.userId, 'HUBSPOT_DISCONNECTED', connection.id, {});
     return this.getOrganizationHubSpot(organizationId);
+  }
+
+  getSyncSettings(organizationId: string) {
+    const connection = this.requireConnection(organizationId);
+    return { ...DEFAULT_HUBSPOT_SYNC_SETTINGS, ...(connection.config?.syncSettings || {}) };
+  }
+
+  async updateSyncSettings(organizationId: string, user: AuthUserPayload, dto: UpdateHubSpotSyncSettingsDto) {
+    const connection = this.requireConnection(organizationId);
+    const nextSettings = {
+      ...DEFAULT_HUBSPOT_SYNC_SETTINGS,
+      ...(connection.config?.syncSettings || {}),
+      ...(dto.syncDirection !== undefined ? { syncDirection: dto.syncDirection } : {}),
+      ...(dto.autoConvertOnWon !== undefined ? { autoConvertOnWon: dto.autoConvertOnWon } : {}),
+      ...(dto.autoCreateDealInCrm !== undefined ? { autoCreateDealInCrm: dto.autoCreateDealInCrm } : {}),
+      ...(dto.tagPartnerAttribution !== undefined ? { tagPartnerAttribution: dto.tagPartnerAttribution } : {}),
+    };
+    connection.config = { ...(connection.config || {}), syncSettings: nextSettings };
+    await awaitPersist(connection);
+    this.audit(organizationId, user.userId, 'HUBSPOT_SYNC_SETTINGS_CHANGED', connection.id, nextSettings);
+    return nextSettings;
   }
 
   syncLogs(organizationId: string) {
@@ -471,9 +534,10 @@ export class HubSpotService {
   }
 
   private async ensureDefaultFieldMappings(connectionId: string, organizationId: string) {
+    const pending: Promise<unknown>[] = [];
     for (const [partnerIqField, externalField, required] of HUBSPOT_DEFAULT_FIELD_MAPPINGS) {
       if (!dbStore.crmFieldMappings.some((item) => item.organizationIntegrationId === connectionId && item.partnerIqField === partnerIqField)) {
-        dbStore.crmFieldMappings.push({
+        const mapping = {
           id: uuidv4(),
           organizationId,
           organizationIntegrationId: connectionId,
@@ -482,9 +546,12 @@ export class HubSpotService {
           required,
           createdAt: new Date(),
           updatedAt: new Date(),
-        });
+        };
+        dbStore.crmFieldMappings.push(mapping);
+        pending.push(awaitPersist(mapping));
       }
     }
+    await Promise.all(pending);
   }
 
   private audit(organizationId: string | undefined, actorId: string, action: string, resourceId: string, metadata?: Record<string, unknown>) {

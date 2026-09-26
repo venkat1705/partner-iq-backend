@@ -8,9 +8,12 @@ import {
 import { timingSafeEqual, createHash } from 'crypto';
 import jwtPkg from 'jsonwebtoken';
 const jwt = (jwtPkg as any).default || jwtPkg;
+import { v4 as uuidv4 } from 'uuid';
 import { getJwtConfig } from '../../config/jwt.config';
-import { PlatformRole } from '../../common/enums';
+import { PlatformRole, AuditAction } from '../../common/enums';
 import { dbStore } from '../../database/store';
+import { AppDataSource } from '../../database/data-source';
+import { AuditLog } from '../../database/schema';
 
 function getConfiguredOpsSecret(): string {
   const secret = process.env.INTERNAL_OPS_KEY || process.env.PRIVATE_API_KEY;
@@ -51,6 +54,7 @@ export class InternalOpsGuard implements CanActivate {
           type: 'INTERNAL_SECRET_HEADER',
           authorizedAt: new Date().toISOString(),
         };
+        await this.recordInternalAuditLog(request);
         return true;
       }
     }
@@ -66,6 +70,7 @@ export class InternalOpsGuard implements CanActivate {
           type: 'INTERNAL_SECRET_BEARER',
           authorizedAt: new Date().toISOString(),
         };
+        await this.recordInternalAuditLog(request);
         return true;
       }
 
@@ -90,6 +95,7 @@ export class InternalOpsGuard implements CanActivate {
               email: user.email,
               authorizedAt: new Date().toISOString(),
             };
+            await this.recordInternalAuditLog(request);
             return true;
           }
         }
@@ -108,6 +114,53 @@ export class InternalOpsGuard implements CanActivate {
       message:
         'Access denied. Valid x-internal-secret header or SuperAdmin credentials required to access internal APIs.',
     });
+  }
+
+  private async recordInternalAuditLog(request: any) {
+    try {
+      const caller = request.internalCaller || {};
+      const callerIdentity =
+        caller.type === 'SUPER_ADMIN_JWT'
+          ? `superadmin:${caller.email || caller.userId}`
+          : `internal_key:${caller.type || 'SECRET'}`;
+
+      const target =
+        request.params?.id ||
+        request.body?.recipientEmail ||
+        request.body?.organizationName ||
+        request.body?.templateKey ||
+        request.query?.id ||
+        'global';
+
+      const route = `${request.method} ${request.originalUrl || request.url}`;
+
+      const entry = {
+        id: uuidv4(),
+        actorType: caller.type === 'SUPER_ADMIN_JWT' ? 'user' : 'api_key',
+        actorId: callerIdentity,
+        action: AuditAction.INTERNAL_API_CALLED,
+        resourceType: 'internal_ops',
+        resourceId: request.originalUrl || request.url,
+        ipAddress: request.ip || '127.0.0.1',
+        userAgent: request.headers?.['user-agent'] || 'internal-ops-client',
+        metadata: {
+          caller: callerIdentity,
+          callerType: caller.type,
+          route,
+          target: String(target),
+          authorizedAt: caller.authorizedAt,
+        },
+        createdAt: new Date(),
+      };
+
+      dbStore.auditLogs.push(entry as any);
+
+      if (AppDataSource.isInitialized) {
+        await AppDataSource.getRepository(AuditLog).save(entry as any);
+      }
+    } catch (err: any) {
+      this.logger.error(`Failed to record internal ops audit log: ${err?.message || err}`);
+    }
   }
 }
 

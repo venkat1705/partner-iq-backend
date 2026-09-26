@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import {
   dbStore,
+  awaitPersist,
   AutomationExecutionEntity,
   AutomationScheduledStepEntity,
   AutomationWorkflowEntity,
@@ -30,7 +31,7 @@ export class AutomationStepRunnerService {
     private readonly notificationsService: NotificationsService,
     private readonly ledgerService: LedgerService,
     private readonly tierService: TierService,
-  ) {}
+  ) { }
 
   /**
    * Run the next step of a workflow execution starting from nodeId.
@@ -236,9 +237,9 @@ export class AutomationStepRunnerService {
       current_conversions: String(metrics.approvedConversions),
       target_conversions: String(nextTier?.conditions?.minimumConversions || 10),
       conversions_remaining: String(Math.max(0, (nextTier?.conditions?.minimumConversions || 10) - metrics.approvedConversions)),
-      tracking_link_url: `https://partneriq.demo/r/${affiliate?.id?.substring(0, 6) || 'demo'}`,
-      asset_library_url: `https://partneriq.demo/app/assets`,
-      affiliate_dashboard_url: `https://partneriq.demo/app/affiliate-portal`,
+      tracking_link_url: `https://partneriq.in/r/${affiliate?.id?.substring(0, 6) || 'ref'}`,
+      asset_library_url: `https://partneriq.in/app/assets`,
+      affiliate_dashboard_url: `https://partneriq.in/app/affiliate-portal`,
       referral_code: affiliate?.id?.substring(0, 6) || 'PARTNER',
     };
 
@@ -314,7 +315,7 @@ export class AutomationStepRunnerService {
       if (isWorkflowClickGated(workflow)) {
         this.logger.warn(
           `Blocked a ${config.bonusAmountCents}-cent automation bonus for affiliate ${execution.affiliateId}: ` +
-            `workflow '${workflow.name}' is gated on click volume, and clicks are a traffic metric rather than an earning event.`,
+          `workflow '${workflow.name}' is gated on click volume, and clicks are a traffic metric rather than an earning event.`,
         );
       } else {
         await this.ledgerService.recordTransaction(
@@ -329,14 +330,17 @@ export class AutomationStepRunnerService {
     }
   }
 
-  cancelPendingStepsForExecution(executionId: string, reason: string) {
+  async cancelPendingStepsForExecution(executionId: string, reason: string) {
+    const pending: Promise<unknown>[] = [];
     dbStore.automationScheduledSteps.forEach((step) => {
       if (step.executionId === executionId && step.status === AutomationStepStatus.PENDING) {
         step.status = AutomationStepStatus.CANCELLED;
         step.lastError = reason;
         step.updatedAt = new Date();
+        pending.push(awaitPersist(step));
       }
     });
+    await Promise.all(pending);
   }
 
   private getAffiliateCurrentMetrics(organizationId: string, programId: string, affiliateId: string) {

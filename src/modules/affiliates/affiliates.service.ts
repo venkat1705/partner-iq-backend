@@ -7,8 +7,8 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
-import { dbStore, AffiliateEntity, ProgramAffiliateEntity, AffiliateApplicationEntity, TrackingLinkEntity } from '../../database/store';
-import { AffiliateStatus, AffiliateInvitationStatus, AFFILIATE_INVITATION_COMPLETED_STATUSES, AFFILIATE_INVITATION_OPEN_STATUSES, ApplicationStatus, AuditAction, OrganizationStatus, ProgramStatus, TrackingLinkStatus, AutomationTriggerType, TierTransitionType, EnvironmentType, PlatformRole, WebhookEvent } from '../../common/enums';
+import { dbStore, AffiliateEntity, ProgramAffiliateEntity, AffiliateApplicationEntity, TrackingLinkEntity, awaitPersist } from '../../database/store';
+import { AffiliateStatus, AffiliateInvitationStatus, AFFILIATE_INVITATION_COMPLETED_STATUSES, AFFILIATE_INVITATION_OPEN_STATUSES, ApplicationStatus, AuditAction, ConversionStatus, OrganizationStatus, ProgramStatus, TrackingLinkStatus, AutomationTriggerType, TierTransitionType, EnvironmentType, PlatformRole, WebhookEvent } from '../../common/enums';
 import { PLATFORM_CURRENCY } from '../../common/constants/currency';
 import { SecurityUtils } from '../../common/utils/security.utils';
 import { EnvironmentUtils } from '../../common/utils/environment.utils';
@@ -48,8 +48,6 @@ import {
   OrganizationMembership,
   PartnerTier,
   AffiliateTier,
-  Coupon,
-  Payout,
 } from '../../database/schema';
 import { IsNull, In } from 'typeorm';
 import { assertUserEligibleForAffiliate } from './affiliate-eligibility.policy';
@@ -58,6 +56,7 @@ import { SystemTemplateKey } from '../email-design/constants/email-template-keys
 import { NotificationsService } from '../notifications/notifications.service';
 import { SubscriptionLimitService } from '../billing/services/subscription-limit.service';
 import { BillingResourceType } from '../billing/enums/billing.enums';
+import { netCommissionAmount, sumNetCommissions } from '../../common/utils/commission.utils';
 
 @Injectable()
 export class AffiliatesService {
@@ -319,6 +318,8 @@ export class AffiliatesService {
 
     dbStore.programAffiliates.push(progAffiliate);
 
+    const pendingPersist: Promise<unknown>[] = [awaitPersist(affiliate), awaitPersist(progAffiliate)];
+
     // Assign initial default partner tier if not already assigned
     const existingTier = dbStore.affiliateTiers.find(
       (at) => at.organizationId === organizationId && at.programId === dto.programId && at.affiliateId === affiliate!.id,
@@ -329,7 +330,7 @@ export class AffiliatesService {
       ) || dbStore.partnerTiers.find((t) => t.organizationId === organizationId && t.isActive && !t.deletedAt);
 
       if (defaultTier) {
-        dbStore.affiliateTiers.push({
+        const affiliateTier = {
           id: uuidv4(),
           organizationId,
           environment,
@@ -340,8 +341,10 @@ export class AffiliatesService {
           isLocked: false,
           createdAt: new Date(),
           updatedAt: new Date(),
-        });
-        dbStore.affiliateTierHistories.push({
+        };
+        dbStore.affiliateTiers.push(affiliateTier);
+        pendingPersist.push(awaitPersist(affiliateTier));
+        const affiliateTierHistory = {
           id: uuidv4(),
           organizationId,
           environment,
@@ -354,7 +357,9 @@ export class AffiliatesService {
           ruleSnapshot: { tierCode: defaultTier.code, name: defaultTier.name },
           effectiveCommissionRate: defaultTier.commissionRateOverride,
           createdAt: new Date(),
-        });
+        };
+        dbStore.affiliateTierHistories.push(affiliateTierHistory);
+        pendingPersist.push(awaitPersist(affiliateTierHistory));
       }
     }
 
@@ -371,6 +376,7 @@ export class AffiliatesService {
       createdAt: new Date(),
     };
     dbStore.trackingLinks.push(trackingLink);
+    pendingPersist.push(awaitPersist(trackingLink));
 
     try {
       const dataSource = await initializeDataSource();
@@ -380,6 +386,8 @@ export class AffiliatesService {
     } catch (err) {
       console.warn('Failed to persist affiliate creation to database:', err);
     }
+
+    await Promise.all(pendingPersist);
 
     // Trigger onboarding automations
     await this.automationEngineService.handleEvent(
@@ -526,6 +534,7 @@ export class AffiliatesService {
     } catch (err) {
       console.warn('Failed to persist affiliate invitation to database:', err);
     }
+    await awaitPersist(invitation);
     this.audit(organizationId, actorId, 'AFFILIATE_INVITATION_SENT', 'affiliate_invitation', invitation.id, {
       programId: program.id,
       email,
@@ -891,6 +900,7 @@ export class AffiliatesService {
       } catch (err) {
         console.warn('Failed to persist affiliate invitation to database in bulk:', err);
       }
+      await awaitPersist(invitation);
 
       this.audit(organizationId, actorId, 'AFFILIATE_INVITATION_SENT', 'affiliate_invitation', invitation.id, {
         programId: program.id,
@@ -1001,6 +1011,7 @@ export class AffiliatesService {
       const dataSource = await initializeDataSource();
       await dataSource.getRepository(AffiliateInvitation).save(invitation);
     } catch { }
+    await awaitPersist(invitation);
     const inviteUrl = this.buildInvitationUrl(token);
     this.audit(organizationId, actorId, 'AFFILIATE_INVITATION_RESENT', 'affiliate_invitation', invitation.id, {
       programId: invitation.programId,
@@ -1025,6 +1036,7 @@ export class AffiliatesService {
       const dataSource = await initializeDataSource();
       await dataSource.getRepository(AffiliateInvitation).save(invitation);
     } catch { }
+    await awaitPersist(invitation);
     this.audit(organizationId, actorId, 'AFFILIATE_INVITATION_REVOKED', 'affiliate_invitation', invitation.id, {
       programId: invitation.programId,
       email: invitation.email,
@@ -1218,12 +1230,14 @@ export class AffiliatesService {
     created.programAffiliate.termsVersionAccepted = invitation.termsVersionAccepted || 1;
     created.programAffiliate.termsAcceptedAt = invitation.termsAcceptedAt || new Date();
     created.programAffiliate.invitedBy = invitation.invitedBy;
+    const pendingPersist: Promise<unknown>[] = [awaitPersist(created.programAffiliate)];
 
     // Link the portal account to the affiliate record so the partner's programs
     // resolve on sign-in.
     if (created.affiliate && !created.affiliate.userId) {
       created.affiliate.userId = authenticatedUserId;
       created.affiliate.updatedAt = new Date();
+      pendingPersist.push(awaitPersist(created.affiliate));
       try {
         const dataSource = await initializeDataSource();
         await dataSource
@@ -1241,6 +1255,7 @@ export class AffiliatesService {
     invitation.termsAcceptedAt = invitation.termsAcceptedAt || now;
     invitation.updatedAt = now;
     await this.persistInvitation(invitation);
+    await Promise.all(pendingPersist);
 
     this.audit(
       invitation.organizationId,
@@ -1459,6 +1474,7 @@ export class AffiliatesService {
         `Failed to persist affiliate invitation ${invitation.id}: ${(error as Error).message}`,
       );
     }
+    await awaitPersist(invitation);
   }
 
   async listInvitationsForEmail(email: string, environment: EnvironmentType = EnvironmentType.LIVE) {
@@ -1539,6 +1555,7 @@ export class AffiliatesService {
       const dataSource = await initializeDataSource();
       await dataSource.getRepository(AffiliateInvitation).save(invitation);
     } catch { }
+    await awaitPersist(invitation);
     this.audit(invitation.organizationId, userId || invitation.invitedBy, 'AFFILIATE_INVITATION_DECLINED', 'affiliate_invitation', invitation.id, {
       programId: invitation.programId,
       email: invitation.email,
@@ -1611,6 +1628,7 @@ export class AffiliatesService {
         const dataSource = await initializeDataSource();
         await dataSource.getRepository(AffiliateInvitation).save(invitation);
       } catch { }
+      await awaitPersist(invitation);
       return { alreadyMember: true, affiliate: existingAffiliate, programAffiliate: existingMembership };
     }
 
@@ -1641,6 +1659,7 @@ export class AffiliatesService {
       await dataSource.getRepository(AffiliateInvitation).save(invitation);
       await dataSource.getRepository(ProgramAffiliate).save(created.programAffiliate);
     } catch { }
+    await Promise.all([awaitPersist(invitation), awaitPersist(created.programAffiliate)]);
 
     this.audit(invitation.organizationId, userId || invitation.invitedBy, 'AFFILIATE_INVITATION_ACCEPTED', 'affiliate_invitation', invitation.id, {
       programId: invitation.programId,
@@ -1882,6 +1901,7 @@ export class AffiliatesService {
         console.warn('Failed to persist affiliate application to db:', e);
       }
     }
+    await awaitPersist(app);
 
     this.audit(
       dto.organizationId,
@@ -2113,6 +2133,7 @@ export class AffiliatesService {
         await dataSource.getRepository(AffiliateApplication).save(app);
       } catch { }
     }
+    await awaitPersist(app);
 
     // Create affiliate
     const created = await this.create(organizationId, {
@@ -2182,6 +2203,7 @@ export class AffiliatesService {
         await dataSource.getRepository(AffiliateApplication).save(app);
       } catch { }
     }
+    await awaitPersist(app);
 
     dbStore.auditLogs.push({
       id: uuidv4(),
@@ -2641,7 +2663,7 @@ export class AffiliatesService {
 
       // Commissions directly from real DB
       const commissions = dbCommissions.filter((c) => affiliateIds.has(c.affiliateId));
-      const totalCommissions = commissions.reduce((sum, c: any) => sum + (Number(c.commissionAmount ?? c.amount) || 0), 0);
+      const totalCommissions = sumNetCommissions(commissions);
 
       // Clicks & Links directly from real DB
       const links = dbTrackingLinks.filter((tl) => affiliateIds.has(tl.affiliateId));
@@ -2738,8 +2760,11 @@ export class AffiliatesService {
   }
 
   /**
-   * Automatically provisions realistic baseline affiliate records if an organization has none,
-   * guaranteeing complete enterprise intelligence data for testing and demonstration.
+   * Fabricated sample affiliate partners for local/dev testing and demos
+   * ONLY. No longer called automatically from any real read/analytics path
+   * (it used to auto-inject these into a brand-new organization's affiliate
+   * list, which is not real data) — call explicitly if you need fixture
+   * affiliates for a manual test.
    */
   async ensureDefaultAffiliates(organizationId: string): Promise<void> {
     const existing = dbStore.affiliates.filter((a) => a.organizationId === organizationId);
@@ -2791,6 +2816,7 @@ export class AffiliatesService {
       },
     ];
 
+    const pendingPersist: Promise<unknown>[] = [];
     for (const p of seededPartners) {
       const affId = uuidv4();
       const aff: Affiliate = {
@@ -2808,6 +2834,7 @@ export class AffiliatesService {
         updatedAt: new Date(),
       };
       dbStore.affiliates.push(aff as any);
+      pendingPersist.push(awaitPersist(aff));
 
       // Add Program Affiliate membership
       const pa: ProgramAffiliate = {
@@ -2818,15 +2845,15 @@ export class AffiliatesService {
         environment: EnvironmentType.LIVE,
         status: p.status,
         referralCode: p.displayName.toLowerCase().replace(/[^a-z0-9]/g, '-'),
-        createdAt: new Date(Date.now() - 30 * 86400000),
-        updatedAt: new Date(),
+        joinedAt: new Date(Date.now() - 30 * 86400000),
       };
       dbStore.programAffiliates.push(pa as any);
+      pendingPersist.push(awaitPersist(pa));
 
       // Seed tracking links if none
       const linkId = uuidv4();
       const code = `${p.displayName.toLowerCase().split(' ')[0]}-promo`;
-      dbStore.trackingLinks.push({
+      const trackingLink = {
         id: linkId,
         organizationId,
         programId,
@@ -2841,8 +2868,11 @@ export class AffiliatesService {
         revenue: p.trustScore > 90 ? 125000 : 25000,
         createdAt: new Date(Date.now() - 20 * 86400000),
         updatedAt: new Date(),
-      } as any);
+      } as any;
+      dbStore.trackingLinks.push(trackingLink);
+      pendingPersist.push(awaitPersist(trackingLink));
     }
+    await Promise.all(pendingPersist);
   }
 
   /**
@@ -2853,8 +2883,6 @@ export class AffiliatesService {
     environment: EnvironmentType = EnvironmentType.LIVE,
     query: AffiliateAnalyticsQueryDto = {},
   ) {
-    await this.ensureDefaultAffiliates(organizationId);
-
     const periodDays = query.period === '7d' ? 7 : query.period === '14d' ? 14 : query.period === '90d' ? 90 : query.period === 'all' ? 365 : 30;
     const sinceDate = new Date(Date.now() - periodDays * 86400000);
 
@@ -2888,8 +2916,9 @@ export class AffiliatesService {
     conversions.forEach((c) => {
       if (c.affiliateId && new Date(c.createdAt) >= sinceDate) activePartnerIds.add(c.affiliateId);
     });
+    const linkMetrics = this.aggregateLinkMetrics(organizationId, trackingLinks);
     trackingLinks.forEach((l) => {
-      if (l.affiliateId && Number(l.clicks || 0) > 0) activePartnerIds.add(l.affiliateId);
+      if (l.affiliateId && (linkMetrics.get(l.id)?.clicks || 0) > 0) activePartnerIds.add(l.affiliateId);
     });
     const activePartners = activePartnerIds.size;
 
@@ -2909,11 +2938,11 @@ export class AffiliatesService {
     // Financial totals
     const totalConversions = conversions.length;
     const grossRevenue = conversions.reduce((sum, c) => sum + Number(c.amount || 0), 0);
-    const totalCommission = commissions.reduce((sum, c) => sum + Number(c.amount || 0), 0);
+    const totalCommission = sumNetCommissions(commissions);
 
     const pendingPayoutLiability = commissions
       .filter((c) => c.status === 'PENDING' || c.status === 'APPROVED')
-      .reduce((sum, c) => sum + Number(c.amount || 0), 0);
+      .reduce((sum, c) => sum + netCommissionAmount(c), 0);
 
     const averageRevenuePerAffiliate = activeAffiliates > 0 ? Math.round(grossRevenue / activeAffiliates) : 0;
 
@@ -2976,7 +3005,7 @@ export class AffiliatesService {
       const dayComms = commissions.filter((c) => c.createdAt && new Date(c.createdAt).toISOString().slice(0, 10) === dateStr);
 
       const dayRev = dayConvs.reduce((sum, c) => sum + Number(c.amount || 0), 0);
-      const dayComm = dayComms.reduce((sum, c) => sum + Number(c.amount || 0), 0);
+      const dayComm = sumNetCommissions(dayComms);
 
       trajectory.push({
         date: dateStr,
@@ -3045,7 +3074,7 @@ export class AffiliatesService {
         affiliateCount: pAffs.length,
         conversions: pConvs.length,
         revenue: pConvs.reduce((sum, c) => sum + Number(c.amount || 0), 0),
-        commission: pComms.reduce((sum, c) => sum + Number(c.amount || 0), 0),
+        commission: sumNetCommissions(pComms),
       };
     });
 
@@ -3089,8 +3118,6 @@ export class AffiliatesService {
     environment: EnvironmentType = EnvironmentType.LIVE,
     query: ListAffiliatesQueryDto = {},
   ) {
-    await this.ensureDefaultAffiliates(organizationId);
-
     const page = Math.max(1, Number(query.page || 1));
     const limit = Math.min(100, Math.max(1, Number(query.limit || 10)));
 
@@ -3166,7 +3193,7 @@ export class AffiliatesService {
           name: prog?.name || 'General Program',
           referralCode: pa.referralCode,
           status: pa.status,
-          joinedAt: pa.createdAt,
+          joinedAt: pa.joinedAt,
         };
       });
 
@@ -3174,13 +3201,13 @@ export class AffiliatesService {
       const aConvs = conversions.filter((c) => c.affiliateId === a.id);
       const aComms = commissions.filter((c) => c.affiliateId === a.id);
 
-      const clicks = aLinks.reduce((sum, l) => sum + Number(l.clicks || 0), 0);
+      const clicks = this.sumLinkClicks(organizationId, aLinks);
       const convCount = aConvs.length;
       const revenue = aConvs.reduce((sum, c) => sum + Number(c.amount || 0), 0);
-      const commission = aComms.reduce((sum, c) => sum + Number(c.amount || 0), 0);
+      const commission = sumNetCommissions(aComms);
       const pendingPayout = aComms
         .filter((c) => c.status === 'PENDING' || c.status === 'APPROVED')
-        .reduce((sum, c) => sum + Number(c.amount || 0), 0);
+        .reduce((sum, c) => sum + netCommissionAmount(c), 0);
 
       const tier = tierAssignments[a.id] || {
         id: 'tier-bronze',
@@ -3281,7 +3308,7 @@ export class AffiliatesService {
       tierData = await this.tierService.getAffiliateTier(organizationId, primaryProgramId, affiliate.id);
     } catch { }
 
-    const clicks = aLinks.reduce((sum, l) => sum + Number(l.clicks || 0), 0);
+    const clicks = this.sumLinkClicks(organizationId, aLinks);
     const convCount = aConvs.length;
     const validConversions = aConvs.filter((c) => c.status === 'APPROVED' || (c as any).status === 'approved').length;
     const pendingConversions = aConvs.filter((c) => c.status === 'PENDING' || (c as any).status === 'pending').length;
@@ -3290,10 +3317,10 @@ export class AffiliatesService {
     const grossRevenue = aConvs.reduce((sum, c) => sum + Number(c.amount || 0), 0);
     const averageOrderValue = convCount > 0 ? Math.round(grossRevenue / convCount) : 0;
 
-    const totalCommission = aComms.reduce((sum, c) => sum + Number(c.amount || 0), 0);
-    const approvedCommission = aComms.filter((c) => c.status === 'APPROVED').reduce((sum, c) => sum + Number(c.amount || 0), 0);
-    const payableCommission = aComms.filter((c) => c.status === 'PENDING' || c.status === 'APPROVED').reduce((sum, c) => sum + Number(c.amount || 0), 0);
-    const paidCommission = aComms.filter((c) => c.status === 'PAID').reduce((sum, c) => sum + Number(c.amount || 0), 0);
+    const totalCommission = sumNetCommissions(aComms);
+    const approvedCommission = sumNetCommissions(aComms.filter((c) => c.status === 'APPROVED'));
+    const payableCommission = sumNetCommissions(aComms.filter((c) => c.status === 'PENDING' || c.status === 'APPROVED'));
+    const paidCommission = sumNetCommissions(aComms.filter((c) => c.payoutStatus === 'PAID'));
 
     // Enrolled Programs
     const enrolledPrograms = progAffs.map((pa) => {
@@ -3305,21 +3332,22 @@ export class AffiliatesService {
         commissionOverride: pa.commissionOverride,
         commissionOverrideType: pa.commissionOverrideType,
         status: pa.status,
-        joinedAt: pa.createdAt,
+        joinedAt: pa.joinedAt,
       };
     });
 
     // Tracking Links Detailed
     const appBaseUrl = getAppConfig().affiliateFrontendUrl.replace(/\/$/, '');
+    const aLinkMetrics = this.aggregateLinkMetrics(organizationId, aLinks);
     const trackingLinksDetailed = aLinks.map((l) => ({
       id: l.id,
       shortCode: l.shortCode,
       shortUrl: `${appBaseUrl}/r/${l.shortCode}`,
       destinationUrl: l.destinationUrl,
-      clicks: Number(l.clicks || 0),
-      conversions: Number(l.conversions || 0),
-      revenue: Number(l.revenue || 0),
-      commission: Number(l.commission || 0),
+      clicks: aLinkMetrics.get(l.id)?.clicks || 0,
+      conversions: aLinkMetrics.get(l.id)?.conversions || 0,
+      revenue: aLinkMetrics.get(l.id)?.revenue || 0,
+      commission: aLinkMetrics.get(l.id)?.commission || 0,
       status: l.status,
       healthStatus: (l as any).healthStatus || 'HEALTHY',
       createdAt: l.createdAt,
@@ -3362,7 +3390,7 @@ export class AffiliatesService {
         id: `act-conv-${c.id}`,
         type: 'CONVERSION',
         title: 'Attributed Order Completed',
-        description: `Order ID ${c.orderId || c.id} driven via partner link (${PLATFORM_CURRENCY} ${(Number(c.amount || 0) / 100).toFixed(2)})`,
+        description: `Order ID ${c.externalId || c.id} driven via partner link (${PLATFORM_CURRENCY} ${(Number(c.amount || 0) / 100).toFixed(2)})`,
         timestamp: new Date(c.createdAt).toISOString(),
       });
     });
@@ -3374,7 +3402,7 @@ export class AffiliatesService {
         type: 'PROGRAM_JOINED',
         title: 'Program Membership Activated',
         description: `Enrolled in ${programsById.get(pa.programId)?.name || 'partner program'} with referral code ${pa.referralCode}`,
-        timestamp: new Date(pa.createdAt).toISOString(),
+        timestamp: new Date(pa.joinedAt).toISOString(),
       });
     });
 
@@ -3439,6 +3467,7 @@ export class AffiliatesService {
   ) {
     const idSet = new Set(dto.affiliateIds);
     let updatedCount = 0;
+    const pendingPersist: Promise<unknown>[] = [];
 
     for (const aff of dbStore.affiliates) {
       if (aff.organizationId === organizationId && idSet.has(aff.id)) {
@@ -3456,7 +3485,7 @@ export class AffiliatesService {
             (pa) => pa.organizationId === organizationId && pa.affiliateId === aff.id && pa.programId === dto.programId,
           );
           if (!hasProg) {
-            dbStore.programAffiliates.push({
+            const newProgAffiliate = {
               id: uuidv4(),
               organizationId,
               programId: dto.programId,
@@ -3466,11 +3495,14 @@ export class AffiliatesService {
               referralCode: aff.displayName.toLowerCase().replace(/[^a-z0-9]/g, '-'),
               createdAt: new Date(),
               updatedAt: new Date(),
-            } as any);
+            } as any;
+            dbStore.programAffiliates.push(newProgAffiliate);
+            pendingPersist.push(awaitPersist(newProgAffiliate));
             updatedCount++;
           }
         }
         aff.updatedAt = new Date();
+        pendingPersist.push(awaitPersist(aff));
       }
     }
 
@@ -3485,6 +3517,8 @@ export class AffiliatesService {
       metadata: { action: dto.action, count: updatedCount, reason: dto.reason },
       createdAt: new Date(),
     });
+
+    await Promise.all(pendingPersist);
 
     return { success: true, updatedCount, action: dto.action };
   }
@@ -3591,4 +3625,59 @@ export class AffiliatesService {
 
     return lines.join('\n');
   }
+
+  /**
+   * Click, conversion, revenue and commission totals per tracking link.
+   *
+   * None of these are columns on the link row — they are derived from the click,
+   * conversion and commission tables, exactly as the tracking module's paginated
+   * listing derives them. Reading `link.clicks` directly (as this service used
+   * to) yields `undefined`, and `Number(undefined || 0)` quietly scores every
+   * link as zero rather than failing, so the dashboards showed no traffic at all.
+   *
+   * Revenue counts APPROVED conversions only, matching the tracking module, so
+   * the two surfaces cannot disagree about the same link.
+   */
+  private aggregateLinkMetrics(organizationId: string, links: TrackingLinkEntity[]) {
+    const metrics = new Map<string, { clicks: number; conversions: number; revenue: number; commission: number }>();
+    for (const link of links) {
+      metrics.set(link.id, { clicks: 0, conversions: 0, revenue: 0, commission: 0 });
+    }
+
+    const linkIdByClickId = new Map<string, string>();
+    for (const click of dbStore.clicks) {
+      if (click.organizationId !== organizationId || !click.trackingLinkId) continue;
+      const entry = metrics.get(click.trackingLinkId);
+      if (!entry) continue;
+      entry.clicks += 1;
+      linkIdByClickId.set(click.id, click.trackingLinkId);
+    }
+
+    const linkIdByConversionId = new Map<string, string>();
+    for (const conversion of dbStore.conversions) {
+      if (conversion.organizationId !== organizationId || !conversion.clickId) continue;
+      if (conversion.status !== ConversionStatus.APPROVED) continue;
+      const linkId = linkIdByClickId.get(conversion.clickId);
+      if (!linkId) continue;
+      const entry = metrics.get(linkId)!;
+      entry.conversions += 1;
+      entry.revenue += conversion.amount || 0;
+      linkIdByConversionId.set(conversion.id, linkId);
+    }
+
+    for (const commission of dbStore.commissions) {
+      if (commission.organizationId !== organizationId || !commission.conversionId) continue;
+      const linkId = linkIdByConversionId.get(commission.conversionId);
+      if (!linkId) continue;
+      metrics.get(linkId)!.commission += netCommissionAmount(commission);
+    }
+
+    return metrics;
+  }
+
+  private sumLinkClicks(organizationId: string, links: TrackingLinkEntity[]) {
+    const metrics = this.aggregateLinkMetrics(organizationId, links);
+    return links.reduce((sum, l) => sum + (metrics.get(l.id)?.clicks || 0), 0);
+  }
+
 }

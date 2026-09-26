@@ -1,4 +1,4 @@
-import {
+﻿import {
   BadRequestException,
   ForbiddenException,
   Injectable,
@@ -12,6 +12,7 @@ import {
   AssetBundleVisibility,
   AssetSourceType,
   AssetStatus,
+  AssetType,
   AuditAction,
   TrackingLinkStatus,
 } from '../../common/enums';
@@ -21,6 +22,7 @@ import {
   AssetBundleItemEntity,
   AssetEntity,
   AssetVersionEntity,
+  awaitPersist,
 } from '../../database/store';
 import {
   AddAssetVersionDto,
@@ -131,13 +133,14 @@ export class AssetManagementService {
     };
 
     dbStore.assets.push(asset);
-    dbStore.assetVersions.push(this.createVersionRecord(asset, actorId, 'Initial asset'));
+    const version = this.createVersionRecord(asset, actorId, 'Initial asset');
+    dbStore.assetVersions.push(version);
+    await Promise.all([awaitPersist(asset), awaitPersist(version)]);
     this.audit(organizationId, actorId, AuditAction.ASSET_CREATED, 'asset', asset.id, { name: asset.name, assetType: asset.assetType });
     return this.hydrateAsset(asset);
   }
 
   async listAssets(organizationId: string, query: ListAssetsQueryDto) {
-    this.ensureDefaultAssets(organizationId);
     const page = Math.max(Number(query.page || 1), 1);
     const limit = Math.min(Math.max(Number(query.limit || 24), 1), 100);
     const search = query.search?.trim().toLowerCase();
@@ -197,6 +200,7 @@ export class AssetManagementService {
       updatedAt: new Date(),
     });
 
+    await awaitPersist(asset);
     this.audit(organizationId, actorId, AuditAction.ASSET_UPDATED, 'asset', asset.id, { previous, updates: dto });
     return this.hydrateAsset(asset);
   }
@@ -207,6 +211,7 @@ export class AssetManagementService {
     asset.deletedAt = new Date();
     asset.updatedBy = actorId;
     asset.updatedAt = new Date();
+    await awaitPersist(asset);
     this.audit(organizationId, actorId, AuditAction.ASSET_ARCHIVED, 'asset', asset.id);
     return { success: true, message: 'Asset archived' };
   }
@@ -216,7 +221,8 @@ export class AssetManagementService {
     if (dto.fileName || dto.mimeType || dto.fileSize) {
       this.validateFile(dto.fileName || asset.fileName || asset.name, dto.mimeType || asset.mimeType || 'application/octet-stream', dto.fileSize || asset.fileSize || 0);
     }
-    dbStore.assetVersions.filter((version) => version.assetId === asset.id).forEach((version) => (version.isCurrent = false));
+    const previousVersions = dbStore.assetVersions.filter((version) => version.assetId === asset.id);
+    previousVersions.forEach((version) => (version.isCurrent = false));
     asset.version += 1;
     asset.fileName = dto.fileName ? this.sanitizeFileName(dto.fileName) : asset.fileName;
     asset.mimeType = dto.mimeType || asset.mimeType;
@@ -230,6 +236,11 @@ export class AssetManagementService {
 
     const version = this.createVersionRecord(asset, actorId, dto.changeNotes);
     dbStore.assetVersions.push(version);
+    await Promise.all([
+      awaitPersist(asset),
+      awaitPersist(version),
+      ...previousVersions.map((v) => awaitPersist(v)),
+    ]);
     this.audit(organizationId, actorId, AuditAction.ASSET_VERSION_ADDED, 'asset', asset.id, { versionNumber: version.versionNumber });
     return version;
   }
@@ -288,12 +299,12 @@ export class AssetManagementService {
       updatedAt: new Date(),
     };
     dbStore.assetBundles.push(bundle);
+    await awaitPersist(bundle);
     this.audit(organizationId, actorId, AuditAction.BUNDLE_CREATED, 'asset_bundle', bundle.id, { name: bundle.name });
     return this.hydrateBundle(bundle);
   }
 
   async listBundles(organizationId: string) {
-    this.ensureDefaultAssets(organizationId);
     return dbStore.assetBundles
       .filter((bundle) => bundle.organizationId === organizationId && !bundle.deletedAt)
       .sort((a, b) => Number(b.featured) - Number(a.featured) || a.displayOrder - b.displayOrder)
@@ -316,6 +327,7 @@ export class AssetManagementService {
       updatedBy: actorId,
       updatedAt: new Date(),
     });
+    await awaitPersist(bundle);
     this.audit(organizationId, actorId, AuditAction.BUNDLE_UPDATED, 'asset_bundle', bundle.id, { updates: dto });
     return this.hydrateBundle(bundle);
   }
@@ -338,6 +350,7 @@ export class AssetManagementService {
       createdBy: actorId,
     };
     dbStore.assetBundleItems.push(item);
+    await awaitPersist(item);
     return this.hydrateBundle(bundle);
   }
 
@@ -351,10 +364,15 @@ export class AssetManagementService {
 
   async reorderBundleAssets(organizationId: string, bundleId: string, dto: ReorderBundleAssetsDto) {
     this.findBundle(organizationId, bundleId);
+    const pending: Promise<unknown>[] = [];
     dto.assetIds.forEach((assetId, index) => {
       const item = dbStore.assetBundleItems.find((row) => row.assetBundleId === bundleId && row.assetId === assetId);
-      if (item) item.displayOrder = index + 1;
+      if (item) {
+        item.displayOrder = index + 1;
+        pending.push(awaitPersist(item));
+      }
     });
+    await Promise.all(pending);
     return this.getBundle(organizationId, bundleId);
   }
 
@@ -364,6 +382,7 @@ export class AssetManagementService {
     bundle.status = bundle.startDate && bundle.startDate > new Date() ? AssetBundleStatus.SCHEDULED : AssetBundleStatus.PUBLISHED;
     bundle.updatedBy = actorId;
     bundle.updatedAt = new Date();
+    await awaitPersist(bundle);
     this.audit(organizationId, actorId, AuditAction.BUNDLE_PUBLISHED, 'asset_bundle', bundle.id, { status: bundle.status });
     return this.hydrateBundle(bundle);
   }
@@ -374,12 +393,12 @@ export class AssetManagementService {
     bundle.deletedAt = new Date();
     bundle.updatedBy = actorId;
     bundle.updatedAt = new Date();
+    await awaitPersist(bundle);
     this.audit(organizationId, actorId, AuditAction.BUNDLE_ARCHIVED, 'asset_bundle', bundle.id);
     return { success: true };
   }
 
   async listAffiliateBundles(organizationId: string, affiliateId: string) {
-    this.ensureDefaultAssets(organizationId);
     const eligibleProgramIds = this.getAffiliateProgramIds(organizationId, affiliateId);
     return dbStore.assetBundles
       .filter((bundle) => bundle.organizationId === organizationId && this.isBundleVisibleToAffiliate(bundle, affiliateId, eligibleProgramIds))
@@ -395,7 +414,6 @@ export class AssetManagementService {
   }
 
   async listAffiliateAssets(organizationId: string, affiliateId: string) {
-    this.ensureDefaultAssets(organizationId);
     const programIds = this.getAffiliateProgramIds(organizationId, affiliateId);
     return dbStore.assets
       .filter((asset) =>
@@ -413,7 +431,7 @@ export class AssetManagementService {
     if (dto.idempotencyKey && dbStore.affiliateAssetActivities.some((row) => row.organizationId === organizationId && row.idempotencyKey === dto.idempotencyKey)) {
       return { success: true, deduped: true };
     }
-    dbStore.affiliateAssetActivities.push({
+    const activity = {
       id: uuidv4(),
       organizationId,
       affiliateId,
@@ -423,7 +441,9 @@ export class AssetManagementService {
       idempotencyKey: dto.idempotencyKey,
       metadata: dto.metadata,
       createdAt: new Date(),
-    });
+    };
+    dbStore.affiliateAssetActivities.push(activity);
+    await awaitPersist(activity);
     return { success: true };
   }
 
@@ -435,7 +455,6 @@ export class AssetManagementService {
   }
 
   async analytics(organizationId: string) {
-    this.ensureDefaultAssets(organizationId);
     const assets = dbStore.assets.filter((asset) => asset.organizationId === organizationId && !asset.deletedAt);
     const bundles = dbStore.assetBundles.filter((bundle) => bundle.organizationId === organizationId && !bundle.deletedAt);
     const activities = dbStore.affiliateAssetActivities.filter((activity) => activity.organizationId === organizationId);
@@ -455,7 +474,6 @@ export class AssetManagementService {
   }
 
   async getStorageAnalytics(organizationId: string) {
-    this.ensureDefaultAssets(organizationId);
     const assets = dbStore.assets.filter((a) => a.organizationId === organizationId && !a.deletedAt);
     const totalStorageBytes = assets.reduce((sum, a) => sum + (Number(a.fileSize) || 0), 0);
     const storageLimitBytes = 50 * 1024 * 1024 * 1024; // 50 GB default quota
@@ -519,7 +537,6 @@ export class AssetManagementService {
   }
 
   async getUsageIntelligence(organizationId: string) {
-    this.ensureDefaultAssets(organizationId);
     const assets = dbStore.assets.filter((a) => a.organizationId === organizationId && !a.deletedAt);
     const bundleItems = dbStore.assetBundleItems;
     const programs = dbStore.programs.filter((p) => p.organizationId === organizationId && !p.deletedAt);
@@ -577,7 +594,6 @@ export class AssetManagementService {
   }
 
   async listFolders(organizationId: string) {
-    this.ensureDefaultAssets(organizationId);
     const assets = dbStore.assets.filter((a) => a.organizationId === organizationId && !a.deletedAt);
     const folderMap = new Map<string, { count: number; totalBytes: number; lastModified: Date }>();
 
@@ -673,6 +689,7 @@ export class AssetManagementService {
 
   async bulkAction(organizationId: string, actorId: string, dto: BulkAssetActionDto) {
     const affected: string[] = [];
+    const pending: Promise<unknown>[] = [];
     for (const assetId of dto.assetIds) {
       const asset = dbStore.assets.find((a) => a.id === assetId && a.organizationId === organizationId && !a.deletedAt);
       if (!asset) continue;
@@ -682,12 +699,14 @@ export class AssetManagementService {
         asset.deletedAt = new Date();
         asset.updatedBy = actorId;
         asset.updatedAt = new Date();
+        pending.push(awaitPersist(asset));
         this.audit(organizationId, actorId, AuditAction.ASSET_ARCHIVED, 'asset', asset.id);
       } else if (dto.action === 'MOVE') {
         if (dto.folderPath) {
           asset.metadata = { ...(asset.metadata || {}), folderPath: dto.folderPath.trim() || 'General' };
           asset.updatedBy = actorId;
           asset.updatedAt = new Date();
+          pending.push(awaitPersist(asset));
           this.audit(organizationId, actorId, AuditAction.ASSET_UPDATED, 'asset', asset.id, { movedTo: dto.folderPath });
         }
       } else if (dto.action === 'TAG') {
@@ -696,11 +715,13 @@ export class AssetManagementService {
           asset.tags = merged;
           asset.updatedBy = actorId;
           asset.updatedAt = new Date();
+          pending.push(awaitPersist(asset));
           this.audit(organizationId, actorId, AuditAction.ASSET_UPDATED, 'asset', asset.id, { addedTags: dto.tags });
         }
       }
       affected.push(asset.id);
     }
+    await Promise.all(pending);
     return { success: true, count: affected.length, affected };
   }
 
@@ -895,292 +916,6 @@ export class AssetManagementService {
     return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 120);
   }
 
-  ensureDefaultAssets(organizationId: string) {
-    const existing = dbStore.assets.filter((a) => a.organizationId === organizationId && !a.deletedAt);
-    if (existing.length > 0) return;
-
-    const program = dbStore.programs.find((p) => p.organizationId === organizationId && !p.deletedAt);
-    const programId = program?.id;
-    const actorId = dbStore.users.find((u) => u.organizationId === organizationId)?.id || 'system';
-    const affiliate = dbStore.affiliates.find((a) => a.organizationId === organizationId);
-    const affiliateId = affiliate?.id || uuidv4();
-
-    const asset1Id = uuidv4();
-    const asset2Id = uuidv4();
-    const asset3Id = uuidv4();
-    const asset4Id = uuidv4();
-    const asset5Id = uuidv4();
-    const asset6Id = uuidv4();
-    const asset7Id = uuidv4();
-
-    const now = Date.now();
-    const dayMs = 86400000;
-
-    const defaultAssets: AssetEntity[] = [
-      {
-        id: asset1Id,
-        organizationId,
-        programId,
-        name: 'Dark Mode Product Showcase Banner (1200x630)',
-        title: 'Dark Mode Product Showcase Banner (1200x630)',
-        description: 'High-converting dark mode banner optimized for Twitter, LinkedIn, and social media cards.',
-        assetType: 'BANNER' as any,
-        sourceType: 'FILE' as any,
-        fileName: 'product-showcase-1200x630.png',
-        originalFileName: 'product-showcase-1200x630.png',
-        fileExtension: 'png',
-        mimeType: 'image/png',
-        fileSize: 1845000,
-        storageUrl: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=1600&auto=format&fit=crop&q=80',
-        thumbnailUrl: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=400&auto=format&fit=crop&q=80',
-        previewUrl: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=1600&auto=format&fit=crop&q=80',
-        status: AssetStatus.PUBLISHED,
-        isPublicToAffiliates: true,
-        isDownloadable: true,
-        isCopyable: true,
-        version: 2,
-        tags: ['Twitter Card', 'Dark Mode', 'Social Banner'],
-        metadata: { folderPath: 'Ad Creatives' },
-        checksum: this.checksumForText('banner-1200x630'),
-        createdBy: actorId,
-        updatedBy: actorId,
-        createdAt: new Date(now - 40 * dayMs),
-        updatedAt: new Date(now - 12 * dayMs),
-      },
-      {
-        id: asset2Id,
-        organizationId,
-        programId,
-        name: 'Official Corporate Vector Logo & Icon Kit',
-        title: 'Official Corporate Vector Logo & Icon Kit',
-        description: 'Official corporate logo variations including light, dark, and monochrome SVG and PNG formats.',
-        assetType: 'LOGO' as any,
-        sourceType: 'FILE' as any,
-        fileName: 'official-brand-logos.zip',
-        originalFileName: 'official-brand-logos.zip',
-        fileExtension: 'zip',
-        mimeType: 'application/zip',
-        fileSize: 2450000,
-        storageUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1600&auto=format&fit=crop&q=80',
-        thumbnailUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400&auto=format&fit=crop&q=80',
-        previewUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1600&auto=format&fit=crop&q=80',
-        status: AssetStatus.PUBLISHED,
-        isPublicToAffiliates: true,
-        isDownloadable: true,
-        isCopyable: true,
-        version: 1,
-        tags: ['Brand Kit', 'Logos', 'Vectors'],
-        metadata: { folderPath: 'Brand Assets' },
-        checksum: this.checksumForText('brand-kit'),
-        createdBy: actorId,
-        updatedBy: actorId,
-        createdAt: new Date(now - 38 * dayMs),
-        updatedAt: new Date(now - 38 * dayMs),
-      },
-      {
-        id: asset3Id,
-        organizationId,
-        programId,
-        name: 'Leaderboard Web Banner (728x90)',
-        title: 'Leaderboard Web Banner (728x90)',
-        description: 'Standard 728x90 leaderboard ad display creative for tech blogs and developer newsletters.',
-        assetType: 'BANNER' as any,
-        sourceType: 'FILE' as any,
-        fileName: 'leaderboard-728x90.png',
-        originalFileName: 'leaderboard-728x90.png',
-        fileExtension: 'png',
-        mimeType: 'image/png',
-        fileSize: 420000,
-        storageUrl: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=1600&auto=format&fit=crop&q=80',
-        thumbnailUrl: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=400&auto=format&fit=crop&q=80',
-        previewUrl: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=1600&auto=format&fit=crop&q=80',
-        status: AssetStatus.PUBLISHED,
-        isPublicToAffiliates: true,
-        isDownloadable: true,
-        isCopyable: true,
-        version: 1,
-        tags: ['Display Ad', 'Banner'],
-        metadata: { folderPath: 'Ad Creatives' },
-        checksum: this.checksumForText('leaderboard-banner'),
-        createdBy: actorId,
-        updatedBy: actorId,
-        createdAt: new Date(now - 35 * dayMs),
-        updatedAt: new Date(now - 35 * dayMs),
-      },
-      {
-        id: asset4Id,
-        organizationId,
-        programId,
-        name: 'High-Converting Newsletter Email Copy Template',
-        title: 'High-Converting Newsletter Email Copy Template',
-        description: 'Proven email swipe copy explaining platform advantages with coupon placeholders.',
-        assetType: 'EMAIL_TEMPLATE' as any,
-        sourceType: 'TEXT' as any,
-        textContent: `Subject: Accelerate your partner ROI with modern automation ⚡\n\nHey {{subscriber_name}},\n\nClaim an exclusive discount with code {{coupon_code}}:\n{{affiliate_link}}\n\nCheers,\n{{partner_name}}`,
-        fileSize: 48000,
-        status: AssetStatus.PUBLISHED,
-        isPublicToAffiliates: true,
-        isDownloadable: false,
-        isCopyable: true,
-        version: 1,
-        tags: ['Email Template', 'Newsletter', 'Swipe Copy'],
-        metadata: { folderPath: 'Email Copies' },
-        checksum: this.checksumForText('email-copy-template'),
-        createdBy: actorId,
-        updatedBy: actorId,
-        createdAt: new Date(now - 30 * dayMs),
-        updatedAt: new Date(now - 30 * dayMs),
-      },
-      {
-        id: asset5Id,
-        organizationId,
-        programId,
-        name: 'Enterprise Platform Architecture & Security Whitepaper',
-        title: 'Enterprise Platform Architecture & Security Whitepaper',
-        description: 'Detailed enterprise PDF whitepaper on security architecture, SOC-2 readiness, and multi-tenant isolation.',
-        assetType: 'PDF' as any,
-        sourceType: 'FILE' as any,
-        fileName: 'partneriq-enterprise-security.pdf',
-        originalFileName: 'partneriq-enterprise-security.pdf',
-        fileExtension: 'pdf',
-        mimeType: 'application/pdf',
-        fileSize: 8540000,
-        storageUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
-        previewUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
-        status: AssetStatus.PUBLISHED,
-        isPublicToAffiliates: true,
-        isDownloadable: true,
-        isCopyable: true,
-        version: 1,
-        tags: ['Whitepaper', 'PDF', 'Security'],
-        metadata: { folderPath: 'Product Kits' },
-        checksum: this.checksumForText('security-whitepaper'),
-        createdBy: actorId,
-        updatedBy: actorId,
-        createdAt: new Date(now - 28 * dayMs),
-        updatedAt: new Date(now - 28 * dayMs),
-      },
-      {
-        id: asset6Id,
-        organizationId,
-        programId,
-        name: 'PartnerIQ Platform 60s Video Teaser',
-        title: 'PartnerIQ Platform 60s Video Teaser',
-        description: 'High definition 1080p MP4 walkthrough showing dashboard capabilities and partner rewards.',
-        assetType: 'VIDEO' as any,
-        sourceType: 'FILE' as any,
-        fileName: 'platform-teaser-1080p.mp4',
-        originalFileName: 'platform-teaser-1080p.mp4',
-        fileExtension: 'mp4',
-        mimeType: 'video/mp4',
-        fileSize: 45200000,
-        storageUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-        previewUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-        status: AssetStatus.PUBLISHED,
-        isPublicToAffiliates: true,
-        isDownloadable: true,
-        isCopyable: false,
-        version: 1,
-        tags: ['Video', 'Demo', 'Teaser'],
-        metadata: { folderPath: 'Ad Creatives' },
-        checksum: this.checksumForText('video-teaser'),
-        createdBy: actorId,
-        updatedBy: actorId,
-        createdAt: new Date(now - 20 * dayMs),
-        updatedAt: new Date(now - 20 * dayMs),
-      },
-      {
-        id: asset7Id,
-        organizationId,
-        programId,
-        name: 'Affiliate Social Promo Copy & Swipe Kit',
-        title: 'Affiliate Social Promo Copy & Swipe Kit',
-        description: 'Draft collection of short-form LinkedIn posts and Twitter threads ready for review.',
-        assetType: AssetType.SOCIAL_COPY,
-        sourceType: AssetSourceType.TEXT,
-        textContent: '🚀 Scaling partner revenue should not take 20 spreadsheets. Here is how we automated tracking, coupons, and payouts.',
-        fileSize: 12000,
-        status: AssetStatus.DRAFT,
-        isPublicToAffiliates: false,
-        isDownloadable: false,
-        isCopyable: true,
-        version: 1,
-        tags: ['Swipe Copy', 'Social'],
-        metadata: { folderPath: 'Email Copies' },
-        checksum: this.checksumForText('swipe-kit'),
-        createdBy: actorId,
-        updatedBy: actorId,
-        createdAt: new Date(now - 5 * dayMs),
-        updatedAt: new Date(now - 5 * dayMs),
-      },
-    ];
-
-    dbStore.assets.push(...defaultAssets);
-
-    defaultAssets.forEach((asset) => {
-      dbStore.assetVersions.push(this.createVersionRecord(asset, actorId, 'Initial upload'));
-    });
-
-    const bundleId = uuidv4();
-    const bundle: AssetBundleEntity = {
-      id: bundleId,
-      organizationId,
-      programId,
-      name: 'Q3 High-Converting Partner Launch Kit',
-      title: 'Q3 High-Converting Partner Launch Kit',
-      description: 'Curated collection of our top-performing banners, official logos, and security whitepaper.',
-      bundleType: 'MEDIA_KIT' as any,
-      visibility: AssetBundleVisibility.ALL_AFFILIATES,
-      status: AssetBundleStatus.PUBLISHED,
-      downloadCount: 42,
-      viewCount: 180,
-      createdAt: new Date(now - 25 * dayMs),
-      updatedAt: new Date(now - 10 * dayMs),
-    };
-    dbStore.assetBundles.push(bundle);
-
-    const bundledAssetIds = [asset1Id, asset2Id, asset3Id, asset5Id];
-    bundledAssetIds.forEach((assetId, index) => {
-      dbStore.assetBundleItems.push({
-        id: uuidv4(),
-        assetBundleId: bundleId,
-        assetId,
-        displayOrder: index + 1,
-        isRequired: false,
-        createdAt: new Date(now - 25 * dayMs),
-      });
-    });
-
-    const activitiesToSeed = [
-      { assetId: asset1Id, type: AffiliateAssetActivityType.VIEW, count: 68 },
-      { assetId: asset1Id, type: AffiliateAssetActivityType.DOWNLOAD, count: 24 },
-      { assetId: asset2Id, type: AffiliateAssetActivityType.VIEW, count: 52 },
-      { assetId: asset2Id, type: AffiliateAssetActivityType.DOWNLOAD, count: 35 },
-      { assetId: asset3Id, type: AffiliateAssetActivityType.VIEW, count: 38 },
-      { assetId: asset3Id, type: AffiliateAssetActivityType.DOWNLOAD, count: 18 },
-      { assetId: asset4Id, type: AffiliateAssetActivityType.COPY, count: 46 },
-      { assetId: asset4Id, type: AffiliateAssetActivityType.VIEW, count: 82 },
-      { assetId: asset5Id, type: AffiliateAssetActivityType.DOWNLOAD, count: 29 },
-      { assetId: asset5Id, type: AffiliateAssetActivityType.VIEW, count: 74 },
-      { assetId: asset6Id, type: AffiliateAssetActivityType.VIEW, count: 110 },
-      { assetId: asset6Id, type: AffiliateAssetActivityType.DOWNLOAD, count: 14 },
-    ];
-
-    activitiesToSeed.forEach(({ assetId, type, count }) => {
-      for (let i = 0; i < count; i++) {
-        const daysAgo = Math.floor(Math.random() * 28);
-        dbStore.affiliateAssetActivities.push({
-          id: uuidv4(),
-          organizationId,
-          affiliateId,
-          assetId,
-          bundleId: bundledAssetIds.includes(assetId) ? bundleId : undefined,
-          activityType: type,
-          createdAt: new Date(now - daysAgo * dayMs),
-        });
-      }
-    });
-  }
 
   private audit(organizationId: string, actorId: string, action: AuditAction, resourceType: string, resourceId: string, metadata?: Record<string, unknown>) {
     dbStore.auditLogs.push({

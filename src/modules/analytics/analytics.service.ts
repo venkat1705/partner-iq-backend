@@ -9,6 +9,7 @@ import {
 } from '../../common/enums';
 import { SubscriptionStatus } from '../billing/enums/billing.enums';
 import { PLATFORM_CURRENCY } from '../../common/constants/currency';
+import { netCommissionAmount } from '../../common/utils/commission.utils';
 
 /**
  * Single source of truth for organization business metrics.
@@ -152,11 +153,11 @@ export class AnalyticsService {
 
     const pendingCommissions = commissions
       .filter((c) => c.status === ConversionStatus.PENDING)
-      .reduce((sum, c) => sum + Number(c.commissionAmount ?? 0), 0);
-    const approvedCommissions = eligible.reduce((sum, c) => sum + Number(c.commissionAmount ?? 0), 0);
+      .reduce((sum, c) => sum + netCommissionAmount(c), 0);
+    const approvedCommissions = eligible.reduce((sum, c) => sum + netCommissionAmount(c), 0);
     const reversedCommissions = commissions
       .filter((c) => c.status === ConversionStatus.REFUNDED || c.status === ConversionStatus.CHARGEBACK)
-      .reduce((sum, c) => sum + Number(c.commissionAmount ?? 0), 0);
+      .reduce((sum, c) => sum + netCommissionAmount(c), 0);
 
     // Commissions already paid out — cross-referenced against completed payout items
     // for this org, not assumed from commission status alone.
@@ -256,7 +257,7 @@ export class AnalyticsService {
       if (!commission.affiliateId) continue;
       commissionsByAffiliate.set(
         commission.affiliateId,
-        (commissionsByAffiliate.get(commission.affiliateId) || 0) + Number(commission.commissionAmount ?? 0),
+        (commissionsByAffiliate.get(commission.affiliateId) || 0) + netCommissionAmount(commission),
       );
     }
 
@@ -433,8 +434,8 @@ export class AnalyticsService {
           month: label,
           revenue: this.sum(curEligible),
           previousRevenue: this.sum(prevEligible),
-          commission: curComm.reduce((sum, c) => sum + Number(c.commissionAmount ?? 0), 0),
-          previousCommission: prevComm.reduce((sum, c) => sum + Number(c.commissionAmount ?? 0), 0),
+          commission: curComm.reduce((sum, c) => sum + netCommissionAmount(c), 0),
+          previousCommission: prevComm.reduce((sum, c) => sum + netCommissionAmount(c), 0),
           conversions: curConv.length,
           previousConversions: prevConv.length,
         };
@@ -480,8 +481,8 @@ export class AnalyticsService {
           month: label,
           revenue: this.sum(curEligible),
           previousRevenue: this.sum(prevEligible),
-          commission: curComm.reduce((sum, c) => sum + Number(c.commissionAmount ?? 0), 0),
-          previousCommission: prevComm.reduce((sum, c) => sum + Number(c.commissionAmount ?? 0), 0),
+          commission: curComm.reduce((sum, c) => sum + netCommissionAmount(c), 0),
+          previousCommission: prevComm.reduce((sum, c) => sum + netCommissionAmount(c), 0),
           conversions: curConv.length,
           previousConversions: prevConv.length,
         };
@@ -527,8 +528,8 @@ export class AnalyticsService {
           month: label,
           revenue: this.sum(curEligible),
           previousRevenue: this.sum(prevEligible),
-          commission: curComm.reduce((sum, c) => sum + Number(c.commissionAmount ?? 0), 0),
-          previousCommission: prevComm.reduce((sum, c) => sum + Number(c.commissionAmount ?? 0), 0),
+          commission: curComm.reduce((sum, c) => sum + netCommissionAmount(c), 0),
+          previousCommission: prevComm.reduce((sum, c) => sum + netCommissionAmount(c), 0),
           conversions: curConv.length,
           previousConversions: prevConv.length,
         };
@@ -574,8 +575,8 @@ export class AnalyticsService {
         month: label,
         revenue: this.sum(eligible),
         previousRevenue: this.sum(prevEligible),
-        commission: bucketCommissions.reduce((sum, c) => sum + Number(c.commissionAmount ?? 0), 0),
-        previousCommission: prevCommissions.reduce((sum, c) => sum + Number(c.commissionAmount ?? 0), 0),
+        commission: bucketCommissions.reduce((sum, c) => sum + netCommissionAmount(c), 0),
+        previousCommission: prevCommissions.reduce((sum, c) => sum + netCommissionAmount(c), 0),
         conversions: bucketConversions.length,
         previousConversions: prevConversions.length,
       };
@@ -617,7 +618,7 @@ export class AnalyticsService {
     for (const commission of commissions) {
       const prev = programMetrics.get(commission.programId);
       if (prev) {
-        prev.commission += Number(commission.commissionAmount ?? 0);
+        prev.commission += netCommissionAmount(commission);
       }
     }
 
@@ -752,7 +753,7 @@ export class AnalyticsService {
       programName: program.name,
       status: program.status,
       totalRevenue: this.sum(eligible),
-      totalCommissions: eligibleCommissions.reduce((sum, c) => sum + Number(c.commissionAmount ?? 0), 0),
+      totalCommissions: eligibleCommissions.reduce((sum, c) => sum + netCommissionAmount(c), 0),
       totalConversions: conversions.length,
       eligibleConversions: eligible.length,
       totalClicks: clicks.length,
@@ -784,7 +785,7 @@ export class AnalyticsService {
       displayName: affiliate.displayName,
       status: affiliate.status,
       totalRevenueGenerated: this.sum(eligible),
-      totalCommissionsEarned: eligibleCommissions.reduce((sum, c) => sum + Number(c.commissionAmount ?? 0), 0),
+      totalCommissionsEarned: eligibleCommissions.reduce((sum, c) => sum + netCommissionAmount(c), 0),
       totalPaidOut: payoutItems.filter((p) => p.status === PayoutStatus.COMPLETED).reduce((sum, p) => sum + Number(p.amount ?? 0), 0),
       totalConversions: conversions.length,
       eligibleConversions: eligible.length,

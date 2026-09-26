@@ -34,6 +34,12 @@ import { BrandingModule } from './modules/branding/branding.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { CouponsModule } from './modules/coupons/coupons.module';
 import { BlogsModule } from './modules/blogs/blogs.module';
+import { SecurityOperationsModule } from './modules/security/security.module';
+import { AdminApiActivityModule } from './modules/api-activity/admin-api-activity.module';
+import { SystemHealthModule } from './modules/system-health/system-health.module';
+import { AdminJobsModule } from './modules/admin/jobs/jobs.module';
+import { FeatureFlagsModule } from './modules/admin/feature-flags/feature-flags.module';
+import { PlatformGovernanceModule } from './modules/admin/governance/governance.module';
 
 @Module({
   imports: [
@@ -76,6 +82,12 @@ import { BlogsModule } from './modules/blogs/blogs.module';
     BrandingModule,
     AnalyticsModule,
     BlogsModule,
+    SecurityOperationsModule,
+    AdminApiActivityModule,
+    SystemHealthModule,
+    AdminJobsModule,
+    FeatureFlagsModule,
+    PlatformGovernanceModule,
   ],
   providers: [
     {

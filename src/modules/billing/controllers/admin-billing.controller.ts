@@ -24,7 +24,7 @@ export class AdminBillingController {
     private readonly payments: PaymentService,
     private readonly coupons: BillingCouponService,
     private readonly pricing: BillingPricingService,
-  ) {}
+  ) { }
 
   @Get('overview')
   @ApiOperation({ summary: 'Get platform billing analytics' })
@@ -42,6 +42,48 @@ export class AdminBillingController {
   @RequirePermissions('billing.coupons.create')
   createCoupon(@CurrentUser() user: AuthUserPayload, @Body() dto: CreateBillingCouponDto) {
     return this.coupons.create(dto, user.userId);
+  }
+
+  @Get('coupons/overview')
+  @RequirePermissions('billing.coupons.read')
+  couponOverview() {
+    return this.coupons.overview();
+  }
+
+  @Get('coupons/redemptions/all')
+  @RequirePermissions('billing.coupons.redemptions.read')
+  allCouponRedemptions() {
+    return this.coupons.allRedemptions();
+  }
+
+  @Get('coupons/campaigns')
+  @RequirePermissions('billing.coupons.read')
+  couponCampaigns() {
+    return this.coupons.campaigns();
+  }
+
+  @Post('coupons/campaigns')
+  @RequirePermissions('billing.coupons.create')
+  createCouponCampaign(@CurrentUser() user: AuthUserPayload, @Body() dto: any) {
+    return this.coupons.createCampaign(dto, user.userId);
+  }
+
+  @Get('coupons/exceptions')
+  @RequirePermissions('billing.coupons.read')
+  couponExceptions() {
+    return this.coupons.exceptions();
+  }
+
+  @Post('coupons/exceptions/:id/resolve')
+  @RequirePermissions('billing.coupons.update')
+  resolveCouponException(@Param('id') id: string, @CurrentUser() user: AuthUserPayload, @Body() dto: any) {
+    return this.coupons.resolveException(id, dto, user.userId);
+  }
+
+  @Get('coupons/audit-logs')
+  @RequirePermissions('billing.coupons.read')
+  couponAuditLogs() {
+    return this.coupons.auditLogs();
   }
 
   @Get('coupons')
@@ -80,6 +122,12 @@ export class AdminBillingController {
     return this.coupons.changeStatus(id, BillingCouponStatus.ARCHIVED, user.userId);
   }
 
+  @Post('coupons/:id/expire')
+  @RequirePermissions('billing.coupons.update')
+  expireCoupon(@Param('id') id: string, @CurrentUser() user: AuthUserPayload) {
+    return this.coupons.expire(id, user.userId);
+  }
+
   @Post('coupons/:id/duplicate')
   @RequirePermissions('billing.coupons.create')
   duplicateCoupon(@Param('id') id: string, @CurrentUser() user: AuthUserPayload) {
@@ -104,6 +152,7 @@ export class AdminBillingController {
     return this.pricing.quote({ organizationId: dto.organizationId || user.organizationId || '', ...dto });
   }
 
+
   @Get('subscriptions')
   subscriptions() {
     return this.adminBilling.subscriptions();
@@ -114,9 +163,83 @@ export class AdminBillingController {
     return this.adminBilling.payments();
   }
 
+  @Get('invoices')
+  invoices() {
+    return this.adminBilling.invoices();
+  }
+
+  @Get('entitlements')
+  entitlements() {
+    return this.adminBilling.entitlements();
+  }
+
+  @Get('credits')
+  credits() {
+    return this.adminBilling.credits();
+  }
+
+  @Post('credits')
+  @RequirePermissions('billing.admin')
+  grantCredit(@CurrentUser() user: AuthUserPayload, @Body() dto: any) {
+    return this.adminBilling.grantCredit(dto, user.userId);
+  }
+
+  @Get('trials')
+  trials() {
+    return this.adminBilling.trials();
+  }
+
+  @Get('refunds')
+  refundsList() {
+    return this.adminBilling.refunds();
+  }
+
   @Post('refunds')
   @RequirePermissions('billing.refund')
   refund(@CurrentUser() user: AuthUserPayload, @Body() dto: RefundDto) {
     return this.payments.refund(user.organizationId || '', user.userId, dto.paymentId, dto.amount);
   }
+
+  @Get('exceptions')
+  exceptions() {
+    return this.adminBilling.exceptions();
+  }
+
+  @Post('exceptions/:id/resolve')
+  @RequirePermissions('billing.admin')
+  resolveException(@Param('id') id: string, @CurrentUser() user: AuthUserPayload, @Body() dto: any) {
+    return this.adminBilling.resolveException(id, dto, user.userId);
+  }
+
+  @Get('enterprise')
+  enterpriseContracts() {
+    return this.adminBilling.enterprise();
+  }
+
+  @Post('enterprise')
+  @RequirePermissions('billing.admin')
+  createEnterpriseContract(@CurrentUser() user: AuthUserPayload, @Body() dto: any) {
+    return this.adminBilling.createEnterpriseContract(dto, user.userId);
+  }
+
+  @Get('providers')
+  providers() {
+    return this.adminBilling.providers();
+  }
+
+  @Get('audit')
+  audit() {
+    return this.adminBilling.audit();
+  }
+
+  @Post('subscriptions/:id/status')
+  @RequirePermissions('billing.admin')
+  updateSubscriptionStatus(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUserPayload,
+    @Body() dto: any,
+  ) {
+    return this.adminBilling.updateSubscriptionStatus(id, dto, user.userId);
+  }
 }
+

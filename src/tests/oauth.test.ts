@@ -5,7 +5,7 @@ import { AuthService } from '../modules/auth/auth.service';
 import { RiskEngineService } from '../modules/auth/risk-engine.service';
 import { MembershipsService } from '../modules/memberships/memberships.service';
 import { NotificationsService } from '../modules/notifications/notifications.service';
-import { runSeed } from '../database/seeds/run-seed';
+import { runSeed } from './helpers/test-seed';
 import { dbStore } from '../database/store';
 import { User, UserIdentity } from '../database/schema';
 import { initializeDataSource } from '../database/data-source';

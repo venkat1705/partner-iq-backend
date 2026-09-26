@@ -1,12 +1,18 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
-import { dbStore } from '../../database/store';
+import { dbStore, awaitPersist } from '../../database/store';
 
 @Injectable()
 export class IntegrationCredentialService {
+  /**
+   * Stays synchronous so every credential mutation lands in dbStore immediately (many callers,
+   * including tests, invoke this without awaiting). The tracked entity is returned so a caller
+   * that needs the background DB write confirmed before it returns can do
+   * `await awaitPersist(credentialService.storeCredential(...))` itself.
+   */
   storeCredential(organizationIntegrationId: string, credentialKey: string, value: string) {
-    if (!value) return;
+    if (!value) return undefined;
     const iv = randomBytes(12);
     const cipher = createCipheriv('aes-256-gcm', this.encryptionKey(), iv);
     const encrypted = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
@@ -26,19 +32,30 @@ export class IntegrationCredentialService {
       updatedAt: new Date(),
     };
 
+    // `existing`, when found, is the live Proxy-wrapped entity already tracked by dbStore —
+    // mutate and return that reference directly rather than the freshly spread `credential`
+    // object, which is never pushed/tracked in the update path.
     if (existing) {
       Object.assign(existing, credential);
-    } else {
-      dbStore.integrationCredentials.push(credential);
+      return existing;
     }
+    dbStore.integrationCredentials.push(credential);
+    return credential;
   }
 
-  storeCredentials(organizationIntegrationId: string, credentials: Record<string, string>) {
+  /**
+   * Stores several credentials in one synchronous pass (so partial execution can't be observed
+   * by an un-awaited caller), then resolves once every write it kicked off has actually landed.
+   */
+  async storeCredentials(organizationIntegrationId: string, credentials: Record<string, string>) {
+    const pending: Promise<unknown>[] = [];
     for (const [key, value] of Object.entries(credentials)) {
       if (value !== undefined && value !== null && String(value).trim() !== '') {
-        this.storeCredential(organizationIntegrationId, key, String(value));
+        const entity = this.storeCredential(organizationIntegrationId, key, String(value));
+        if (entity) pending.push(awaitPersist(entity));
       }
     }
+    await Promise.all(pending);
   }
 
   getCredential(organizationIntegrationId: string, credentialKey: string): string {

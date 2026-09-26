@@ -1,11 +1,13 @@
-import { Module, OnModuleInit } from '@nestjs/common';
+import { Module, OnModuleInit, Inject, forwardRef } from '@nestjs/common';
 import { FraudController } from './fraud.controller';
+import { AdminFraudController } from './admin-fraud.controller';
 import { FraudContextFactory } from './fraud-context.factory';
 import { FraudDecisionService } from './fraud-decision.service';
 import { FraudEngineService } from './fraud-engine.service';
 import { FraudPolicyService } from './fraud-policy.service';
 import { FraudScoreService } from './fraud-score.service';
 import { FraudService } from './fraud.service';
+import { AdminFraudService } from './admin-fraud.service';
 import { FraudSignalRegistry } from './fraud-signal-registry';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { WebhooksModule } from '../webhooks/webhooks.module';
@@ -54,9 +56,10 @@ const signalProviders = [
 
 @Module({
   imports: [NotificationsModule, WebhooksModule, CommissionsModule, LedgerModule],
-  controllers: [FraudController],
+  controllers: [FraudController, AdminFraudController],
   providers: [
     FraudService,
+    AdminFraudService,
     FraudEngineService,
     FraudScoreService,
     FraudDecisionService,
@@ -71,30 +74,48 @@ const signalProviders = [
     { provide: FRAUD_MODEL_PROVIDER, useClass: NoOpFraudModelProvider },
     ...signalProviders,
   ],
-  exports: [FraudService, FraudEngineService, FraudVelocityService],
+  exports: [FraudService, AdminFraudService, FraudEngineService, FraudVelocityService],
 })
 export class FraudModule implements OnModuleInit {
   constructor(
+    @Inject(forwardRef(() => FraudSignalRegistry))
     private readonly registry: FraudSignalRegistry,
+    @Inject(forwardRef(() => IpReputationSignal))
     private readonly ipReputation: IpReputationSignal,
+    @Inject(forwardRef(() => IpVelocitySignal))
     private readonly ipVelocity: IpVelocitySignal,
+    @Inject(forwardRef(() => AffiliateVelocitySignal))
     private readonly affiliateVelocity: AffiliateVelocitySignal,
+    @Inject(forwardRef(() => DeviceVelocitySignal))
     private readonly deviceVelocity: DeviceVelocitySignal,
+    @Inject(forwardRef(() => DuplicateDeviceSignal))
     private readonly duplicateDevice: DuplicateDeviceSignal,
+    @Inject(forwardRef(() => GeoMismatchSignal))
     private readonly geoMismatch: GeoMismatchSignal,
+    @Inject(forwardRef(() => SelfReferralSignal))
     private readonly selfReferral: SelfReferralSignal,
+    @Inject(forwardRef(() => ConversionSpeedSignal))
     private readonly conversionSpeed: ConversionSpeedSignal,
+    @Inject(forwardRef(() => DuplicateConversionSignal))
     private readonly duplicateConversion: DuplicateConversionSignal,
+    @Inject(forwardRef(() => UserAgentRiskSignal))
     private readonly userAgentRisk: UserAgentRiskSignal,
+    @Inject(forwardRef(() => AmountAnomalySignal))
     private readonly amountAnomaly: AmountAnomalySignal,
+    @Inject(forwardRef(() => AffiliateTrustSignal))
     private readonly affiliateTrust: AffiliateTrustSignal,
+    @Inject(forwardRef(() => AffiliateHighRefundRateSignal))
     private readonly refundRate: AffiliateHighRefundRateSignal,
+    @Inject(forwardRef(() => AffiliateHighChargebackRateSignal))
     private readonly chargebackRate: AffiliateHighChargebackRateSignal,
+    @Inject(forwardRef(() => PayoutAmountAnomalySignal))
     private readonly payoutAmount: PayoutAmountAnomalySignal,
+    @Inject(forwardRef(() => PayoutTrustDropSignal))
     private readonly payoutTrustDrop: PayoutTrustDropSignal,
-  ) {}
+  ) { }
 
   onModuleInit() {
+    if (!this.registry) return;
     [
       this.ipReputation,
       this.ipVelocity,
@@ -112,6 +133,10 @@ export class FraudModule implements OnModuleInit {
       this.chargebackRate,
       this.payoutAmount,
       this.payoutTrustDrop,
-    ].forEach((signal) => this.registry.register(signal));
+    ].forEach((signal) => {
+      if (signal && this.registry) {
+        this.registry.register(signal);
+      }
+    });
   }
 }

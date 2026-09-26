@@ -3,7 +3,8 @@
   "ts-node": {
     "esm": true,
     "preferTsExts": true,
-    "transpileOnly": true
+    "transpileOnly": true,
+    "experimentalSpecifierResolution": "node"
   },
   "compilerOptions": {
     "module": "ESNext",

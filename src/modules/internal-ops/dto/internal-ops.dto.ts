@@ -2,45 +2,13 @@ import { IsEmail, IsNotEmpty, IsOptional, IsString, MinLength, IsBoolean, IsEnum
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { UserStatus, DocumentType } from '../../../common/enums';
 
-export class CreateSuperAdminDto {
-  @ApiProperty({ example: 'info@partneriq.in', description: 'Email address of the superadmin' })
-  @IsEmail({}, { message: 'Please provide a valid email address' })
-  @IsNotEmpty()
-  email!: string;
-
-  @ApiProperty({ example: 'SuperSecure@2026', description: 'Password (min 8 characters)' })
-  @IsString()
-  @MinLength(8, { message: 'Password must be at least 8 characters long' })
-  @IsNotEmpty()
-  password!: string;
-
-  @ApiProperty({ example: 'Alex', description: 'First name' })
-  @IsString()
-  @IsNotEmpty()
-  firstName!: string;
-
-  @ApiProperty({ example: 'Mercer', description: 'Last name' })
-  @IsString()
-  @IsNotEmpty()
-  lastName!: string;
-
-  @ApiPropertyOptional({ example: '+14155552671', description: 'Contact phone number' })
-  @IsOptional()
-  @IsString()
-  phone?: string;
-
-  @ApiPropertyOptional({ example: true, default: true, description: 'Automatically verify email' })
-  @IsOptional()
-  @IsBoolean()
-  autoVerifyEmail?: boolean = true;
-}
+// CreateSuperAdminDto was removed along with POST /internal/superadmins —
+// super admin creation now only happens via `npm run create-super-admin`.
 
 export class UpdateSuperAdminDto {
-  @ApiPropertyOptional({ example: 'NewSecurePassword@2026', description: 'New password' })
-  @IsOptional()
-  @IsString()
-  @MinLength(8)
-  password?: string;
+  // Password changes are deliberately not permitted via PATCH /internal/superadmins/:id.
+  // Password updates happen strictly via the CLI (`npm run create-super-admin`) or the
+  // user's own standard set-password / password-reset flow.
 
   @ApiPropertyOptional({ example: 'Alex', description: 'First name' })
   @IsOptional()
@@ -140,28 +108,5 @@ export class GenerateTestDocumentDto {
   customData?: Record<string, any>;
 }
 
-export class SeedSandboxOrgDto {
-  @ApiProperty({ example: 'Apex Analytics Corp' })
-  @IsString()
-  @IsNotEmpty()
-  organizationName!: string;
 
-  @ApiProperty({ example: 'admin@apexanalytics.io' })
-  @IsEmail()
-  @IsNotEmpty()
-  ownerEmail!: string;
-
-  @ApiPropertyOptional({ example: 'pro', default: 'pro', enum: ['starter', 'pro', 'growth', 'enterprise'] })
-  @IsOptional()
-  @IsString()
-  plan?: string = 'pro';
-
-  @ApiPropertyOptional({ example: 5, default: 5, description: 'Number of sample affiliates to generate' })
-  @IsOptional()
-  generateAffiliatesCount?: number = 5;
-
-  @ApiPropertyOptional({ example: 10, default: 10, description: 'Number of mock conversions to record' })
-  @IsOptional()
-  generateConversionsCount?: number = 10;
-}
 

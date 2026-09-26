@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
-import { dbStore } from '../../database/store';
+import { dbStore, awaitPersist } from '../../database/store';
 import { NotificationGateway } from './notifications.gateway';
 import type {
   NotificationCategory,
@@ -55,29 +55,22 @@ export class NotificationsService {
 
     const next = this.defaultPreferences(userId, organizationId);
     dbStore.notificationPreferences.push(next);
+    await awaitPersist(next);
     return next;
   }
 
   async updatePreferences(userId: string, updates: Partial<NotificationPreference>, organizationId?: string) {
+    // getPreferences() returns the raw tracked entity (either the existing dbStore-proxied
+    // record, or a freshly pushed one) — mutate it in place rather than building a detached
+    // spread copy, which would never route back through the dbStore proxy's persistence.
     const current = await this.getPreferences(userId, organizationId);
-    const next = {
-      ...current,
-      ...updates,
+    Object.assign(current, updates, {
       channels: { ...current.channels, ...(updates.channels || {}) },
       categories: { ...current.categories, ...(updates.categories || {}) },
-    };
+    });
 
-    const index = dbStore.notificationPreferences.findIndex(
-      (item) => item.userId === userId && (!organizationId || item.organizationId === organizationId),
-    );
-
-    if (index >= 0) {
-      dbStore.notificationPreferences[index] = next;
-    } else {
-      dbStore.notificationPreferences.push(next);
-    }
-
-    return next;
+    await awaitPersist(current);
+    return current;
   }
 
   async createNotification(input: {
@@ -107,6 +100,7 @@ export class NotificationsService {
     };
 
     dbStore.notifications.unshift(notification);
+    await awaitPersist(notification);
 
     const preferences = await this.getPreferences(notification.userId, notification.organizationId);
     if (!preferences.enabled || !preferences.channels.in_app) {
@@ -137,6 +131,7 @@ export class NotificationsService {
     }
 
     notification.isRead = true;
+    await awaitPersist(notification);
     this.gateway.broadcastToUser(userId, {
       type: 'notification.read',
       notification,
@@ -151,6 +146,7 @@ export class NotificationsService {
     items.forEach((notification) => {
       notification.isRead = true;
     });
+    await Promise.all(items.map((notification) => awaitPersist(notification)));
 
     this.gateway.broadcastToUser(userId, {
       type: 'notification.read_all',

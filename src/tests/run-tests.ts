@@ -1,3 +1,6 @@
+import * as dotenv from 'dotenv';
+dotenv.config({ path: '.env.test', override: true });
+
 import { AuthService } from '../modules/auth/auth.service';
 import { RiskEngineService } from '../modules/auth/risk-engine.service';
 import { OrganizationsService } from '../modules/organizations/organizations.service';
@@ -30,7 +33,7 @@ import { FraudVelocityService } from '../modules/fraud/velocity/fraud-velocity.s
 import { CommissionsService } from '../modules/commissions/commissions.service';
 import { LedgerService } from '../modules/ledger/ledger.service';
 import { WebhooksService } from '../modules/webhooks/webhooks.service';
-import { runSeed } from '../database/seeds/run-seed';
+import { runSeed } from './helpers/test-seed';
 import { SecurityUtils } from '../common/utils/security.utils';
 import { AssetManagementService } from '../modules/asset-management/asset-management.service';
 import { dbStore } from '../database/store';
@@ -90,12 +93,12 @@ async function runTestSuite() {
   const sharedCommissionsService = new CommissionsService(sharedLedgerService);
 
   // 1. Database Seed Verification
-  const { admin, org, seedPrograms, affiliate } = await runSeed();
+  const { admin, adminPassword, org, seedPrograms, affiliate } = await runSeed();
   assert(!!admin && !!org, 'Seed Data Initialized');
 
   // 2. Authentication & Password Security Test
   const authService = new AuthService(new RiskEngineService());
-  const loginRes = (await authService.login({ email: 'admin@partneriq.demo', password: 'PartnerIQ@123' })) as any;
+  const loginRes = (await authService.login({ email: admin.email, password: adminPassword })) as any;
   assert(!!loginRes.accessToken && !!loginRes.refreshToken, 'Admin Authentication Successful');
 
   // 3. Refresh Token Rotation & Theft Detection Test
@@ -321,6 +324,7 @@ async function runTestSuite() {
   console.log(`===================================\n`);
 
   if (failed > 0) process.exit(1);
+  process.exit(0);
 }
 
 runTestSuite().catch((err) => {

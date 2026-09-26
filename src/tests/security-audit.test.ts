@@ -1,6 +1,6 @@
 import { PartnerIQ as NodeSDK, verifyWebhookSignature } from '../../packages/partneriq-node/src/index';
 import { PartnerIQ as BrowserSDK } from '../../packages/partneriq-browser/src/index';
-import { runSeed } from '../database/seeds/run-seed';
+import { runSeed } from './helpers/test-seed';
 import { dbStore } from '../database/store';
 import { SecurityUtils } from '../common/utils/security.utils';
 import { WebhooksService } from '../modules/webhooks/webhooks.service';

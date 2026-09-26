@@ -1,6 +1,6 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+﻿import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
-import { dbStore, CommissionRuleEntity, CommissionEntity, ConversionEntity } from '../../database/store';
+import { dbStore, CommissionRuleEntity, CommissionEntity, ConversionEntity, awaitPersist } from '../../database/store';
 import { CommissionType, ConversionStatus, LedgerEntryType, AuditAction, WebhookEvent } from '../../common/enums';
 import { PLATFORM_CURRENCY } from '../../common/constants/currency';
 import { LedgerService } from '../ledger/ledger.service';
@@ -22,6 +22,7 @@ import { SystemTemplateKey } from '../email-design/constants/email-template-keys
 import { getAppConfig } from '../../config/app.config';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuditService } from '../audit/audit.service';
+import { netCommissionAmount } from '../../common/utils/commission.utils';
 
 @Injectable()
 export class CommissionsService {
@@ -221,13 +222,14 @@ export class CommissionsService {
     };
 
     dbStore.commissionRules.push(rule);
+    await awaitPersist(rule);
     this.audit(organizationId, 'system', 'COMMISSION_RULE_CREATED', rule.id, { after: rule, version: rule.version });
     return rule;
   }
 
   /**
    * Updating a rule bumps its version in place and records a full before/after
-   * snapshot in the audit trail (resourceType 'commission_rule') — this is the
+   * snapshot in the audit trail (resourceType 'commission_rule') â€” this is the
    * rule's version history: GET .../rules/:ruleId/history replays it as a timeline.
    */
   async updateRule(organizationId: string, ruleId: string, dto: UpdateCommissionRuleDto, actorId = 'system') {
@@ -280,13 +282,14 @@ export class CommissionsService {
 
     rule.version += 1;
     rule.updatedAt = new Date();
+    await awaitPersist(rule);
 
     this.audit(organizationId, actorId, 'COMMISSION_RULE_UPDATED', rule.id, { before, after: { ...rule }, version: rule.version });
     return rule;
   }
 
   /**
-   * Rule version history — replays the audit trail recorded on create/update/delete
+   * Rule version history â€” replays the audit trail recorded on create/update/delete
    * for this rule into a human-readable timeline, newest first.
    */
   async getRuleHistory(organizationId: string, ruleId: string) {
@@ -343,6 +346,7 @@ export class CommissionsService {
     rule.status = 'ARCHIVED';
     rule.active = false;
     rule.updatedAt = new Date();
+    await awaitPersist(rule);
 
     this.audit(organizationId, 'system', 'COMMISSION_RULE_DELETED', rule.id, { before: rule, version: rule.version });
     return { success: true, message: `Commission rule "${rule.name}" deleted successfully.` };
@@ -392,7 +396,7 @@ export class CommissionsService {
     // conversion.amount directly by the program's rate, so a conversion reported in a
     // different currency than the program would silently over/under-pay by orders of
     // magnitude. PartnerIQ enforces INR only at every input boundary (DTOs reject any
-    // other currency), so this should never trigger in practice — kept as defense in
+    // other currency), so this should never trigger in practice â€” kept as defense in
     // depth against legacy data or a bypassed validation path.
     if (program?.currency && conversion.currency && program.currency.toUpperCase() !== conversion.currency.toUpperCase()) {
       throw new BadRequestException(
@@ -429,8 +433,8 @@ export class CommissionsService {
 
     // Per-affiliate commission override (set by a COMMISSION_RATE_CHANGE milestone reward,
     // or manually by an admin) on this specific program enrollment. More specific than the
-    // tier default — a reward earned by this individual affiliate should stick even if their
-    // tier's base rate is lower — but a merchant-configured commission RULE below is still the
+    // tier default â€” a reward earned by this individual affiliate should stick even if their
+    // tier's base rate is lower â€” but a merchant-configured commission RULE below is still the
     // final, most specific word (e.g. a fraud-risk clamp) and can still override it.
     const enrollment = dbStore.programAffiliates.find(
       (pa) => pa.organizationId === organizationId && pa.programId === conversion.programId && pa.affiliateId === affiliateId,
@@ -444,7 +448,7 @@ export class CommissionsService {
       commissionValue = enrollment.commissionOverride;
     }
 
-    // Load active custom rules sorted by priority — program-specific rules and
+    // Load active custom rules sorted by priority â€” program-specific rules and
     // the organization-wide default rule (no programId) are both eligible.
     const rules = dbStore.commissionRules
       .filter((r) => r.organizationId === organizationId && (r.programId === conversion.programId || !r.programId) && r.active && r.status === 'ACTIVE')
@@ -494,6 +498,7 @@ export class CommissionsService {
     };
 
     dbStore.commissions.push(commission);
+    await awaitPersist(commission);
 
     this.emitWebhook(organizationId, WebhookEvent.COMMISSION_CREATED, {
       commissionId: commission.id,
@@ -525,251 +530,11 @@ export class CommissionsService {
   }
 
   async getCommissions(organizationId: string, programId?: string) {
-    this.ensureDefaultCommissions(organizationId);
     return dbStore.commissions.filter((c) => c.organizationId === organizationId && (!programId || c.programId === programId));
   }
 
-  ensureDefaultCommissions(organizationId: string) {
-    const existing = dbStore.commissions.filter((c) => c.organizationId === organizationId);
-    if (existing.length > 0) return;
-
-    let program: any = dbStore.programs.find((p) => p.organizationId === organizationId && !p.deletedAt);
-    if (!program) {
-      program = {
-        id: uuidv4(),
-        organizationId,
-        name: 'Growth Enterprise Partner Program',
-        slug: 'growth-enterprise',
-        commissionType: CommissionType.PERCENTAGE,
-        defaultCommissionValue: 1500, // 15.00%
-        currency: PLATFORM_CURRENCY,
-        status: 'ACTIVE' as any,
-        createdAt: new Date(Date.now() - 90 * 86400000),
-        updatedAt: new Date(),
-      };
-      dbStore.programs.push(program as any);
-    }
-
-    let affiliates = dbStore.affiliates.filter((a) => a.organizationId === organizationId);
-    if (affiliates.length < 2) {
-      const aff1 = {
-        id: uuidv4(),
-        organizationId,
-        displayName: 'Aarav Patel (Fintech Daily)',
-        email: 'aarav.patel@fintechdaily.in',
-        companyName: 'Fintech Daily Media',
-        status: 'ACTIVE' as any,
-        trustScore: 94,
-        country: 'IN',
-        createdAt: new Date(Date.now() - 80 * 86400000),
-        updatedAt: new Date(),
-      };
-      const aff2 = {
-        id: uuidv4(),
-        organizationId,
-        displayName: 'Pooja Sharma (SaaS Radar)',
-        email: 'pooja@saasradar.co',
-        companyName: 'SaaS Radar Media',
-        status: 'ACTIVE' as any,
-        trustScore: 89,
-        country: 'IN',
-        createdAt: new Date(Date.now() - 60 * 86400000),
-        updatedAt: new Date(),
-      };
-      dbStore.affiliates.push(aff1 as any, aff2 as any);
-      affiliates = [aff1 as any, aff2 as any];
-    }
-
-    const defaultRule = dbStore.commissionRules.find((r) => r.organizationId === organizationId && r.active);
-    const ruleId = defaultRule?.id;
-    const ruleName = defaultRule?.name || 'Standard Affiliate Tier';
-
-    const seedConfigs = [
-      {
-        id: uuidv4(),
-        affIndex: 0,
-        orderId: 'ORD-89412',
-        customerEmail: 'rohit@techventures.io',
-        baseAmount: 1450000, // ₹14,500.00
-        rate: 1500, // 15%
-        commissionAmount: 217500, // ₹2,175.00
-        reversedAmount: 0,
-        status: ConversionStatus.APPROVED,
-        approvalStatus: 'APPROVED',
-        payoutStatus: 'UNPAID', // Within 30d hold
-        holdUntil: new Date(Date.now() + 18 * 86400000),
-        daysAgo: 12,
-        ruleName,
-      },
-      {
-        id: uuidv4(),
-        affIndex: 1,
-        orderId: 'ORD-88190',
-        customerEmail: 'meera@cloudscale.net',
-        baseAmount: 3500000, // ₹35,000.00
-        rate: 1800, // 18%
-        commissionAmount: 630000, // ₹6,300.00
-        reversedAmount: 0,
-        status: ConversionStatus.APPROVED,
-        approvalStatus: 'APPROVED',
-        payoutStatus: 'PAYABLE', // Hold period completed
-        holdUntil: new Date(Date.now() - 15 * 86400000),
-        daysAgo: 45,
-        ruleName: 'India High-Growth Standard',
-      },
-      {
-        id: uuidv4(),
-        affIndex: 0,
-        orderId: 'ORD-91204',
-        customerEmail: 'vikram@enterprisecorp.in',
-        baseAmount: 8500000, // ₹85,000.00
-        rate: 2000, // 20%
-        commissionAmount: 1700000, // ₹17,000.00
-        reversedAmount: 0,
-        status: ConversionStatus.PENDING,
-        approvalStatus: 'PENDING',
-        payoutStatus: 'UNPAID',
-        holdUntil: new Date(Date.now() + 28 * 86400000),
-        daysAgo: 2,
-        notes: 'High-value threshold reached; awaiting supervisor approval',
-        ruleName: 'Enterprise Volume Rule',
-      },
-      {
-        id: uuidv4(),
-        affIndex: 1,
-        orderId: 'ORD-86402',
-        customerEmail: 'sunil@growthleads.in',
-        baseAmount: 2200000, // ₹22,000.00
-        rate: 1500, // 15%
-        commissionAmount: 330000, // ₹3,300.00
-        reversedAmount: 0,
-        status: ConversionStatus.APPROVED,
-        approvalStatus: 'APPROVED',
-        payoutStatus: 'PAID',
-        holdUntil: new Date(Date.now() - 30 * 86400000),
-        daysAgo: 60,
-        ruleName,
-      },
-      {
-        id: uuidv4(),
-        affIndex: 0,
-        orderId: 'ORD-87309',
-        customerEmail: 'alok@retailpulse.com',
-        baseAmount: 1800000, // ₹18,000.00
-        rate: 1500, // 15%
-        commissionAmount: 270000, // ₹2,700.00
-        reversedAmount: 135000, // ₹1,350.00 clawback
-        status: ConversionStatus.PARTIALLY_REFUNDED,
-        approvalStatus: 'APPROVED',
-        payoutStatus: 'UNPAID',
-        daysAgo: 25,
-        notes: 'Partial order refund of 50% processed; proportional clawback deducted.',
-        ruleName,
-      },
-      {
-        id: uuidv4(),
-        affIndex: 1,
-        orderId: 'ORD-87991',
-        customerEmail: 'dev@novastack.io',
-        baseAmount: 4000000, // ₹40,000.00
-        rate: 1500, // 15%
-        commissionAmount: 700000, // Adjusted from 600000 to 700000
-        reversedAmount: 0,
-        status: ConversionStatus.APPROVED,
-        approvalStatus: 'APPROVED',
-        payoutStatus: 'PAYABLE',
-        holdUntil: new Date(Date.now() - 5 * 86400000),
-        daysAgo: 35,
-        adjustmentHistory: [
-          {
-            id: uuidv4(),
-            delta: 100000, // +₹1,000
-            previousAmount: 600000,
-            newAmount: 700000,
-            reason: 'Quarterly affiliate volume milestone bonus',
-            notes: 'Approved by affiliate partnerships lead',
-            adjustedBy: 'system',
-            createdAt: new Date(Date.now() - 10 * 86400000),
-          },
-        ],
-        ruleName,
-      },
-      {
-        id: uuidv4(),
-        affIndex: 0,
-        orderId: 'ORD-89912',
-        customerEmail: 'anjali@commerceflow.in',
-        baseAmount: 5000000, // ₹50,000.00
-        rate: 1500, // 15%
-        commissionAmount: 750000, // ₹7,500.00
-        reversedAmount: 0,
-        status: ConversionStatus.APPROVED,
-        approvalStatus: 'APPROVED',
-        payoutStatus: 'HELD',
-        disputeStatus: 'OPEN',
-        disputeReason: 'Partner submitted dispute: promo coupon campaign bonus rate of 20% was expected instead of 15%.',
-        daysAgo: 8,
-        notes: 'Under review by finance operations team',
-        ruleName,
-      },
-    ];
-
-    for (const sc of seedConfigs) {
-      const affiliate = affiliates[sc.affIndex] || affiliates[0];
-      const convId = uuidv4();
-      const conv: ConversionEntity = {
-        id: convId,
-        organizationId,
-        programId: program.id,
-        affiliateId: affiliate.id,
-        externalId: sc.orderId,
-        customerExternalId: sc.customerEmail,
-        amount: sc.baseAmount,
-        currency: program.currency || PLATFORM_CURRENCY,
-        status: sc.status,
-        refundedAmount: sc.reversedAmount > 0 ? sc.baseAmount / 2 : 0,
-        refundHistory: sc.reversedAmount > 0 ? [{ refundExternalId: `REF-${sc.orderId}`, amount: sc.baseAmount / 2, reason: 'Customer return', createdAt: new Date(Date.now() - (sc.daysAgo - 2) * 86400000).toISOString() }] : [],
-        createdAt: new Date(Date.now() - sc.daysAgo * 86400000),
-        updatedAt: new Date(Date.now() - sc.daysAgo * 86400000),
-      } as any;
-      dbStore.conversions.push(conv);
-
-      const comm: CommissionEntity = {
-        id: sc.id,
-        organizationId,
-        programId: program.id,
-        affiliateId: affiliate.id,
-        conversionId: convId,
-        ruleId,
-        ruleSnapshot: {
-          ruleName: sc.ruleName,
-          commissionType: CommissionType.PERCENTAGE,
-          commissionValue: sc.rate,
-        },
-        rate: sc.rate,
-        baseAmount: sc.baseAmount,
-        commissionAmount: sc.commissionAmount,
-        reversedAmount: sc.reversedAmount,
-        calculationVersion: 'v2.0',
-        status: sc.status,
-        approvalStatus: sc.approvalStatus,
-        approvedAt: sc.approvalStatus === 'APPROVED' ? new Date(Date.now() - (sc.daysAgo - 1) * 86400000) : undefined,
-        approvedBy: sc.approvalStatus === 'APPROVED' ? 'system' : undefined,
-        payoutStatus: sc.payoutStatus,
-        disputeStatus: sc.disputeStatus || 'NONE',
-        disputeReason: sc.disputeReason,
-        adjustmentHistory: sc.adjustmentHistory || [],
-        holdUntil: sc.holdUntil,
-        notes: sc.notes,
-        createdAt: new Date(Date.now() - sc.daysAgo * 86400000),
-        updatedAt: new Date(Date.now() - sc.daysAgo * 86400000),
-      } as any;
-      dbStore.commissions.push(comm);
-    }
-  }
 
   async getCommissionsPaginated(organizationId: string, query: ListCommissionsQueryDto) {
-    this.ensureDefaultCommissions(organizationId);
 
     const page = Math.max(1, Number(query.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(query.limit) || 25));
@@ -926,7 +691,6 @@ export class CommissionsService {
   }
 
   async getCommissionById(organizationId: string, commissionId: string) {
-    this.ensureDefaultCommissions(organizationId);
     const comm = dbStore.commissions.find((c) => c.id === commissionId && c.organizationId === organizationId);
     if (!comm) throw new NotFoundException('Commission record not found');
 
@@ -955,7 +719,6 @@ export class CommissionsService {
   }
 
   async getCommissionAnalytics(organizationId: string, query: CommissionAnalyticsQueryDto) {
-    this.ensureDefaultCommissions(organizationId);
 
     let commissions = dbStore.commissions.filter((c) => c.organizationId === organizationId);
     let conversions = dbStore.conversions.filter((cv) => cv.organizationId === organizationId);
@@ -984,11 +747,11 @@ export class CommissionsService {
 
     const payableCommissions = commissions
       .filter((c) => (c.payoutStatus === 'PAYABLE' || (c.status === ConversionStatus.APPROVED && (!c.holdUntil || new Date(c.holdUntil) <= new Date()))) && c.payoutStatus !== 'PAID')
-      .reduce((sum, c) => sum + Math.max(0, (c.commissionAmount || 0) - (c.reversedAmount || 0)), 0);
+      .reduce((sum, c) => sum + netCommissionAmount(c), 0);
 
     const paidCommissions = commissions
       .filter((c) => c.payoutStatus === 'PAID')
-      .reduce((sum, c) => sum + Math.max(0, (c.commissionAmount || 0) - (c.reversedAmount || 0)), 0);
+      .reduce((sum, c) => sum + netCommissionAmount(c), 0);
 
     const reversedCommissions = commissions.reduce((sum, c) => sum + (c.reversedAmount || 0), 0);
     const commissionLiability = Math.max(0, approvedCommissions + payableCommissions - paidCommissions - reversedCommissions);
@@ -1197,6 +960,7 @@ export class CommissionsService {
       affiliateId: commission.affiliateId,
     });
 
+    await awaitPersist(commission);
     return this.hydrateCommission(commission);
   }
 
@@ -1234,6 +998,7 @@ export class CommissionsService {
       notes,
     });
 
+    await awaitPersist(commission);
     return this.hydrateCommission(commission);
   }
 
@@ -1280,17 +1045,17 @@ export class CommissionsService {
       newAmount,
     });
 
+    await awaitPersist(commission);
     return this.hydrateCommission(commission);
   }
 
   async getPayoutReadiness(organizationId: string, query?: any) {
-    this.ensureDefaultCommissions(organizationId);
 
     const commissions = dbStore.commissions.filter((c) => c.organizationId === organizationId);
     const affiliates = dbStore.affiliates.filter((a) => a.organizationId === organizationId);
     const org = dbStore.organizations.find((o) => o.id === organizationId);
     const currency = org?.defaultCurrency || PLATFORM_CURRENCY;
-    const minPayoutThreshold = 250000; // ₹2,500.00 / $25.00 min threshold
+    const minPayoutThreshold = 250000; // â‚¹2,500.00 / $25.00 min threshold
 
     let payableNowTotal = 0;
     let onHoldTotal = 0;
@@ -1369,7 +1134,6 @@ export class CommissionsService {
   }
 
   async getDisputes(organizationId: string) {
-    this.ensureDefaultCommissions(organizationId);
     const disputed = dbStore.commissions.filter(
       (c) => c.organizationId === organizationId && c.disputeStatus && c.disputeStatus !== 'NONE',
     );
@@ -1403,6 +1167,7 @@ export class CommissionsService {
       notes: dto.notes,
     });
 
+    await awaitPersist(commission);
     return this.hydrateCommission(commission);
   }
 
@@ -1471,7 +1236,7 @@ export class CommissionsService {
   }
 
   private evaluateProgramRules(organizationId: string, programId: string, context: Record<string, any>) {
-    // Program-specific rules and org-wide default rules (no programId — e.g. the
+    // Program-specific rules and org-wide default rules (no programId â€” e.g. the
     // rule seeded automatically when the organization was created) are both
     // eligible; a program-specific rule naturally wins when given a higher
     // priority than the organization-wide default.

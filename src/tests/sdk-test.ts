@@ -1,5 +1,5 @@
 import { PartnerIQ } from '../../sdk/src/index';
-import { runSeed } from '../database/seeds/run-seed';
+import { runSeed } from './helpers/test-seed';
 import { dbStore } from '../database/store';
 import { SecurityUtils } from '../common/utils/security.utils';
 

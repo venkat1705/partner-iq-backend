@@ -125,7 +125,7 @@ export class PricingPreviewDto {
   currency?: string;
 }
 
-export class ValidateBillingCouponDto extends PricingPreviewDto {}
+export class ValidateBillingCouponDto extends PricingPreviewDto { }
 
 export class CreateBillingCouponDto {
   @IsString()
@@ -254,3 +254,133 @@ export class UpdateBillingCouponDto extends CreateBillingCouponDto {
   @IsEnum(BillingCouponStatus)
   status?: BillingCouponStatus;
 }
+
+export class GrantCreditDto {
+  @IsUUID()
+  organizationId!: string;
+
+  @IsInt()
+  @Min(1)
+  amount!: number;
+
+  @IsString()
+  reason!: string;
+
+  @IsOptional()
+  @IsString()
+  type?: string;
+
+  @IsOptional()
+  @IsDateString()
+  expiresAt?: string;
+}
+
+export class UpdateSubscriptionStatusDto {
+  @IsString()
+  status!: string;
+
+  @IsOptional()
+  @IsBoolean()
+  cancelAtPeriodEnd?: boolean;
+
+  @IsOptional()
+  @IsDateString()
+  nextBillingDate?: string;
+}
+
+export class ResolveBillingExceptionDto {
+  @IsOptional()
+  @IsString()
+  resolutionNote?: string;
+}
+
+export class CreateEnterpriseContractDto {
+  @IsUUID()
+  organizationId!: string;
+
+  @IsString()
+  contractName!: string;
+
+  @IsInt()
+  @Min(1)
+  annualValue!: number;
+
+  @IsString()
+  billingTerms!: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  customAffiliateLimit?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  customConversionLimit?: number;
+
+  @IsOptional()
+  @IsString()
+  dedicatedAccountManager?: string;
+
+  @IsOptional()
+  @IsString()
+  slaCommitment?: string;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
+export class CreateBillingCampaignDto {
+  @IsString()
+  name!: string;
+
+  @IsString()
+  code!: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsString()
+  campaignType?: string;
+
+  @IsOptional()
+  @IsDateString()
+  startsAt?: string;
+
+  @IsOptional()
+  @IsDateString()
+  endsAt?: string;
+
+  @IsOptional()
+  @IsString()
+  utmCampaign?: string;
+
+  @IsOptional()
+  @IsString()
+  utmSource?: string;
+
+  @IsOptional()
+  @IsString()
+  utmMedium?: string;
+
+  @IsOptional()
+  @IsString()
+  landingPage?: string;
+}
+
+export class UpdateBillingCampaignDto extends CreateBillingCampaignDto {
+  @IsOptional()
+  @IsString()
+  status?: string;
+}
+
+export class ResolveCouponExceptionDto {
+  @IsOptional()
+  @IsString()
+  resolutionNote?: string;
+}
+
+

@@ -1,4 +1,4 @@
-import {
+﻿import {
   Injectable,
   NotFoundException,
   BadRequestException,
@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import * as crypto from 'crypto';
-import { dbStore, TrackingLinkEntity, ClickEntity, AttributionEntity } from '../../database/store';
+import { dbStore, TrackingLinkEntity, ClickEntity, AttributionEntity, awaitPersist } from '../../database/store';
 import {
   AuditAction,
   EnvironmentType,
@@ -33,6 +33,10 @@ import {
 } from './dto/tracking.dto';
 import { AuditService } from '../audit/audit.service';
 import { PLATFORM_CURRENCY } from '../../common/constants/currency';
+import { netCommissionAmount } from '../../common/utils/commission.utils';
+
+/** Upper bound on a single page of tracking links. */
+const MAX_PAGE_SIZE = 100;
 
 interface UtmContext {
   landingUrl?: string;
@@ -42,6 +46,19 @@ interface UtmContext {
   utmTerm?: string;
   utmContent?: string;
   affiliateId?: string;
+  /** Host the redirect was served on â€” carries the org slug that scopes the short code. */
+  host?: string;
+  /**
+   * Authoritative tenant for the lookup. The browser SDK knows the org from its
+   * public key, which beats inferring it from the host.
+   */
+  organizationId?: string;
+  /** `pi_anon_id` from the inbound request, so a returning visitor keeps one identity. */
+  existingAnonymousId?: string;
+  /** Extra inbound query params (sub_id and friends) to carry to the destination. */
+  passthroughParams?: Record<string, string>;
+  /** Deep-link target from `?url=`, resolved against the link's own destination. */
+  deepLinkTarget?: string;
 }
 
 export interface HydratedTrackingLink extends TrackingLinkEntity {
@@ -55,6 +72,7 @@ export interface HydratedTrackingLink extends TrackingLinkEntity {
   conversionRate: number;
   revenue: number; // in cents
   commission: number; // in cents
+  shortUrl: string;
   fullTrackingUrl: string;
 }
 
@@ -139,180 +157,15 @@ export class TrackingService {
   /**
    * Deterministic baseline seeding for tracking links, clicks, and attributions.
    */
-  ensureDefaultTrackingLinks(organizationId: string) {
-    const existing = dbStore.trackingLinks.filter((l) => l.organizationId === organizationId);
-    if (existing.length > 0) return;
-
-    let program = dbStore.programs.find((p) => p.organizationId === organizationId && !p.deletedAt);
-    if (!program) {
-      program = {
-        id: uuidv4(),
-        organizationId,
-        name: 'Enterprise Growth Program',
-        slug: 'growth-program',
-        currency: PLATFORM_CURRENCY,
-        status: ProgramStatus.ACTIVE,
-        cookieDays: 30,
-        attributionModel: 'LAST_CLICK' as any,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      } as any;
-      dbStore.programs.push(program);
-    }
-
-    let affiliates = dbStore.affiliates.filter((a) => a.organizationId === organizationId);
-    if (affiliates.length === 0) {
-      const aff1 = {
-        id: uuidv4(),
-        organizationId,
-        displayName: 'Summit Peak Media',
-        email: 'partners@summitpeak.io',
-        companyName: 'Summit Peak Media Ltd',
-        country: 'IN',
-        status: AffiliateStatus.ACTIVE,
-        trustScore: 95,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      } as any;
-      const aff2 = {
-        id: uuidv4(),
-        organizationId,
-        displayName: 'Velocity Growth Labs',
-        email: 'growth@velocitylabs.co',
-        companyName: 'Velocity Labs Corp',
-        country: 'IN',
-        status: AffiliateStatus.ACTIVE,
-        trustScore: 88,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      } as any;
-      dbStore.affiliates.push(aff1, aff2);
-      affiliates = [aff1, aff2];
-    }
-
-    const aff0 = affiliates[0];
-    const aff1 = affiliates[1] || affiliates[0];
-    const now = new Date();
-
-    // Link 1: Summit Peak - Google Ads Campaign
-    const link1Id = uuidv4();
-    const link1: TrackingLinkEntity = {
-      id: link1Id,
-      organizationId,
-      environment: EnvironmentType.LIVE,
-      programId: program.id,
-      affiliateId: aff0.id,
-      campaignId: 'enterprise-launch',
-      destinationUrl: 'https://partneriq.in/pricing?utm_source=google-ads',
-      shortCode: 'summit-google',
-      status: TrackingLinkStatus.ACTIVE,
-      utmSource: 'google-ads',
-      utmMedium: 'cpc',
-      utmCampaign: 'enterprise-launch',
-      healthStatus: 'HEALTHY',
-      notes: 'High-intent search campaign link',
-      createdAt: new Date(now.getTime() - 14 * 86400000),
-      lastActivityAt: new Date(now.getTime() - 1 * 86400000),
-    };
-
-    // Link 2: Velocity Labs - YouTube Review
-    const link2Id = uuidv4();
-    const link2: TrackingLinkEntity = {
-      id: link2Id,
-      organizationId,
-      environment: EnvironmentType.LIVE,
-      programId: program.id,
-      affiliateId: aff1.id,
-      campaignId: 'creator-showcase',
-      destinationUrl: 'https://partneriq.in/demo?utm_source=youtube',
-      shortCode: 'velocity-yt',
-      status: TrackingLinkStatus.ACTIVE,
-      utmSource: 'youtube',
-      utmMedium: 'video-review',
-      utmCampaign: 'creator-showcase',
-      healthStatus: 'HEALTHY',
-      notes: 'Sponsored video review and breakdown description link',
-      createdAt: new Date(now.getTime() - 12 * 86400000),
-      lastActivityAt: new Date(now.getTime() - 2 * 86400000),
-    };
-
-    // Link 3: Summit Peak - Newsletter Promotion
-    const link3Id = uuidv4();
-    const link3: TrackingLinkEntity = {
-      id: link3Id,
-      organizationId,
-      environment: EnvironmentType.LIVE,
-      programId: program.id,
-      affiliateId: aff0.id,
-      campaignId: 'q3-newsletter',
-      destinationUrl: 'https://partneriq.in/signup?utm_source=newsletter',
-      shortCode: 'summit-news',
-      status: TrackingLinkStatus.ACTIVE,
-      utmSource: 'newsletter',
-      utmMedium: 'email',
-      utmCampaign: 'q3-newsletter',
-      healthStatus: 'HEALTHY',
-      notes: 'Weekly VIP partner digest feature',
-      createdAt: new Date(now.getTime() - 8 * 86400000),
-      lastActivityAt: new Date(now.getTime() - 3 * 86400000),
-    };
-
-    // Link 4: Paused / Inactive Link (Link Health test)
-    const link4Id = uuidv4();
-    const link4: TrackingLinkEntity = {
-      id: link4Id,
-      organizationId,
-      environment: EnvironmentType.LIVE,
-      programId: program.id,
-      affiliateId: aff1.id,
-      campaignId: 'old-promo-2025',
-      destinationUrl: 'https://partneriq.in/promo/archived',
-      shortCode: 'promo-legacy',
-      status: TrackingLinkStatus.PAUSED,
-      utmSource: 'direct',
-      healthStatus: 'INACTIVE',
-      notes: 'Archived holiday season promotional link',
-      createdAt: new Date(now.getTime() - 60 * 86400000),
-      lastActivityAt: new Date(now.getTime() - 45 * 86400000),
-    };
-
-    dbStore.trackingLinks.push(link1, link2, link3, link4);
-
-    // Seed realistic click records for links
-    const seedClicksForLink = (linkObj: TrackingLinkEntity, count: number, daysBack: number) => {
-      for (let i = 0; i < count; i++) {
-        const clickDate = new Date(now.getTime() - Math.floor(Math.random() * daysBack) * 86400000);
-        const anonId = `anon_${uuidv4().slice(0, 10)}`;
-        const ip = `103.21.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
-        dbStore.clicks.push({
-          id: uuidv4(),
-          organizationId,
-          environment: EnvironmentType.LIVE,
-          programId: linkObj.programId,
-          affiliateId: linkObj.affiliateId,
-          trackingLinkId: linkObj.id,
-          anonymousId: anonId,
-          ipHash: crypto.createHash('sha256').update(ip).digest('hex'),
-          userAgent: i % 2 === 0 ? 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/120.0.0.0' : 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) Safari/604.1',
-          referrer: linkObj.utmSource === 'youtube' ? 'https://youtube.com' : 'https://google.com',
-          landingUrl: linkObj.destinationUrl,
-          utmSource: linkObj.utmSource,
-          utmMedium: linkObj.utmMedium,
-          utmCampaign: linkObj.utmCampaign,
-          country: 'IN',
-          deviceType: i % 2 === 0 ? 'desktop' : 'mobile',
-          browser: i % 2 === 0 ? 'Chrome' : 'Safari',
-          fraudScore: 5,
-          fraudStatus: FraudStatus.LOW,
-          createdAt: clickDate,
-        } as any);
-      }
-    };
-
-    seedClicksForLink(link1, 48, 14);
-    seedClicksForLink(link2, 26, 12);
-    seedClicksForLink(link3, 15, 8);
+  /**
+   * Public redirect URL for a short code. Mirrors the org-slug host used by the
+   * affiliate portal so a link copied from either surface resolves identically.
+   */
+  private buildShortUrl(organizationId: string, shortCode: string): string {
+    const org = dbStore.organizations.find((o) => o.id === organizationId);
+    return `https://${org?.slug || 'go'}.partneriq.in/r/${shortCode}`;
   }
+
 
   /**
    * 360-Degree Tracking Link Analytics Aggregations
@@ -322,7 +175,6 @@ export class TrackingService {
     environment: EnvironmentType = EnvironmentType.LIVE,
     query: TrackingLinkAnalyticsQueryDto = {},
   ) {
-    this.ensureDefaultTrackingLinks(organizationId);
 
     const links = dbStore.trackingLinks.filter(
       (l) =>
@@ -374,7 +226,7 @@ export class TrackingService {
     const convIdsSet = new Set(attributedConversions.map((c) => c.id));
     const totalCommission = commissions
       .filter((comm) => comm.conversionId && convIdsSet.has(comm.conversionId))
-      .reduce((sum, comm) => sum + (comm.commissionAmount || 0), 0);
+      .reduce((sum, comm) => sum + netCommissionAmount(comm), 0);
 
     const conversionRate = totalClicks > 0
       ? Number(((totalConversions / totalClicks) * 100).toFixed(1))
@@ -404,7 +256,7 @@ export class TrackingService {
         trajectoryMap[key].conversions++;
         trajectoryMap[key].revenue += conv.amount || 0;
         const comm = commissions.find((c) => c.conversionId === conv.id);
-        if (comm) trajectoryMap[key].commission += comm.commissionAmount || 0;
+        if (comm) trajectoryMap[key].commission += netCommissionAmount(comm);
       }
     }
 
@@ -512,10 +364,16 @@ export class TrackingService {
       }))
       .sort((a, b) => b.revenue - a.revenue);
 
-    // UTM Source breakdown
+    // Source breakdowns are keyed on the link's configured source, not the
+    // effective one. An inbound `?utm_source=` legitimately overrides what gets
+    // forwarded to the merchant, but letting it also drive the organization's
+    // own reporting would let a partner relabel their traffic at will.
+    const canonicalSource = (clk: ClickEntity) =>
+      clk.canonicalUtmSource || clk.utmSource || 'direct';
+
     const utmSourceMap: Record<string, number> = {};
     for (const clk of clicks) {
-      const src = clk.utmSource || 'direct';
+      const src = canonicalSource(clk);
       utmSourceMap[src] = (utmSourceMap[src] || 0) + 1;
     }
     const utmSources = Object.entries(utmSourceMap).map(([source, count]) => ({
@@ -523,6 +381,21 @@ export class TrackingService {
       count,
       percentage: totalClicks > 0 ? Number(((count / totalClicks) * 100).toFixed(1)) : 0,
     }));
+
+    // Traffic source breakdown (clicks + attributed conversions per UTM source)
+    const clickSourceById = new Map(clicks.map((c) => [c.id, canonicalSource(c)]));
+    const sourceConversionMap: Record<string, number> = {};
+    for (const conv of attributedConversions) {
+      const src = clickSourceById.get(conv.clickId as string) || 'direct';
+      sourceConversionMap[src] = (sourceConversionMap[src] || 0) + 1;
+    }
+    const sourceBreakdown = Object.entries(utmSourceMap)
+      .map(([source, count]) => ({
+        source,
+        clicks: count,
+        conversions: sourceConversionMap[source] || 0,
+      }))
+      .sort((a, b) => b.clicks - a.clicks);
 
     // Link health checks
     const healthyCount = links.filter((l) => (l as any).healthStatus === 'HEALTHY' || !(l as any).healthStatus).length;
@@ -565,6 +438,12 @@ export class TrackingService {
       programBreakdown,
       affiliateBreakdown,
       utmSources,
+      sourceBreakdown,
+      // Flattened aliases of healthSummary â€” the portal's health cards and the
+      // Link Health Center tab badge read these directly.
+      healthyLinks: healthyCount,
+      warningLinks: degradedCount,
+      brokenLinks: brokenCount,
       healthSummary: {
         healthyCount,
         degradedCount,
@@ -584,10 +463,9 @@ export class TrackingService {
     environment: EnvironmentType = EnvironmentType.LIVE,
     query: ListTrackingLinksQueryDto = {},
   ) {
-    this.ensureDefaultTrackingLinks(organizationId);
 
     const page = Math.max(1, Number(query.page || 1));
-    const limit = Math.max(1, Math.min(100, Number(query.limit || 20)));
+    const limit = Math.max(1, Math.min(MAX_PAGE_SIZE, Number(query.limit || 20)));
 
     let links = dbStore.trackingLinks.filter(
       (l) =>
@@ -655,13 +533,13 @@ export class TrackingService {
       const convIds = new Set(linkConversions.map((c) => c.id));
       const commission = commissions
         .filter((comm) => comm.conversionId && convIds.has(comm.conversionId))
-        .reduce((sum, comm) => sum + (comm.commissionAmount || 0), 0);
+        .reduce((sum, comm) => sum + netCommissionAmount(comm), 0);
 
       const conversionRate = linkClicks.length > 0
         ? Number(((linkConversions.length / linkClicks.length) * 100).toFixed(1))
         : 0;
 
-      const fullTrackingUrl = `https://partneriq.in/r/${link.shortCode}`;
+      const shortUrl = this.buildShortUrl(organizationId, link.shortCode);
 
       return {
         ...link,
@@ -675,7 +553,8 @@ export class TrackingService {
         conversionRate,
         revenue,
         commission,
-        fullTrackingUrl,
+        shortUrl,
+        fullTrackingUrl: shortUrl,
       };
     });
 
@@ -715,7 +594,6 @@ export class TrackingService {
     linkId: string,
     environment: EnvironmentType = EnvironmentType.LIVE,
   ) {
-    this.ensureDefaultTrackingLinks(organizationId);
 
     const link = dbStore.trackingLinks.find(
       (l) =>
@@ -744,7 +622,7 @@ export class TrackingService {
     );
 
     const revenue = conversions.reduce((sum, c) => sum + (c.amount || 0), 0);
-    const commission = commissions.reduce((sum, comm) => sum + (comm.commissionAmount || 0), 0);
+    const commission = commissions.reduce((sum, comm) => sum + netCommissionAmount(comm), 0);
     const conversionRate = clicks.length > 0 ? Number(((conversions.length / clicks.length) * 100).toFixed(1)) : 0;
 
     // Recent clicks (up to 10)
@@ -785,7 +663,8 @@ export class TrackingService {
     return {
       link: {
         ...link,
-        fullTrackingUrl: `https://partneriq.in/r/${link.shortCode}`,
+        shortUrl: this.buildShortUrl(organizationId, link.shortCode),
+        fullTrackingUrl: this.buildShortUrl(organizationId, link.shortCode),
       },
       partner: {
         id: aff?.id,
@@ -839,9 +718,12 @@ export class TrackingService {
     actorId?: string,
     environment: EnvironmentType = EnvironmentType.LIVE,
   ) {
-    const program = dbStore.programs.find((p) => p.id === dto.programId && !p.deletedAt);
+    // Resolve program â€” use the provided programId or fall back to the first active program in the org
+    const program = dto.programId
+      ? dbStore.programs.find((p) => p.id === dto.programId && !p.deletedAt)
+      : dbStore.programs.find((p) => p.organizationId === organizationId && p.status === ProgramStatus.ACTIVE && !p.deletedAt);
     if (!program) {
-      throw new BadRequestException('Program not found');
+      throw new BadRequestException('Program not found. Please select a valid program or create one first.');
     }
     EnvironmentUtils.assertEnvironmentIntegrity(
       { organizationId, environment },
@@ -852,9 +734,12 @@ export class TrackingService {
       throw new BadRequestException('Cannot create tracking links for an inactive program');
     }
 
-    const affiliate = dbStore.affiliates.find((a) => a.id === dto.affiliateId && a.organizationId === organizationId);
+    // Resolve affiliate â€” use the provided affiliateId or fall back to the first active affiliate in the org
+    const affiliate = dto.affiliateId
+      ? dbStore.affiliates.find((a) => a.id === dto.affiliateId && a.organizationId === organizationId)
+      : dbStore.affiliates.find((a) => a.organizationId === organizationId && a.status === AffiliateStatus.ACTIVE);
     if (!affiliate) {
-      throw new BadRequestException('Affiliate partner not found in this organization');
+      throw new BadRequestException('Affiliate partner not found. Please select a valid partner or invite one first.');
     }
     if (affiliate.status !== AffiliateStatus.ACTIVE) {
       throw new BadRequestException('Cannot create tracking links for an inactive affiliate');
@@ -885,8 +770,8 @@ export class TrackingService {
       id: uuidv4(),
       organizationId,
       environment,
-      programId: dto.programId,
-      affiliateId: dto.affiliateId,
+      programId: program.id,
+      affiliateId: affiliate.id,
       campaignId: dto.campaignId,
       destinationUrl: dto.destinationUrl.trim(),
       shortCode,
@@ -904,19 +789,20 @@ export class TrackingService {
     } as any;
 
     dbStore.trackingLinks.push(link);
+    await awaitPersist(link);
 
     // Performance Aggregation & Automations
     await this.performanceAggregationService?.recordTrackingLinkCreated(
       organizationId,
-      dto.programId,
-      dto.affiliateId,
+      program.id,
+      affiliate.id,
     );
 
     await this.automationEngineService?.handleEvent(
       AutomationTriggerType.TRACKING_LINK_CREATED,
       organizationId,
-      dto.programId,
-      dto.affiliateId,
+      program.id,
+      affiliate.id,
       { trackingLinkId: link.id, shortCode },
     );
 
@@ -936,7 +822,11 @@ export class TrackingService {
       },
     });
 
-    return link;
+    return {
+      ...link,
+      shortUrl: this.buildShortUrl(organizationId, link.shortCode),
+      fullTrackingUrl: this.buildShortUrl(organizationId, link.shortCode),
+    };
   }
 
   /**
@@ -988,6 +878,7 @@ export class TrackingService {
       metadata: { changes: dto },
     });
 
+    await awaitPersist(link);
     return link;
   }
 
@@ -1005,6 +896,7 @@ export class TrackingService {
     );
 
     let updatedCount = 0;
+    const pendingPersist: Promise<unknown>[] = [];
     for (const link of links) {
       if (dto.action === 'ACTIVATE') {
         link.status = TrackingLinkStatus.ACTIVE;
@@ -1019,6 +911,7 @@ export class TrackingService {
         updatedCount++;
       }
       (link as any).updatedAt = new Date();
+      pendingPersist.push(awaitPersist(link));
     }
 
     this.audit({
@@ -1031,6 +924,7 @@ export class TrackingService {
       metadata: { action: dto.action, updatedCount, linkIds: dto.linkIds },
     });
 
+    await Promise.all(pendingPersist);
     return { success: true, updatedCount, action: dto.action };
   }
 
@@ -1105,12 +999,27 @@ export class TrackingService {
    * Legacy Get Links compatibility
    */
   async getLinks(organizationId: string, environment: EnvironmentType = EnvironmentType.LIVE, programId?: string) {
-    const paginated = await this.getLinksPaginated(organizationId, environment, {
+    // getLinksPaginated caps `limit` at 100 to bound public page sizes, so asking
+    // for 1000 in one call silently returned only the first 100 links. This is an
+    // unpaginated endpoint by contract, so it walks the pages instead of
+    // pretending a single oversized request works.
+    const first = await this.getLinksPaginated(organizationId, environment, {
       programId,
       page: 1,
-      limit: 1000,
+      limit: MAX_PAGE_SIZE,
     });
-    return paginated.data;
+
+    const all = [...first.data];
+    for (let page = 2; page <= first.meta.totalPages; page++) {
+      const next = await this.getLinksPaginated(organizationId, environment, {
+        programId,
+        page,
+        limit: MAX_PAGE_SIZE,
+      });
+      all.push(...next.data);
+    }
+
+    return all;
   }
 
   /**
@@ -1124,9 +1033,44 @@ export class TrackingService {
     country?: string,
     utm?: UtmContext,
   ) {
-    const link = dbStore.trackingLinks.find(
+    // Short codes are unique per (organizationId, environment), not globally, so a
+    // bare `find` by code can serve one tenant's link to another tenant's traffic.
+    // The redirect host carries the org slug ({slug}.partneriq.in), which is the
+    // only tenant signal a public redirect has â€” when it resolves, it is binding.
+    const matches = dbStore.trackingLinks.filter(
       (l) => l.shortCode === shortCode.toLowerCase() && l.status === TrackingLinkStatus.ACTIVE,
     );
+
+    const { organizationId: hostOrganizationId, unknownTenant } =
+      this.resolveOrganizationIdFromHost(utm?.host);
+
+    if (unknownTenant) {
+      throw new NotFoundException('Tracking link not found or inactive');
+    }
+
+    // An explicit tenant (the SDK's public key) always wins over the host slug.
+    const scopeOrganizationId = utm?.organizationId || hostOrganizationId;
+    const scoped = scopeOrganizationId
+      ? matches.filter((l) => l.organizationId === scopeOrganizationId)
+      : matches;
+
+    // A public redirect has no environment header, so LIVE always wins; a TEST
+    // link is only served when no LIVE link claims the code.
+    const liveOnly = scoped.filter(
+      (l) => !l.environment || l.environment === EnvironmentType.LIVE,
+    );
+    const pool = liveOnly.length ? liveOnly : scoped;
+
+    if (pool.length > 1) {
+      this.logger.warn(
+        `Short code '${shortCode}' is claimed by ${pool.length} links across tenants and the host ` +
+        `('${utm?.host || 'unknown'}') did not identify one. Serving the earliest-created link.`,
+      );
+    }
+
+    const link = [...pool].sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    )[0];
 
     if (!link) {
       throw new NotFoundException('Tracking link not found or inactive');
@@ -1146,18 +1090,11 @@ export class TrackingService {
       affiliate = dbStore.affiliates.find((a) => a.id === link.affiliateId);
     }
 
-    if (!affiliate) {
-      affiliate =
-        dbStore.affiliates.find(
-          (a) => a.organizationId === link.organizationId && a.status === AffiliateStatus.ACTIVE,
-        ) ||
-        dbStore.affiliates.find((a) => a.organizationId === link.organizationId);
-
-      if (affiliate && !link.affiliateId) {
-        link.affiliateId = affiliate.id;
-      }
-    }
-
+    // No arbitrary fallback here on purpose: picking "any active affiliate in the
+    // org" would attribute real revenue â€” and real commission â€” to a partner who
+    // had nothing to do with the click, and the old code also wrote that guess
+    // back onto the link permanently. An unresolvable affiliate is a tracking
+    // failure, not something to guess at.
     const isEligibleForTracking =
       !!program && program.status === ProgramStatus.ACTIVE &&
       !!affiliate && affiliate.status === AffiliateStatus.ACTIVE;
@@ -1171,7 +1108,11 @@ export class TrackingService {
         resourceType: 'tracking_link',
         resourceId: link.id,
         metadata: {
-          reason: !program || program.status !== ProgramStatus.ACTIVE ? 'PROGRAM_INACTIVE' : 'AFFILIATE_INACTIVE',
+          reason: !program || program.status !== ProgramStatus.ACTIVE
+            ? 'PROGRAM_INACTIVE'
+            : !affiliate
+              ? 'AFFILIATE_UNRESOLVED'
+              : 'AFFILIATE_INACTIVE',
           programId: link.programId,
           affiliateId: affiliate?.id || link.affiliateId,
         },
@@ -1191,7 +1132,13 @@ export class TrackingService {
       'Program',
     );
 
-    const anonymousId = `anon_${uuidv4()}`;
+    // Reuse the visitor's existing identity when they already carry one for this
+    // org. Minting a fresh id on every click orphaned the earlier attribution
+    // rows â€” nothing could ever match them again â€” which quietly collapsed
+    // FIRST_CLICK and the weighted multi-touch models down to last-click.
+    const anonymousId =
+      this.resolveExistingAnonymousId(utm?.existingAnonymousId, link.organizationId) ||
+      `anon_${uuidv4()}`;
     const ipHash = ipAddress ? crypto.createHmac('sha256', process.env.FRAUD_IP_HASH_SECRET || process.env.JWT_SECRET || 'partneriq-fraud-ip-salt').update(ipAddress).digest('hex') : 'unknown';
 
     // Record Click
@@ -1213,6 +1160,10 @@ export class TrackingService {
       utmCampaign: utm?.utmCampaign || (link as any).utmCampaign,
       utmTerm: utm?.utmTerm || (link as any).utmTerm,
       utmContent: utm?.utmContent || (link as any).utmContent,
+      // Effective UTMs above honour an inbound override so the partner can tag
+      // placements; this records how the link itself was configured, which is
+      // what source reporting is based on.
+      canonicalUtmSource: (link as any).utmSource || 'direct',
       country: country || 'unknown',
       deviceType: this.getDeviceType(userAgent),
       browser: this.getBrowser(userAgent),
@@ -1223,6 +1174,7 @@ export class TrackingService {
     };
     dbStore.clicks.push(click);
     (link as any).lastActivityAt = new Date();
+    const pendingPersist: Promise<unknown>[] = [awaitPersist(click), awaitPersist(link)];
 
     this.audit({
       organizationId: link.organizationId,
@@ -1270,6 +1222,7 @@ export class TrackingService {
       createdAt: new Date(),
     };
     dbStore.attributions.push(attribution);
+    pendingPersist.push(awaitPersist(attribution));
 
     this.audit({
       organizationId: link.organizationId,
@@ -1286,13 +1239,156 @@ export class TrackingService {
       },
     });
 
+    const destinationUrl = this.buildResolvedDestination(
+      link,
+      click,
+      anonymousId,
+      utm?.passthroughParams,
+      utm?.deepLinkTarget,
+    );
+
+    await Promise.all(pendingPersist);
     return {
-      destinationUrl: link.destinationUrl,
+      destinationUrl,
       anonymousId,
       clickId: click.id,
       cookieMaxAgeMs: cookieDays * 24 * 3600 * 1000,
       tracked: true,
     };
+  }
+
+  /**
+   * The cookie this redirect sets belongs to the PartnerIQ redirect host, so the
+   * merchant's own site can never read it â€” different origin, and `SameSite`
+   * keeps it off cross-site XHR regardless. The identifiers therefore have to
+   * travel to the destination in the URL, where the merchant page (or the
+   * browser SDK's `captureReferral()`) can pick them up and persist them in
+   * first-party storage. This is also where the UTM and custom parameters the
+   * Link Builder previews actually get applied â€” previously they were recorded
+   * on the click but never forwarded, so the merchant's own analytics saw the
+   * traffic as direct.
+   */
+  private buildResolvedDestination(
+    link: TrackingLinkEntity,
+    click: ClickEntity,
+    anonymousId: string,
+    passthroughParams?: Record<string, string>,
+    deepLinkTarget?: string,
+  ): string {
+    try {
+      const url = this.applyDeepLink(link.destinationUrl, deepLinkTarget);
+      if (click.utmSource) url.searchParams.set('utm_source', click.utmSource);
+      if (click.utmMedium) url.searchParams.set('utm_medium', click.utmMedium);
+      if (click.utmCampaign) url.searchParams.set('utm_campaign', click.utmCampaign);
+      if (click.utmTerm) url.searchParams.set('utm_term', click.utmTerm);
+      if (click.utmContent) url.searchParams.set('utm_content', click.utmContent);
+
+      const customParameters = (link as any).customParameters as Record<string, string> | undefined;
+      for (const [key, value] of Object.entries(customParameters || {})) {
+        if (key.trim()) url.searchParams.set(key.trim(), String(value ?? ''));
+      }
+
+      // Anything else the affiliate appended at click time (sub_id, placement
+      // tags, and so on) rides along â€” but only into keys nothing has claimed,
+      // so a visitor-supplied value can never overwrite the link's own
+      // configuration or the destination URL's existing parameters.
+      for (const [key, value] of Object.entries(passthroughParams || {})) {
+        if (!url.searchParams.has(key)) url.searchParams.set(key, value);
+      }
+
+      // clickId is the primary, durable attribution identifier; anonymousId is
+      // the fallback the identify endpoint keys on.
+      url.searchParams.set('pi_click_id', click.id);
+      url.searchParams.set('pi_anon_id', anonymousId);
+      return url.toString();
+    } catch {
+      // A destination that isn't a parseable absolute URL should still redirect
+      // rather than 500 â€” it just goes out without the attribution parameters.
+      return link.destinationUrl;
+    }
+  }
+
+  /**
+   * Applies a `?url=` deep-link target on top of the link's own destination.
+   *
+   * This is an open-redirect surface: the target arrives in a URL that anyone
+   * can craft and share, so it is constrained to the destination's own origin.
+   * A relative path (`/pricing`) is resolved against the destination; an
+   * absolute URL is honoured only when its origin matches exactly. Anything
+   * else â€” another host, a protocol-relative `//evil.com`, a `javascript:`
+   * payload â€” is discarded and the visitor lands on the configured destination,
+   * which is the safe outcome rather than an error page.
+   */
+  private applyDeepLink(destinationUrl: string, deepLinkTarget?: string): URL {
+    const destination = new URL(destinationUrl);
+    if (!deepLinkTarget) return destination;
+
+    const target = deepLinkTarget.trim();
+    // `//host` is protocol-relative and would resolve to a foreign origin.
+    if (!target || target.startsWith('//')) return destination;
+
+    let resolved: URL;
+    try {
+      resolved = new URL(target, destination);
+    } catch {
+      return destination;
+    }
+
+    if (resolved.origin !== destination.origin) {
+      this.logger.warn(
+        `Rejected cross-origin deep link '${target}' for destination '${destination.origin}'.`,
+      );
+      return destination;
+    }
+
+    // Keep query parameters the link author configured on the destination;
+    // the deep link chooses the path, not the campaign wiring.
+    for (const [key, value] of destination.searchParams) {
+      if (!resolved.searchParams.has(key)) resolved.searchParams.set(key, value);
+    }
+
+    return resolved;
+  }
+
+  /**
+   * Accepts an inbound `pi_anon_id` only when it is one this organization has
+   * actually issued, so a hand-crafted cookie cannot graft a visitor onto
+   * someone else's attribution history.
+   */
+  private resolveExistingAnonymousId(
+    candidate: string | undefined,
+    organizationId: string,
+  ): string | undefined {
+    if (!candidate || !/^anon_[0-9a-f-]{36}$/i.test(candidate)) return undefined;
+    const known = dbStore.attributions.some(
+      (a) => a.anonymousId === candidate && a.organizationId === organizationId,
+    );
+    return known ? candidate : undefined;
+  }
+
+  /**
+   * Maps the redirect host's leading label ({slug}.partneriq.in) to an org.
+   * Returns undefined for apex/localhost hosts and for the generic `go.` host,
+   * which name no tenant.
+   */
+  private resolveOrganizationIdFromHost(host?: string): { organizationId?: string; unknownTenant: boolean } {
+    if (!host) return { unknownTenant: false };
+    const hostname = host.split(':')[0].toLowerCase();
+    const labels = hostname.split('.');
+    if (labels.length < 3) return { unknownTenant: false };
+
+    const slug = labels[0];
+    if (!slug || slug === 'www' || slug === 'go') return { unknownTenant: false };
+
+    const organizationId = dbStore.organizations.find((o) => o.slug === slug)?.id;
+    if (organizationId) return { organizationId, unknownTenant: false };
+
+    // Only a partneriq.in subdomain is guaranteed to be a tenant host. An
+    // unrecognised slug there is a bad host, not an invitation to fall back to
+    // matching across every tenant â€” otherwise anyone who can set a Host header
+    // reopens the collision. Other hosts (custom domains) stay unscoped.
+    const isPlatformHost = labels.slice(-2).join('.') === 'partneriq.in';
+    return { unknownTenant: isPlatformHost };
   }
 
   private getDeviceType(userAgent?: string) {
@@ -1329,18 +1425,21 @@ export class TrackingService {
       throw new BadRequestException('Invalid public tracking key');
     }
 
-    const link = dbStore.trackingLinks.find((l) => l.shortCode === dto.shortCode.toLowerCase());
-    if (link && link.organizationId !== pubKey.organizationId) {
-      throw new BadRequestException('Public key does not match tracking link organization');
-    }
-
+    // Scope the lookup to the key's own organization rather than pre-checking a
+    // globally-found link. Short codes are unique per tenant, not globally, so
+    // the old `find` could land on another tenant's link and reject a legitimate
+    // click â€” or, once it passed, leave the resolution unscoped entirely.
     return this.handleRedirect(dto.shortCode, userAgent, ipAddress, undefined, undefined, {
+      organizationId: pubKey.organizationId,
       landingUrl: dto.landingUrl,
       utmSource: dto.utmSource,
       utmMedium: dto.utmMedium,
       utmCampaign: dto.utmCampaign,
       utmTerm: dto.utmTerm,
       utmContent: dto.utmContent,
+      // The SDK reports the visitor's existing id; honouring it keeps one
+      // identity across touchpoints exactly as the redirect path does.
+      existingAnonymousId: dto.anonymousId,
     });
   }
 
@@ -1390,6 +1489,7 @@ export class TrackingService {
     toUpdate.forEach((attr) => {
       attr.customerExternalId = dto.customerExternalId;
     });
+    await Promise.all(toUpdate.map((attr) => awaitPersist(attr)));
 
     if (toUpdate.length) {
       this.audit({

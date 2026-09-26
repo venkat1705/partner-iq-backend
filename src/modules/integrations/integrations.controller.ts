@@ -10,6 +10,12 @@ import { IntegrationStatus } from '../../common/enums';
 import type { AuthUserPayload } from '../../common/interfaces/request-with-user.interface';
 import { IntegrationsService } from './integrations.service';
 import { ConnectIntegrationDto, TestIntegrationDto } from './dto/connect-integration.dto';
+import {
+  TriggerSyncDto,
+  RetryOperationDto,
+  UpdateFieldMappingsDto,
+  UpdateConnectionStatusDto,
+} from './dto/integration-operations.dto';
 
 @ApiTags('Integrations')
 @Controller('api/v1')
@@ -183,6 +189,198 @@ export class IntegrationsController {
     @CurrentUser() user: AuthUserPayload,
   ) {
     return this.integrationsService.disconnectIntegration(organizationId, user.userId, slugOrId);
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // Operations & Control Center Endpoints
+  // ─────────────────────────────────────────────────────────
+
+  @Get('organizations/:organizationId/integrations/connections')
+  @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+  @RequirePermissions('view.integrations')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List all active and configured connections for an organization' })
+  listConnections(@Param('organizationId') organizationId: string) {
+    return this.integrationsService.listOrganizationConnections(organizationId);
+  }
+
+  @Get('organizations/:organizationId/integrations/syncs')
+  @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+  @RequirePermissions('view.integrations')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List all integration sync activity logs across the organization' })
+  listAllSyncs(
+    @Param('organizationId') organizationId: string,
+    @Query('status') status?: string,
+    @Query('direction') direction?: string,
+    @Query('entityType') entityType?: string,
+    @Query('limit') limit?: number,
+  ) {
+    return this.integrationsService.listSyncLogs(organizationId, undefined, {
+      status,
+      direction,
+      entityType,
+      limit: limit ? Number(limit) : undefined,
+    });
+  }
+
+  @Get('organizations/:organizationId/integrations/:slugOrId/syncs')
+  @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+  @RequirePermissions('view.integrations')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List sync activity logs for a specific integration' })
+  listSyncs(
+    @Param('organizationId') organizationId: string,
+    @Param('slugOrId') slugOrId: string,
+    @Query('status') status?: string,
+    @Query('direction') direction?: string,
+    @Query('entityType') entityType?: string,
+    @Query('limit') limit?: number,
+  ) {
+    return this.integrationsService.listSyncLogs(organizationId, slugOrId, {
+      status,
+      direction,
+      entityType,
+      limit: limit ? Number(limit) : undefined,
+    });
+  }
+
+  @Post('organizations/:organizationId/integrations/:slugOrId/sync')
+  @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+  @RequirePermissions('manage.integrations')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Trigger a synchronization run for an integration' })
+  triggerSync(
+    @Param('organizationId') organizationId: string,
+    @Param('slugOrId') slugOrId: string,
+    @CurrentUser() user: AuthUserPayload,
+    @Body() dto?: TriggerSyncDto,
+  ) {
+    return this.integrationsService.triggerSync(organizationId, user.userId, slugOrId, dto);
+  }
+
+  @Get('organizations/:organizationId/integrations/events')
+  @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+  @RequirePermissions('view.integrations')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List inbound webhook events across all integrations for an organization' })
+  listAllEvents(
+    @Param('organizationId') organizationId: string,
+    @Query('status') status?: string,
+    @Query('eventType') eventType?: string,
+    @Query('limit') limit?: number,
+  ) {
+    return this.integrationsService.listEvents(organizationId, undefined, {
+      status,
+      eventType,
+      limit: limit ? Number(limit) : undefined,
+    });
+  }
+
+  @Get('organizations/:organizationId/integrations/:slugOrId/events')
+  @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+  @RequirePermissions('view.integrations')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List inbound webhook events for a specific integration' })
+  listEvents(
+    @Param('organizationId') organizationId: string,
+    @Param('slugOrId') slugOrId: string,
+    @Query('status') status?: string,
+    @Query('eventType') eventType?: string,
+    @Query('limit') limit?: number,
+  ) {
+    return this.integrationsService.listEvents(organizationId, slugOrId, {
+      status,
+      eventType,
+      limit: limit ? Number(limit) : undefined,
+    });
+  }
+
+  @Get('organizations/:organizationId/integrations/errors')
+  @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+  @RequirePermissions('view.integrations')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List grouped integration errors across all connections' })
+  listAllErrors(@Param('organizationId') organizationId: string) {
+    return this.integrationsService.listErrors(organizationId);
+  }
+
+  @Get('organizations/:organizationId/integrations/:slugOrId/errors')
+  @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+  @RequirePermissions('view.integrations')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List grouped integration errors for a specific integration' })
+  listErrors(
+    @Param('organizationId') organizationId: string,
+    @Param('slugOrId') slugOrId: string,
+  ) {
+    return this.integrationsService.listErrors(organizationId, slugOrId);
+  }
+
+  @Post('organizations/:organizationId/integrations/:slugOrId/retry')
+  @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+  @RequirePermissions('manage.integrations')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Idempotently retry a failed integration sync or webhook event' })
+  retryOperation(
+    @Param('organizationId') organizationId: string,
+    @Param('slugOrId') slugOrId: string,
+    @CurrentUser() user: AuthUserPayload,
+    @Body() dto: RetryOperationDto,
+  ) {
+    return this.integrationsService.retryOperation(organizationId, user.userId, slugOrId, dto);
+  }
+
+  @Get('organizations/:organizationId/integrations/:slugOrId/health')
+  @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+  @RequirePermissions('view.integrations')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get deterministic integration health breakdown' })
+  getHealth(
+    @Param('organizationId') organizationId: string,
+    @Param('slugOrId') slugOrId: string,
+  ) {
+    return this.integrationsService.getIntegrationHealth(organizationId, slugOrId);
+  }
+
+  @Get('organizations/:organizationId/integrations/:slugOrId/mapping')
+  @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+  @RequirePermissions('view.integrations')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get CRM data field mappings for an integration' })
+  getMapping(
+    @Param('organizationId') organizationId: string,
+    @Param('slugOrId') slugOrId: string,
+  ) {
+    return this.integrationsService.getFieldMappings(organizationId, slugOrId);
+  }
+
+  @Patch('organizations/:organizationId/integrations/:slugOrId/mapping')
+  @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+  @RequirePermissions('manage.integrations')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update CRM data field mappings for an integration' })
+  updateMapping(
+    @Param('organizationId') organizationId: string,
+    @Param('slugOrId') slugOrId: string,
+    @CurrentUser() user: AuthUserPayload,
+    @Body() dto: UpdateFieldMappingsDto,
+  ) {
+    return this.integrationsService.updateFieldMappings(organizationId, user.userId, slugOrId, dto);
+  }
+
+  @Patch('organizations/:organizationId/integrations/connections/:connectionId/status')
+  @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+  @RequirePermissions('manage.integrations')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update integration connection status (pause, resume, disconnect)' })
+  updateConnectionStatus(
+    @Param('organizationId') organizationId: string,
+    @Param('connectionId') connectionId: string,
+    @CurrentUser() user: AuthUserPayload,
+    @Body() dto: UpdateConnectionStatusDto,
+  ) {
+    return this.integrationsService.updateConnectionStatus(organizationId, user.userId, connectionId, dto);
   }
 
   // ─────────────────────────────────────────────────────────

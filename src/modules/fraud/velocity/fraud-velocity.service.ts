@@ -34,7 +34,7 @@ export class FraudVelocityService {
     this.hasWarnedFallback = true;
     const message = error instanceof Error ? error.message : String(error);
     this.logger.warn(
-      `Redis is unreachable for fraud velocity tracking; falling back to in-process counters. ` +
+      `Redis is unavailable for fraud velocity tracking (unreachable, or a command was rejected); falling back to in-process counters. ` +
       `In a multi-instance deployment this undercounts velocity (each instance only sees its own traffic), weakening IP/affiliate/device velocity signals. (${message})`,
     );
   }
@@ -43,8 +43,18 @@ export class FraudVelocityService {
     try {
       const client = this.getClient();
       if (client.status === 'wait') await client.connect();
-      const results = await client.multi().incr(key).expire(key, ttlSeconds, 'NX').exec();
-      return Number(results?.[0]?.[1] || 0);
+      // `EXPIRE key ttl NX` is Redis 7.0+. On older servers the flag is rejected
+      // when the command is queued, which aborts the whole MULTI (EXECABORT) and
+      // pushes every increment into the fallback path even though Redis is up.
+      // Reading the TTL and setting it only when absent has the same
+      // "don't extend an existing window" semantics on every version.
+      const results = await client.multi().incr(key).ttl(key).exec();
+      const count = Number(results?.[0]?.[1] || 0);
+      const remainingTtl = Number(results?.[1]?.[1] ?? -1);
+      if (remainingTtl < 0) {
+        await client.expire(key, ttlSeconds);
+      }
+      return count;
     } catch (error) {
       this.warnFallback(error);
       const now = Date.now();

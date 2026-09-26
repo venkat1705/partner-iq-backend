@@ -8,6 +8,7 @@ import {
   Organization,
   OrganizationMembership,
   OrganizationSecurityPolicy,
+  OrganizationSettings,
   MfaRateLimit,
   Program,
   User,
@@ -37,12 +38,19 @@ import {
   FraudSignal,
   AffiliateTrustHistory,
   FraudMetricRollup,
+  FraudRule,
+  FraudRuleVersion,
+  FraudAlert,
+  FraudInvestigation,
+  FraudHold,
+  FraudException,
   PayoutBatch,
   PayoutItem,
   WebhookEndpoint,
   WebhookDelivery,
   AuditLog,
   DemoBooking,
+  GoogleCalendarConnection,
   PublicKey,
   UserDevice,
   UserMfaConfig,
@@ -114,6 +122,44 @@ import {
   EmailSuppression,
   PlatformSetting,
   BlogPost,
+  SecurityEvent,
+  SecuritySignal,
+  SecurityAlert,
+  SecurityInvestigation,
+  SecurityIncident,
+  SecurityRule,
+  SecurityRuleVersion,
+  SecurityAction,
+  SecurityException,
+  ApiRequest,
+  ApiExternalCall,
+  ApiErrorGroup,
+  ApiRateLimitQuota,
+  ApiActivityAudit,
+  ApiActivityException,
+  WebhookEndpointRecord,
+  WebhookEventRecord,
+  WebhookDeliveryRecord,
+  WebhookDeliveryAttemptRecord,
+  WebhookEventTypeDefinition,
+  WebhookDeadLetterRecord,
+  WebhookSecurityIncidentRecord,
+  WebhookExceptionRecord,
+  WebhookAuditRecord,
+  SystemMonitoredService,
+  SystemHealthCheckResult,
+  SystemIncident,
+  SystemServiceDependency,
+  SystemDeploymentRecord,
+  SystemMaintenanceWindow,
+  FeatureFlag,
+  FeatureFlagEnvironment,
+  FeatureFlagRule,
+  FeatureFlagOverride,
+  FeatureFlagVersion,
+  FeatureFlagDependency,
+  FeatureFlagEvaluationMetric,
+  FeatureFlagSettingsRecord,
 } from './schema';
 import {
   RoleDefinition,
@@ -122,8 +168,29 @@ import {
   OrganizationPolicy,
   OrganizationInvitation,
 } from './schema-rbac';
+import {
+  GovernancePolicy,
+  GovernancePolicyVersion,
+  GovernanceApprovalPolicy,
+  GovernanceApprovalRequest,
+  GovernanceException,
+  GovernanceEmergencyControl,
+  GovernanceViolation,
+} from './schema-governance';
 
-dotenv.config();
+export function isTestRun(): boolean {
+  if (process.env.NODE_ENV === 'test') return true;
+  if (Boolean(process.env.JEST_WORKER_ID)) return true;
+  const scriptPath = process.argv[1] || '';
+  if (/[\\/]tests?[\\/]|\.(int\.)?spec\.ts$|\.test\.ts$/.test(scriptPath)) return true;
+  return false;
+}
+
+if (isTestRun()) {
+  dotenv.config({ path: '.env.test', override: true });
+} else {
+  dotenv.config({ path: '.env' });
+}
 
 const databaseUrl = process.env.DATABASE_URL;
 const databaseHost = process.env.DATABASE_HOST || process.env.PLANETSCALE_DB_HOST || 'localhost';
@@ -187,12 +254,19 @@ export const AppDataSource = new DataSource({
     FraudSignal,
     AffiliateTrustHistory,
     FraudMetricRollup,
+    FraudRule,
+    FraudRuleVersion,
+    FraudAlert,
+    FraudInvestigation,
+    FraudHold,
+    FraudException,
     PayoutBatch,
     PayoutItem,
     WebhookEndpoint,
     WebhookDelivery,
     AuditLog,
     DemoBooking,
+    GoogleCalendarConnection,
     PublicKey,
     UserDevice,
     UserMfaConfig,
@@ -269,12 +343,77 @@ export const AppDataSource = new DataSource({
     OrganizationInvitation,
     PlatformSetting,
     BlogPost,
+    SecurityEvent,
+    SecuritySignal,
+    SecurityAlert,
+    SecurityInvestigation,
+    SecurityIncident,
+    SecurityRule,
+    SecurityRuleVersion,
+    SecurityAction,
+    SecurityException,
+    ApiRequest,
+    ApiExternalCall,
+    ApiErrorGroup,
+    ApiRateLimitQuota,
+    ApiActivityAudit,
+    ApiActivityException,
+    WebhookEndpointRecord,
+    WebhookEventRecord,
+    WebhookDeliveryRecord,
+    WebhookDeliveryAttemptRecord,
+    WebhookEventTypeDefinition,
+    WebhookDeadLetterRecord,
+    WebhookSecurityIncidentRecord,
+    WebhookExceptionRecord,
+    WebhookAuditRecord,
+    SystemMonitoredService,
+    SystemHealthCheckResult,
+    SystemIncident,
+    SystemServiceDependency,
+    SystemDeploymentRecord,
+    SystemMaintenanceWindow,
+    FeatureFlag,
+    FeatureFlagEnvironment,
+    FeatureFlagRule,
+    FeatureFlagOverride,
+    FeatureFlagVersion,
+    FeatureFlagDependency,
+    FeatureFlagEvaluationMetric,
+    FeatureFlagSettingsRecord,
+    OrganizationSettings,
+    GovernancePolicy,
+    GovernancePolicyVersion,
+    GovernanceApprovalPolicy,
+    GovernanceApprovalRequest,
+    GovernanceException,
+    GovernanceEmergencyControl,
+    GovernanceViolation,
   ],
   migrations: ['src/database/migrations/*.ts'],
   migrationsRun: false,
 });
 
+
 export async function initializeDataSource() {
+  if (process.env.UNIT_TEST === 'true' || process.env.TEST_MEMORY_ONLY === 'true') {
+    throw new Error('Unit tests must not access the database');
+  }
+
+  if (isTestRun()) {
+    const targetDb = String((AppDataSource.options as any).database || process.env.DATABASE_NAME || '');
+    const targetHost = String((AppDataSource.options as any).host || process.env.DATABASE_HOST || 'localhost');
+
+    const isHostLocal = targetHost === 'localhost' || targetHost === '127.0.0.1';
+    const isDbTest = targetDb.endsWith('_test');
+
+    if (!isDbTest || !isHostLocal) {
+      throw new Error(
+        `FATAL SAFETY GUARD: Test run attempted against non-test database or non-local host! DATABASE_NAME="${targetDb}", DATABASE_HOST="${targetHost}". Tests may only run against databases ending with "_test" on localhost/127.0.0.1.`
+      );
+    }
+  }
+
   if (!AppDataSource.isInitialized) {
     await AppDataSource.initialize();
   }

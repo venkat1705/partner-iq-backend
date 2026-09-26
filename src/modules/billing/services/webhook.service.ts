@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { Injectable } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
-import { dbStore } from '../../../database/store';
+import { dbStore, awaitPersist } from '../../../database/store';
 import { PaymentEventStatus, PaymentProviderType, PaymentStatus, SubscriptionStatus } from '../enums/billing.enums';
 import { PaymentProviderFactory } from '../providers/payment-provider.factory';
 import { SubscriptionService } from './subscription.service';
@@ -40,14 +40,21 @@ export class BillingWebhookService {
       createdDate: new Date(),
     };
     dbStore.billingPaymentEvents.push(event as any);
+    // Re-fetch the tracked (Proxy-wrapped) array element: `event` is still the
+    // raw object that was pushed, and mutating fields on it directly — as this
+    // block used to — never goes through dbStore's persistence Proxy, so the
+    // status/processedAt/errorMessage updates below would silently vanish.
+    const trackedEvent = dbStore.billingPaymentEvents.find((item) => item.id === event.id)!;
 
     try {
       await this.dispatch(verified.eventType, verified.payload);
-      event.status = PaymentEventStatus.PROCESSED;
-      event.processedAt = new Date();
+      trackedEvent.status = PaymentEventStatus.PROCESSED;
+      trackedEvent.processedAt = new Date();
+      await awaitPersist(trackedEvent);
     } catch (error: any) {
-      event.status = PaymentEventStatus.FAILED;
-      event.errorMessage = error?.message || 'Webhook processing failed';
+      trackedEvent.status = PaymentEventStatus.FAILED;
+      trackedEvent.errorMessage = error?.message || 'Webhook processing failed';
+      await awaitPersist(trackedEvent);
       throw error;
     }
 

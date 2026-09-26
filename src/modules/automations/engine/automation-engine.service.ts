@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import {
   dbStore,
+  awaitPersist,
   AutomationExecutionEntity,
   AutomationWorkflowEntity,
 } from '../../../database/store';
@@ -83,6 +84,7 @@ export class AutomationEngineService {
       };
 
       dbStore.automationExecutions.push(execution);
+      await awaitPersist(execution);
 
       // Advance execution
       await this.stepRunner.runStep(execution, workflow, triggerNode.id);
@@ -104,6 +106,7 @@ export class AutomationEngineService {
         (e.status === AutomationExecutionStatus.RUNNING || e.status === AutomationExecutionStatus.WAITING),
     );
 
+    const pending: Promise<unknown>[] = [];
     for (const execution of activeExecutions) {
       const workflow = dbStore.automationWorkflows.find((w) => w.id === execution.workflowId);
       if (!workflow || !workflow.goalConfig) continue;
@@ -129,8 +132,10 @@ export class AutomationEngineService {
         this.logger.log(`Affiliate ${affiliateId} reached goal for workflow '${workflow.name}'. Cancelling pending steps.`);
         execution.status = AutomationExecutionStatus.GOAL_REACHED;
         execution.completedAt = new Date();
+        pending.push(awaitPersist(execution));
         this.stepRunner.cancelPendingStepsForExecution(execution.id, 'Goal achieved: Affiliate performed target activity');
       }
     }
+    await Promise.all(pending);
   }
 }

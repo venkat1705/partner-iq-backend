@@ -195,10 +195,14 @@ export class TrackingController {
       utmTerm: query.utm_term,
       utmContent: query.utm_content,
       affiliateId: query.aff || query.affiliateId || query.affiliate || query.ref,
+      host: req.headers.host,
+      existingAnonymousId: req.cookies?.pi_anon_id,
+      passthroughParams: this.collectPassthroughParams(query),
+      deepLinkTarget: query.url,
     });
 
-    if (result.tracked && result.anonymousId) {
-      this.setAttributionCookie(res, req, result.anonymousId, result.cookieMaxAgeMs);
+    if (result.tracked && result.anonymousId && result.clickId) {
+      this.setAttributionCookies(res, req, result.anonymousId, result.clickId, result.cookieMaxAgeMs);
     }
 
     return res.redirect(302, result.destinationUrl);
@@ -220,6 +224,45 @@ export class TrackingController {
     return this.trackingService.identifyCustomer(dto);
   }
 
+  /**
+   * Query parameters this redirect consumes itself and therefore never forwards:
+   * the UTM set is re-applied from the recorded click, the affiliate aliases are
+   * used to resolve the partner, and the `pi_` identifiers are minted server-side
+   * — echoing an inbound copy of those would let a visitor spoof attribution.
+   */
+  private static readonly RESERVED_REDIRECT_PARAMS = new Set([
+    'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
+    'aff', 'affiliateid', 'affiliate', 'ref',
+    'pi_click_id', 'pi_anon_id',
+    'url',
+  ]);
+
+  private static readonly PASSTHROUGH_KEY_PATTERN = /^[A-Za-z0-9_.-]{1,64}$/;
+  private static readonly MAX_PASSTHROUGH_PARAMS = 15;
+  private static readonly MAX_PASSTHROUGH_VALUE_LENGTH = 512;
+
+  /**
+   * Everything else an affiliate tacked onto the short link — `sub_id`,
+   * placement tags, campaign slugs — is carried through to the destination so
+   * the merchant's own analytics sees it. Bounded in count, key shape and value
+   * length, since this is attacker-controlled input being written into a URL we
+   * hand to a third-party site.
+   */
+  private collectPassthroughParams(query: Record<string, string | undefined>) {
+    const passthrough: Record<string, string> = {};
+
+    for (const [key, value] of Object.entries(query || {})) {
+      if (Object.keys(passthrough).length >= TrackingController.MAX_PASSTHROUGH_PARAMS) break;
+      if (typeof value !== 'string' || !value) continue;
+      if (TrackingController.RESERVED_REDIRECT_PARAMS.has(key.toLowerCase())) continue;
+      if (!TrackingController.PASSTHROUGH_KEY_PATTERN.test(key)) continue;
+
+      passthrough[key] = value.slice(0, TrackingController.MAX_PASSTHROUGH_VALUE_LENGTH);
+    }
+
+    return passthrough;
+  }
+
   private getClientIp(req: Request) {
     const forwardedFor = req.headers['x-forwarded-for'];
     if (Array.isArray(forwardedFor)) return forwardedFor[0];
@@ -232,13 +275,32 @@ export class TrackingController {
     return `${proto}://${host}${req.originalUrl}`.slice(0, 2000);
   }
 
-  private setAttributionCookie(res: Response, req: Request, anonymousId: string, maxAgeMs: number) {
-    res.cookie('pi_anon_id', anonymousId, {
+  private setAttributionCookies(
+    res: Response,
+    req: Request,
+    anonymousId: string,
+    clickId: string,
+    maxAgeMs: number,
+  ) {
+    const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
+
+    // `SameSite=Lax` is not sent on cross-site XHR/fetch, so a merchant site
+    // calling this API from its own origin never saw these cookies. `None` lifts
+    // that restriction but every browser requires `Secure` alongside it — and
+    // rejects the cookie outright without it — so plain-HTTP local development
+    // has to stay on `Lax`.
+    const crossSite = isHttps ? { sameSite: 'none' as const, secure: true } : { sameSite: 'lax' as const, secure: false };
+
+    const options = {
       maxAge: maxAgeMs,
-      httpOnly: false,
-      secure: req.secure || req.headers['x-forwarded-proto'] === 'https',
-      sameSite: 'lax',
+      httpOnly: false, // the browser SDK reads these via getAttribution()
       path: '/',
-    });
+      ...crossSite,
+    };
+
+    res.cookie('pi_anon_id', anonymousId, options);
+    // Documented as the primary, durable attribution identifier, but never
+    // actually set until now — getAttribution().clickId always read undefined.
+    res.cookie('pi_click_id', clickId, options);
   }
 }

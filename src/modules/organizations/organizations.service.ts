@@ -3,10 +3,11 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { IsNull } from 'typeorm';
-import { dbStore, OrganizationEntity, OrganizationMembershipEntity, ProgramEntity } from '../../database/store';
+import { dbStore, OrganizationEntity, OrganizationMembershipEntity, ProgramEntity, awaitPersist } from '../../database/store';
 import { AppDataSource } from '../../database/data-source';
 import { Organization, OrganizationMembership, Program } from '../../database/schema';
 import { OrganizationStatus, Role, ProgramType, ProgramStatus, CommissionType, AttributionModel, AuditAction, EnvironmentType } from '../../common/enums';
@@ -34,6 +35,8 @@ import { TierService } from '../gamification/tiers/tier.service';
 
 @Injectable()
 export class OrganizationsService {
+  private readonly logger = new Logger(OrganizationsService.name);
+
   constructor(
     private readonly trialService?: TrialService,
     private readonly emailDispatch?: SystemEmailDispatchService,
@@ -52,25 +55,71 @@ export class OrganizationsService {
    * the insert share a lock, so two tabs racing for the last slot cannot both
    * succeed.
    */
-  async create(userId: string, dto: CreateOrganizationDto) {
+  private isDuplicateKeyError(err: any): boolean {
+    return err?.code === 'ER_DUP_ENTRY' || err?.errno === 1062;
+  }
+
+  async create(
+    userId: string,
+    dto: CreateOrganizationDto,
+    idempotencyKey?: string,
+    options?: { isOnboarding?: boolean },
+  ) {
     assertUserEligibleForOrganization(userId);
+
+    // A replayed submission (double-click, network retry, two tabs) must return
+    // the organization the first request already created, not consume another
+    // slot in the account's org allowance or create a second row.
+    if (idempotencyKey) {
+      const existing = await this.findByIdempotencyKey(userId, idempotencyKey);
+      if (existing) return existing;
+    }
 
     if (this.billingAccounts && this.subscriptionLimits) {
       const account = await this.billingAccounts.resolveForUser(userId);
       return this.subscriptionLimits.reserve(
         account.id,
         BillingResourceType.ORGANIZATION,
-        () => this.createOrganizationRecord(userId, dto, account.id),
+        () => this.createOrganizationRecord(userId, dto, account.id, idempotencyKey, options?.isOnboarding),
       );
     }
 
-    return this.createOrganizationRecord(userId, dto);
+    return this.createOrganizationRecord(userId, dto, undefined, idempotencyKey, options?.isOnboarding);
+  }
+
+  private async findByIdempotencyKey(userId: string, idempotencyKey: string) {
+    if (!AppDataSource.isInitialized) {
+      return dbStore.organizations.find(
+        (o) => o.createdBy === userId && (o as any).onboardingIdempotencyKey === idempotencyKey && !o.deletedAt,
+      );
+    }
+    return AppDataSource.getRepository(Organization).findOne({
+      where: { createdBy: userId, onboardingIdempotencyKey: idempotencyKey, deletedAt: IsNull() },
+    });
+  }
+
+  /**
+   * The real guard against duplicate onboarding orgs: unlike the idempotency
+   * key (scoped to one form mount), this survives a refresh, a closed tab, or
+   * a re-login, because it's keyed on the user, not the client session.
+   */
+  private async findInProgressOnboardingOrg(userId: string) {
+    if (!AppDataSource.isInitialized) {
+      return dbStore.organizations.find(
+        (o) => o.createdBy === userId && o.onboardingStatus === 'IN_PROGRESS' && !o.deletedAt,
+      );
+    }
+    return AppDataSource.getRepository(Organization).findOne({
+      where: { createdBy: userId, onboardingStatus: 'IN_PROGRESS', deletedAt: IsNull() },
+    });
   }
 
   private async createOrganizationRecord(
     userId: string,
     dto: CreateOrganizationDto,
     accountId?: string,
+    idempotencyKey?: string,
+    isOnboarding?: boolean,
   ) {
     let slug = this.slugify(dto.slug || dto.name);
 
@@ -102,6 +151,13 @@ export class OrganizationsService {
       status: OrganizationStatus.ACTIVE,
       onboardingCompleted: false,
       createdBy: userId,
+      onboardingIdempotencyKey: idempotencyKey,
+      // Plain (non-wizard) creation has no multi-step flow to resume, so it's
+      // "complete" immediately; the wizard path locks this org to the user
+      // until completeOnboarding() runs (see onboardingLockKey on the entity).
+      onboardingStatus: isOnboarding ? 'IN_PROGRESS' : 'COMPLETED',
+      onboardingStep: 1,
+      onboardingLockKey: isOnboarding ? userId : undefined,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -121,8 +177,27 @@ export class OrganizationsService {
     };
 
     if (AppDataSource.isInitialized) {
-      await AppDataSource.getRepository(Organization).save(org);
-      await AppDataSource.getRepository(OrganizationMembership).save(membership);
+      try {
+        // Atomic: either both rows land, or neither does. A concurrent request
+        // with the same idempotency key (the race the pre-check above can miss)
+        // fails here on the unique index instead of creating a duplicate org.
+        await AppDataSource.transaction(async (manager) => {
+          await manager.getRepository(Organization).save(org);
+          await manager.getRepository(OrganizationMembership).save(membership);
+        });
+      } catch (err: any) {
+        if (this.isDuplicateKeyError(err)) {
+          if (idempotencyKey) {
+            const existing = await this.findByIdempotencyKey(userId, idempotencyKey);
+            if (existing) return existing;
+          }
+          if (isOnboarding) {
+            const existing = await this.findInProgressOnboardingOrg(userId);
+            if (existing) return existing;
+          }
+        }
+        throw err;
+      }
     }
 
     if (!dbStore.organizations.some((o) => o.id === org.id)) {
@@ -131,40 +206,58 @@ export class OrganizationsService {
     if (!dbStore.organizationMemberships.some((m) => m.id === membership.id)) {
       dbStore.organizationMemberships.push(membership);
     }
+    await Promise.all([awaitPersist(org), awaitPersist(membership)]);
 
+    // The wizard path defers trial/commission-rule/tier/audit/email to
+    // completeOnboarding() — see the comment there for why. Plain creation has
+    // no separate "complete" step, so it runs them here, as before.
+    if (!isOnboarding) {
+      await this.seedOrganizationDefaults(org, userId);
+    }
+
+    return org;
+  }
+
+  /**
+   * Trial, default commission rule, default tier ladder, audit log entry, and
+   * welcome email/notification. Each of the three service calls already
+   * no-ops if it was already done for this org (checked directly in
+   * `seedDefaultTiers`, via the DB unique constraint for the trial, and via a
+   * caught "rule already exists" error for the commission rule) — so this
+   * whole method is safe to call more than once for the same org, which is
+   * exactly what happens when `completeOnboarding()` is retried after a
+   * partial failure.
+   */
+  private async seedOrganizationDefaults(org: OrganizationEntity, userId: string) {
+    // 1. Trial: Check-then-create, catching only expected 'already exists/consumed' states.
     // Start the 14-day free trial on GROWTH rather than PRO: PRO is unlimited,
     // so trialling on it would leave every allowance unenforced for 14 days and
     // then collapse hard at conversion. GROWTH gives a realistic, enforced set
     // of limits during the trial.
     try {
-      await this.trialService?.startTrial(org.id, userId, 'GROWTH');
-    } catch (err) {
-      // Non-blocking if trial already exists or fails
+      const alreadyHasTrial = dbStore.organizationTrials.some((t) => t.organizationId === org.id);
+      if (!alreadyHasTrial) {
+        await this.trialService?.startTrial(org.id, userId, 'GROWTH');
+      }
+    } catch (err: any) {
+      const isExpected =
+        err?.response?.code === 'TRIAL_ALREADY_CONSUMED' ||
+        err?.response?.code === 'ACTIVE_SUBSCRIPTION_EXISTS' ||
+        err?.message?.includes?.('already consumed') ||
+        err?.message?.includes?.('already has an active');
+      if (!isExpected) {
+        this.logger.error(
+          `Failed to start trial for organization ${org.id}: ${err?.message || err}`,
+          err?.stack,
+        );
+      }
     }
 
-    // Seed a default organization-wide commission rule so the org isn't left with
-    // an empty commission structure before any program-specific rules are configured.
-    try {
-      await this.commissionsService?.createRule(org.id, {
-        name: 'Default Commission Rate',
-        priority: 0,
-        commissionType: CommissionType.PERCENTAGE,
-        commissionValue: 1500, // 15.00% — value is in basis points (100 = 1%)
-        holdPeriodDays: 30,
-        status: 'ACTIVE',
-      });
-    } catch (err) {
-      // Non-blocking — an organization can still function without a default rule.
-    }
-
-    // Seed the Bronze/Silver/Gold/Platinum tier ladder so every affiliate this org
-    // invites is assigned Bronze automatically — without this, an org that never
-    // visits the Gamification page has no default tier for the system to assign at all.
-    try {
-      await this.tierService?.seedDefaultTiers(org.id, userId);
-    } catch (err) {
-      // Non-blocking — tiers can still be configured manually later.
-    }
+    // Note: a default commission rule and a Bronze/Silver/Gold/Platinum tier
+    // ladder used to be fabricated here on every org creation. That was fake
+    // placeholder data, not real organization state, so it has been removed —
+    // a new organization now starts with genuinely empty commission rules and
+    // tiers until an admin configures them for real.
 
     // Audit log
     dbStore.auditLogs.push({
@@ -179,8 +272,6 @@ export class OrganizationsService {
     });
 
     this.notifyOrganizationCreated(org, userId).catch(() => undefined);
-
-    return org;
   }
 
   private async notifyOrganizationCreated(org: OrganizationEntity, userId: string) {
@@ -378,19 +469,73 @@ export class OrganizationsService {
     if (AppDataSource.isInitialized) {
       await AppDataSource.getRepository(Organization).save(org);
     }
+    await awaitPersist(org);
     return org;
   }
 
   // Onboarding Step 1
   async onboardingOrg(userId: string, dto: OnboardingOrgDto) {
-    return this.create(userId, {
-      name: dto.name,
-      slug: dto.slug,
-      website: dto.website,
-      industry: dto.industry,
-      companySize: dto.companySize,
-      country: dto.country,
-    });
+    // Checked BEFORE the idempotency key, and independent of it: a refresh,
+    // closed tab, or re-login generates a brand new key every time, so the
+    // key alone can't catch "this user already started onboarding". This
+    // check can, because it's keyed on the user, not the client session.
+    const inProgress = await this.findInProgressOnboardingOrg(userId);
+    if (inProgress) return inProgress;
+
+    return this.create(
+      userId,
+      {
+        name: dto.name,
+        slug: dto.slug,
+        website: dto.website,
+        industry: dto.industry,
+        companySize: dto.companySize,
+        country: dto.country,
+      },
+      dto.idempotencyKey,
+      { isOnboarding: true },
+    );
+  }
+
+  /**
+   * For the frontend to resume onboarding at the right place on load —
+   * covers the refresh / closed-tab / re-login case directly, rather than
+   * relying on the wizard's own client-side state (which is gone in exactly
+   * those cases).
+   */
+  async getOnboardingStatus(userId: string) {
+    const inProgress = await this.findInProgressOnboardingOrg(userId);
+    if (!inProgress) {
+      return { inProgress: false as const };
+    }
+    return {
+      inProgress: true as const,
+      organization: {
+        id: inProgress.id,
+        name: inProgress.name,
+        slug: inProgress.slug,
+        website: inProgress.website,
+        industry: inProgress.industry,
+        companySize: inProgress.companySize,
+        country: inProgress.country,
+      },
+      step: inProgress.onboardingStep,
+    };
+  }
+
+  /** Called whenever the frontend advances past a step, so a resume lands on the right screen instead of always step 1. */
+  async updateOnboardingStep(userId: string, organizationId: string, step: number) {
+    const org = await this.findOne(organizationId);
+    if (org.createdBy !== userId) {
+      throw new ForbiddenException('You do not own this organization.');
+    }
+    org.onboardingStep = step;
+    org.updatedAt = new Date();
+    if (AppDataSource.isInitialized) {
+      await AppDataSource.getRepository(Organization).save(org);
+    }
+    await awaitPersist(org);
+    return { success: true, step: org.onboardingStep };
   }
 
   private slugify(value: string) {
@@ -437,6 +582,7 @@ export class OrganizationsService {
     };
 
     dbStore.programs.push(program);
+    await awaitPersist(program);
     this.notifyProgramCreated(org, program, userId).catch(() => undefined);
     return program;
   }
@@ -473,14 +619,49 @@ export class OrganizationsService {
     }).catch(() => undefined);
   }
 
-  // Onboarding Step Complete
-  async completeOnboarding(organizationId: string) {
+  /**
+   * Onboarding Step Complete.
+   *
+   * Idempotent and safe to retry: if the user's first call succeeded but the
+   * response never reached the client (dropped connection, browser closed),
+   * calling this again with the same organizationId re-runs
+   * `seedOrganizationDefaults()` — which itself no-ops on anything already
+   * seeded — and re-clears the lock, rather than leaving the org stuck
+   * IN_PROGRESS forever. The welcome email/notification/audit-log-entry combo
+   * inside it should still only fire once, so it's skipped on a call that
+   * finds the org already COMPLETED.
+   */
+  async completeOnboarding(organizationId: string, userId: string) {
     const org = await this.findOne(organizationId);
+    if (org.createdBy !== userId) {
+      throw new ForbiddenException('You do not own this organization.');
+    }
+
+    const wasAlreadyCompleted = org.onboardingStatus === 'COMPLETED';
+
+    // Enrichment runs BEFORE the org is marked COMPLETED and saved: if the
+    // process dies partway through (or a sub-step throws past its own
+    // try/catch), the org stays IN_PROGRESS and the next retry re-enters this
+    // branch and tries again, instead of being marked "done" prematurely and
+    // permanently skipping whatever didn't finish.
+    if (!wasAlreadyCompleted) {
+      await this.seedOrganizationDefaults(org, userId);
+    }
+
     org.onboardingCompleted = true;
+    org.onboardingStatus = 'COMPLETED';
+    // Must be `null`, not `undefined`: TypeORM's save() treats an `undefined`
+    // property as "not specified, leave the column alone", not "clear it" —
+    // assigning `undefined` here silently left the old lock in place, which
+    // permanently blocked this user's next onboarding attempt (caught by the
+    // "third org via onboarding" case in onboarding-duplicate-org.test.ts).
+    org.onboardingLockKey = null as any;
     org.updatedAt = new Date();
     if (AppDataSource.isInitialized) {
       await AppDataSource.getRepository(Organization).save(org);
     }
+    await awaitPersist(org);
+
     return { success: true, onboardingCompleted: true };
   }
 }

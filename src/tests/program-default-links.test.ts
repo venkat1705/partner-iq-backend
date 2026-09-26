@@ -14,7 +14,7 @@
  *   npx tsx src/tests/program-default-links.test.ts
  */
 import { v4 as uuidv4 } from 'uuid';
-import { runSeed } from '../database/seeds/run-seed';
+import { runSeed } from './helpers/test-seed';
 import { initializeDataSource } from '../database/data-source';
 import { Program, Affiliate, ProgramAffiliate, TrackingLink } from '../database/schema';
 import { AffiliatePortalController } from '../modules/affiliates/affiliate-portal.controller';

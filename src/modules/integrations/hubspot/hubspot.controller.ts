@@ -12,6 +12,7 @@ import { HubSpotService } from './hubspot.service';
 import {
   UpdateHubSpotFieldMappingsDto,
   UpdateHubSpotPipelineMappingDto,
+  UpdateHubSpotSyncSettingsDto,
   UpsertHubSpotPlatformConfigDto,
 } from './dto/hubspot.dto';
 
@@ -172,6 +173,22 @@ export class HubSpotController {
   @ApiBearerAuth()
   updateFieldMappings(@Param('organizationId') organizationId: string, @Body() dto: UpdateHubSpotFieldMappingsDto) {
     return this.hubSpot.updateFieldMappings(organizationId, dto);
+  }
+
+  @Get('organizations/:organizationId/integrations/hubspot/sync-settings')
+  @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+  @RequirePermissions('integrations.view')
+  @ApiBearerAuth()
+  getSyncSettings(@Param('organizationId') organizationId: string) {
+    return this.hubSpot.getSyncSettings(organizationId);
+  }
+
+  @Patch('organizations/:organizationId/integrations/hubspot/sync-settings')
+  @UseGuards(JwtAuthGuard, OrganizationGuard, PermissionsGuard)
+  @RequirePermissions('integrations.configure')
+  @ApiBearerAuth()
+  updateSyncSettings(@Param('organizationId') organizationId: string, @CurrentUser() user: AuthUserPayload, @Body() dto: UpdateHubSpotSyncSettingsDto) {
+    return this.hubSpot.updateSyncSettings(organizationId, user, dto);
   }
 
   @Get('organizations/:organizationId/integrations/hubspot/sync-logs')

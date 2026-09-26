@@ -1,7 +1,7 @@
 import { Inject, Injectable, NotFoundException, forwardRef } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
-import { dbStore } from '../../../database/store';
+import { dbStore, awaitPersist } from '../../../database/store';
 import { IntegrationEventStatus } from '../../../common/enums';
 import { PartnerDealsService } from '../../partner-deals/partner-deals.service';
 import { IntegrationCredentialService } from '../integration-credential.service';
@@ -13,18 +13,23 @@ import { NotificationsService } from '../../notifications/notifications.service'
 @Injectable()
 export class HubSpotWebhookService {
   constructor(
+    @Inject(forwardRef(() => HubSpotService))
     private readonly hubSpot: HubSpotService,
+    @Inject(forwardRef(() => HubSpotTokenService))
     private readonly tokenService: HubSpotTokenService,
+    @Inject(forwardRef(() => IntegrationCredentialService))
     private readonly credentials: IntegrationCredentialService,
     @Inject(forwardRef(() => PartnerDealsService))
     private readonly partnerDeals: PartnerDealsService,
+    @Inject(forwardRef(() => NotificationsService))
     private readonly notificationsService: NotificationsService,
-  ) {}
+  ) { }
 
   async receive(body: any, headers: Record<string, any>, rawBody: Buffer) {
     const events = Array.isArray(body) ? body : Array.isArray(body?.events) ? body.events : [body];
     const integration = this.hubSpot.requireIntegration();
     const processed: Array<Record<string, unknown>> = [];
+    const pending: Promise<unknown>[] = [];
 
     for (const eventPayload of events) {
       const portalId = String(eventPayload.portalId || eventPayload.portalIdString || eventPayload.hubId || '');
@@ -46,6 +51,7 @@ export class HubSpotWebhookService {
       const duplicate = dbStore.integrationEvents.find((item) => item.organizationIntegrationId === connection.id && item.externalEventId === externalEventId);
       if (duplicate) {
         duplicate.status = IntegrationEventStatus.DUPLICATE;
+        pending.push(awaitPersist(duplicate));
         processed.push({ eventId: duplicate.id, duplicate: true });
         continue;
       }
@@ -77,7 +83,7 @@ export class HubSpotWebhookService {
             // Use a minimal system user for audit purposes
             const systemUser: any = { userId: 'system' };
             // Call HubSpotService.disconnect to mark as disconnected and create audit
-            this.hubSpot.disconnect(connection.organizationId, systemUser);
+            await this.hubSpot.disconnect(connection.organizationId, systemUser);
             // Add a sync log entry to surface in integration logs
             this.hubSpot.syncLog(connection, 'app_uninstalled', 'INTEGRATION', 'INBOUND', 'SUCCEEDED', { event: eventPayload });
             // Notify active organization members about the disconnect (in-app + email)
@@ -99,7 +105,7 @@ export class HubSpotWebhookService {
           status = IntegrationEventStatus.IGNORED;
           result = { ignored: true, reason: 'Webhook event is not a deal stage change' };
         }
-        
+
       } catch {
         status = IntegrationEventStatus.FAILED;
         error = 'HubSpot webhook processing failed';
@@ -125,9 +131,11 @@ export class HubSpotWebhookService {
       dbStore.integrationEvents.push(event);
       connection.lastWebhookAt = new Date();
       connection.lastError = error;
+      pending.push(awaitPersist(event), awaitPersist(connection));
       processed.push({ eventId: event.id, status, result });
     }
 
+    await Promise.all(pending);
     return { received: true, processed };
   }
 

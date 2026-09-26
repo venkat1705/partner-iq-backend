@@ -5,6 +5,7 @@ import {
   Injectable,
   NotFoundException,
   UnauthorizedException,
+  Optional,
   forwardRef,
 } from '@nestjs/common';
 import { IsNull } from 'typeorm';
@@ -12,7 +13,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { initializeDataSource } from '../../../database/data-source';
 import { AffiliatesService } from '../affiliates.service';
 import { Affiliate, AffiliateInvitation, AffiliatePortalProfile, AuditLog, User, UserIdentity } from '../../../database/schema';
-import { dbStore } from '../../../database/store';
+import { dbStore, awaitPersist } from '../../../database/store';
 import { AuditAction, PlatformRole, UserStatus } from '../../../common/enums';
 import { SecurityUtils } from '../../../common/utils/security.utils';
 import { safeReturnPath } from '../../../common/utils/safe-redirect.utils';
@@ -46,12 +47,17 @@ export interface AffiliateRegisterPayload {
 @Injectable()
 export class AffiliateAuthService {
   constructor(
+    @Inject(forwardRef(() => AuthService))
     private readonly authService: AuthService,
+    @Inject(forwardRef(() => GoogleOAuthService))
     private readonly googleOAuthService: GoogleOAuthService,
+    @Inject(forwardRef(() => OAuthStateService))
     private readonly stateService: OAuthStateService,
     @Inject(forwardRef(() => AffiliatesService))
     private readonly affiliatesService: AffiliatesService,
+    @Optional() @Inject(forwardRef(() => SystemEmailDispatchService))
     private readonly emailDispatch?: SystemEmailDispatchService,
+    @Optional() @Inject(forwardRef(() => NotificationsService))
     private readonly notificationsService?: NotificationsService,
   ) { }
 
@@ -468,6 +474,7 @@ export class AffiliateAuthService {
       const storeUser = dbStore.users.find((u) => u.id === existingUser.id);
       if (storeUser && storeUser.platformRole === PlatformRole.USER) {
         storeUser.platformRole = PlatformRole.AFFILIATE;
+        await awaitPersist(storeUser);
       }
       return { user: existingUser, isNewUser: false };
     }

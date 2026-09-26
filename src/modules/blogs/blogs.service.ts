@@ -13,6 +13,7 @@ import { BlogPost, Organization, OrganizationBranding } from '../../database/sch
 import { AuditService } from '../audit/audit.service';
 import { AuditAction } from '../../common/enums';
 import { DEFAULT_BLOG_POSTS } from './constants/default-blogs';
+import { DEFAULT_ORGANIZATION_BLOGS } from './constants/organization-blogs';
 import { CreateBlogDto, UpdateBlogDto, QueryBlogsDto } from './dto/blogs.dto';
 
 @Injectable()
@@ -26,10 +27,15 @@ export class BlogsService {
   }
 
   /**
-   * Bootstraps the 10 educational default PartnerIQ blogs if database is empty.
+   * Bootstraps the 10 educational default PartnerIQ blogs and 10 organization blogs if database is empty.
    */
   async ensureDefaultBlogs(): Promise<void> {
-    for (const post of DEFAULT_BLOG_POSTS) {
+    const combinedDefaults = [
+      ...DEFAULT_BLOG_POSTS.map((p) => ({ ...p, scopeType: 'GLOBAL' as const })),
+      ...DEFAULT_ORGANIZATION_BLOGS.map((p) => ({ ...p, scopeType: 'ORGANIZATION' as const })),
+    ];
+
+    for (const post of combinedDefaults) {
       const existing = dbStore.blogPosts.find((b) => b.slug === post.slug);
       if (existing) continue;
 
@@ -45,13 +51,13 @@ export class BlogsService {
         tags: [...post.tags],
         author: { ...post.author },
         status: ((post as any).status?.toUpperCase() as any) || 'PUBLISHED',
-        scopeType: 'GLOBAL',
+        scopeType: (post as any).scopeType || 'GLOBAL',
         organizationId: undefined,
         readingTime: post.readingTime || '10 min read',
         featured: Boolean((post as any).featured),
         seoTitle: post.seoTitle || post.title,
         seoDescription: post.seoDescription || post.excerpt,
-        canonicalUrl: post.canonicalUrl || `https://affiliate.partneriq.in/blog/${post.slug}`,
+        canonicalUrl: post.canonicalUrl || ((post as any).scopeType === 'ORGANIZATION' ? `https://partneriq.in/blog/${post.slug}` : `https://affiliate.partneriq.in/blog/${post.slug}`),
         createdById: undefined,
         updatedById: undefined,
         publishedAt: post.publishedAt ? new Date(post.publishedAt) : new Date(),
@@ -374,8 +380,14 @@ export class BlogsService {
 
   async listPublic(query: QueryBlogsDto) {
     let posts = dbStore.blogPosts.filter(
-      (p) => !p.deletedAt && p.scopeType === 'GLOBAL' && p.status === 'PUBLISHED',
+      (p) => !p.deletedAt && p.status === 'PUBLISHED',
     );
+
+    if (query.scopeType && query.scopeType !== 'ALL') {
+      posts = posts.filter((p) => p.scopeType === query.scopeType);
+    } else if (!query.scopeType) {
+      posts = posts.filter((p) => p.scopeType === 'GLOBAL');
+    }
 
     if (query.category && query.category !== 'ALL') {
       posts = posts.filter((p) => p.category === query.category);
@@ -443,12 +455,12 @@ export class BlogsService {
       throw new NotFoundException(`Article '${slug}' not found`);
     }
 
-    // 1. Global published blog -> always visible
-    if (post.scopeType === 'GLOBAL' && post.status === 'PUBLISHED') {
+    // 1. Global or Organization published blog -> visible if published
+    if (post.status === 'PUBLISHED') {
       return this.hydrateBranding(post);
     }
 
-    // 2. Organization published blog -> verify affiliate or org membership
+    // 2. Organization draft blog -> verify affiliate or org membership
     if (post.scopeType === 'ORGANIZATION') {
       if (organizationIdContext && organizationIdContext === post.organizationId) {
         return this.hydrateBranding(post);
@@ -462,12 +474,11 @@ export class BlogsService {
             ((affiliateIdentity.userId && a.userId === affiliateIdentity.userId) ||
               (email && a.email?.toLowerCase().trim() === email)),
         );
-        if (hasMembership && post.status === 'PUBLISHED') {
+        if (hasMembership) {
           return this.hydrateBranding(post);
         }
       }
 
-      // If user is super admin viewing
       throw new ForbiddenException('You are not authorized to view this organization article');
     }
 

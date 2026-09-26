@@ -1,4 +1,4 @@
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, Optional } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { dbStore } from '../../database/store';
 import {
@@ -23,13 +23,18 @@ import type { FraudModelProvider } from './model/fraud-model.provider';
 @Injectable()
 export class FraudEngineService {
   constructor(
+    @Inject(forwardRef(() => FraudSignalRegistry))
     private readonly registry: FraudSignalRegistry,
+    @Inject(forwardRef(() => FraudPolicyService))
     private readonly policyService: FraudPolicyService,
+    @Inject(forwardRef(() => FraudScoreService))
     private readonly scoreService: FraudScoreService,
+    @Inject(forwardRef(() => FraudDecisionService))
     private readonly decisionService: FraudDecisionService,
+    @Inject(forwardRef(() => NotificationsService))
     private readonly notificationsService: NotificationsService,
     @Optional() @Inject(FRAUD_MODEL_PROVIDER) private readonly modelProvider?: FraudModelProvider,
-  ) {}
+  ) { }
 
   async assess(context: FraudContext, assessmentType = FraudAssessmentType.INITIAL): Promise<FraudAssessmentResult> {
     const policy = this.policyService.resolvePolicy(context.organizationId, context.programId);

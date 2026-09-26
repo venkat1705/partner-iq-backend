@@ -34,6 +34,7 @@ export interface AuthUserPayload {
   apiKeyEnvironment?: 'test' | 'live' | EnvironmentType;
   scopes?: string[];
   isApiKey?: boolean;
+  mustChangePassword?: boolean;
 }
 
 export interface RequestWithUser extends Request {

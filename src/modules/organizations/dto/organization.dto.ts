@@ -106,6 +106,16 @@ export class OnboardingOrgDto {
   @IsOptional()
   @IsString()
   country?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Client-generated key, stable for the lifetime of the onboarding form. A resubmission ' +
+      '(double-click, retry, two tabs) with the same key returns the original organization ' +
+      'instead of creating a duplicate.',
+  })
+  @IsOptional()
+  @IsString()
+  idempotencyKey?: string;
 }
 
 export class OnboardingProgramDto {

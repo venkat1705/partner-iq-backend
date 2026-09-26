@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
-import { dbStore, UserLegalAcceptanceEntity } from '../../database/store';
+import { dbStore, awaitPersist, UserLegalAcceptanceEntity } from '../../database/store';
 import { AppDataSource } from '../../database/data-source';
 import { UserLegalAcceptance } from '../../database/schema';
 import {
@@ -103,6 +103,7 @@ export class LegalAcceptanceService {
         }
         if (!dbStore.userLegalAcceptances.some((item) => item.id === record.id)) {
           dbStore.userLegalAcceptances.push(record);
+          await awaitPersist(record);
         }
         written.push({
           documentType,

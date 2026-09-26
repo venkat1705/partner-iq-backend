@@ -4,7 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
-import { dbStore, OrganizationMembershipEntity } from '../../database/store';
+import { dbStore, OrganizationMembershipEntity, awaitPersist } from '../../database/store';
 import { initializeDataSource } from '../../database/data-source';
 import { User } from '../../database/schema';
 import { InviteMemberDto, UpdateMemberRoleDto } from './dto/membership.dto';
@@ -161,6 +161,7 @@ export class MembershipsService {
     };
 
     dbStore.organizationInvitations.push(invitation);
+    await awaitPersist(invitation);
     this.audit(organizationId, invitedByUserId, 'MEMBER_INVITED', 'organization_invitation', invitation.id, {
       email,
       role,
@@ -213,6 +214,7 @@ export class MembershipsService {
     }
 
     invitation.revokedAt = new Date();
+    await awaitPersist(invitation);
     this.audit(organizationId, actorId || invitation.invitedBy, 'MEMBER_INVITATION_REVOKED', 'organization_invitation', invitationId, {
       email: invitation.email,
     });
@@ -255,6 +257,7 @@ export class MembershipsService {
     );
     if (existing) {
       invitation.acceptedAt = new Date();
+      await awaitPersist(invitation);
       return existing;
     }
 
@@ -274,6 +277,7 @@ export class MembershipsService {
 
     dbStore.organizationMemberships.push(membership);
     invitation.acceptedAt = new Date();
+    await Promise.all([awaitPersist(membership), awaitPersist(invitation)]);
     this.audit(invitation.organizationId, user.id, 'MEMBER_INVITATION_ACCEPTED', 'organization_membership', membership.id, {
       email: user.email,
       role: membership.role,
@@ -353,6 +357,7 @@ export class MembershipsService {
     const previousRole = membership.role;
     membership.role = dto.role;
     membership.updatedAt = new Date();
+    await awaitPersist(membership);
     this.audit(organizationId, actorId || membership.userId, 'MEMBER_ROLE_UPDATED', 'organization_membership', memberId, {
       memberUserId: membership.userId,
       previousRole,
@@ -372,6 +377,7 @@ export class MembershipsService {
 
     membership.status = MembershipStatus.REMOVED;
     membership.updatedAt = new Date();
+    await awaitPersist(membership);
     this.audit(organizationId, actorId || membership.userId, 'MEMBER_REMOVED', 'organization_membership', memberId, {
       memberUserId: membership.userId,
       role: membership.role,

@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
-import { dbStore } from '../../../database/store';
+import { dbStore, awaitPersist } from '../../../database/store';
 import { BillingInterval, PaymentProviderType, PaymentStatus, SubscriptionStatus } from '../enums/billing.enums';
 import { CheckoutDto, VerifyPaymentDto } from '../dto/billing.dto';
 import { PlanService } from './plan.service';
@@ -155,7 +155,7 @@ export class BillingService {
     };
 
     if (idempotencyKey) {
-      dbStore.idempotencyKeys.push({
+      const ikRecord = {
         id: uuidv4(),
         organizationId,
         key: idempotencyKey,
@@ -164,7 +164,9 @@ export class BillingService {
         responseBody: response,
         expiresAt: new Date(Date.now() + 24 * 3600 * 1000),
         createdAt: new Date(),
-      });
+      };
+      dbStore.idempotencyKeys.push(ikRecord);
+      await awaitPersist(ikRecord);
     }
     return response;
   }
@@ -202,7 +204,7 @@ export class BillingService {
 
     const existing = dbStore.billingPayments.find((item) => item.providerPaymentId === dto.razorpay_payment_id);
     if (!existing) {
-      dbStore.billingPayments.push({
+      const payment = {
         id: uuidv4(),
         organizationId,
         subscriptionId: subscription?.id,
@@ -216,7 +218,9 @@ export class BillingService {
         paidAt: status === PaymentStatus.CAPTURED ? new Date() : undefined,
         createdDate: new Date(),
         modifiedDate: new Date(),
-      });
+      };
+      dbStore.billingPayments.push(payment);
+      await awaitPersist(payment);
     }
 
     if (subscription && paymentDetails.status === 'captured') {
@@ -247,7 +251,7 @@ export class BillingService {
       (item) => item.providerPaymentId === dto.razorpay_payment_id,
     );
     if (!existingPayment) {
-      dbStore.billingPayments.push({
+      const payment = {
         id: uuidv4(),
         organizationId,
         provider: PaymentProviderType.RAZORPAY,
@@ -260,7 +264,9 @@ export class BillingService {
         paidAt: status === PaymentStatus.CAPTURED ? new Date() : undefined,
         createdDate: new Date(),
         modifiedDate: new Date(),
-      } as any);
+      } as any;
+      dbStore.billingPayments.push(payment);
+      await awaitPersist(payment);
     }
 
     if (paymentDetails.status !== 'captured') {
@@ -271,7 +277,7 @@ export class BillingService {
       };
     }
 
-    const activated = this.addons.activatePurchases({
+    const activated = await this.addons.activatePurchases({
       providerOrderId: dto.razorpay_order_id,
       providerPaymentId: dto.razorpay_payment_id,
       purchaseIds: paymentDetails.notes?.purchaseIds

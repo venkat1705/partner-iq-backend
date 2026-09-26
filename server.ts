@@ -11,7 +11,7 @@ import { GlobalExceptionFilter } from './src/common/filters/global-exception.fil
 import { TransformInterceptor } from './src/common/interceptors/transform.interceptor';
 import { LoggingInterceptor } from './src/common/interceptors/logging.interceptor';
 import { dbStore } from './src/database/store';
-import { runSeed } from './src/database/seeds/run-seed';
+import { seedSystemDefaults } from './src/database/seeds/run-seed';
 import { getAppConfig } from './src/config/app.config';
 import { PartnerIQWorker } from './src/workers/bullmq.worker';
 
@@ -25,8 +25,8 @@ async function bootstrap() {
     return;
   }
 
-  // Seed initial data
-  await runSeed();
+  // Seed initial system defaults
+  await seedSystemDefaults();
   await dbStore.initialize();
 
   const app = await NestFactory.create(AppModule, { rawBody: true, bodyParser: false });
@@ -113,19 +113,19 @@ async function bootstrap() {
 
           <div class="grid md:grid-cols-3 gap-6">
             <div class="bg-slate-800/60 border border-slate-700/60 p-5 rounded-xl space-y-2">
-              <span class="text-slate-400 text-xs font-semibold uppercase tracking-wider">Default Admin Account</span>
-              <p class="text-sm font-mono text-emerald-300">admin@partneriq.demo</p>
-              <p class="text-xs font-mono text-slate-400">Password: PartnerIQ@123</p>
+              <span class="text-slate-400 text-xs font-semibold uppercase tracking-wider">System Status</span>
+              <p class="text-sm font-bold text-emerald-400">Operational</p>
+              <p class="text-xs text-slate-400">All core services running</p>
             </div>
             <div class="bg-slate-800/60 border border-slate-700/60 p-5 rounded-xl space-y-2">
-              <span class="text-slate-400 text-xs font-semibold uppercase tracking-wider">Seeded Tenant</span>
-              <p class="text-sm font-bold text-white">Acme SaaS</p>
-              <p class="text-xs text-slate-400">4 Programs & Pre-configured Affiliate</p>
+              <span class="text-slate-400 text-xs font-semibold uppercase tracking-wider">Authentication</span>
+              <p class="text-sm font-bold text-white">RBAC & JWT</p>
+              <p class="text-xs text-slate-400">Multi-tenant token isolation active</p>
             </div>
             <div class="bg-slate-800/60 border border-slate-700/60 p-5 rounded-xl space-y-2">
-              <span class="text-slate-400 text-xs font-semibold uppercase tracking-wider">Test Tracking Link</span>
-              <p class="text-xs font-mono text-indigo-300">/r/sarah</p>
-              <a href="/r/sarah" target="_blank" class="inline-block text-xs text-indigo-400 hover:underline">Test Redirect ↗</a>
+              <span class="text-slate-400 text-xs font-semibold uppercase tracking-wider">API Documentation</span>
+              <p class="text-sm font-mono text-indigo-300">/api/docs</p>
+              <a href="/api/docs" target="_blank" class="inline-block text-xs text-indigo-400 hover:underline">Open Swagger UI ↗</a>
             </div>
           </div>
 

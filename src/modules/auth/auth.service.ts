@@ -27,7 +27,7 @@ import {
   UserMfaConfig,
   UserRecoveryCode,
 } from '../../database/schema';
-import { dbStore } from '../../database/store';
+import { dbStore, awaitPersist } from '../../database/store';
 import { SecurityUtils } from '../../common/utils/security.utils';
 import { lookupIp } from '../../common/utils/geo.utils';
 import { generateQrCodeDataUrl } from '../../common/utils/qr.utils';
@@ -69,7 +69,7 @@ export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
   constructor(
-    private readonly riskEngine: RiskEngineService,
+    @Inject(forwardRef(() => RiskEngineService)) private readonly riskEngine: RiskEngineService,
     @Optional() @Inject(forwardRef(() => EmailQueueProducer)) private readonly emailQueueProducer?: EmailQueueProducer,
     @Optional() @Inject(forwardRef(() => EmailQueueWorker)) private readonly emailQueueWorker?: EmailQueueWorker,
     @Optional() private readonly notificationsService?: NotificationsService,
@@ -714,9 +714,11 @@ export class AuthService {
     }
 
     const passwordHash = await SecurityUtils.hashPassword(dto.password);
-    const platformRole = this.isConfiguredSuperAdmin(normalizedEmail)
-      ? PlatformRole.SUPER_ADMIN
-      : PlatformRole.USER;
+    // Self-registration NEVER grants SUPER_ADMIN, full stop — the removed
+    // SUPER_ADMIN_EMAILS auto-grant created the row with that role BEFORE
+    // email verification, and a sibling check in getMe() applied it with NO
+    // verification check at all. Bootstrap a super admin with
+    // `npm run create-super-admin` instead.
     const newUser = users.create({
       email: normalizedEmail,
       passwordHash,
@@ -724,7 +726,7 @@ export class AuthService {
       lastName: dto.lastName,
       status: UserStatus.ACTIVE,
       emailVerified: false,
-      platformRole,
+      platformRole: PlatformRole.USER,
       failedLoginAttempts: 0,
     });
     const savedUser = await users.save(newUser);
@@ -782,13 +784,6 @@ export class AuthService {
       // Timing-safe: don't reveal whether email exists
       await SecurityUtils.hashPassword('dummy-timing-safe-hash');
       throw new UnauthorizedException('Invalid email or password');
-    }
-
-    if (user.platformRole !== PlatformRole.SUPER_ADMIN && this.isConfiguredSuperAdmin(normalizedEmail)) {
-      user.platformRole = PlatformRole.SUPER_ADMIN;
-      try {
-        await users.save(user);
-      } catch { }
     }
 
     if (user.platformRole === PlatformRole.AFFILIATE && !options.allowAffiliate) {
@@ -1248,6 +1243,7 @@ export class AuthService {
     if (memUser) {
       memUser.emailVerified = true;
       memUser.status = user.status;
+      await awaitPersist(memUser);
     }
 
     await this.recordSecurityEvent({
@@ -1955,6 +1951,7 @@ export class AuthService {
       if (data.firstName !== undefined) inStore.firstName = data.firstName;
       if (data.lastName !== undefined) inStore.lastName = data.lastName;
       if (data.avatarUrl !== undefined) inStore.avatarUrl = data.avatarUrl;
+      await awaitPersist(inStore);
     }
 
     return this.getMe(userId);
@@ -1969,13 +1966,12 @@ export class AuthService {
       throw new NotFoundException('User not found');
     }
 
-    let isSuperAdmin = user.platformRole === PlatformRole.SUPER_ADMIN || this.isConfiguredSuperAdmin(user.email);
-    if (isSuperAdmin && user.platformRole !== PlatformRole.SUPER_ADMIN) {
-      user.platformRole = PlatformRole.SUPER_ADMIN;
-      try {
-        await users.save(user);
-      } catch { }
-    }
+    // No auto-upgrade here: this used to silently promote a user to
+    // SUPER_ADMIN on every /auth/me call if their email matched
+    // SUPER_ADMIN_EMAILS — with no verification check of any kind. Role
+    // changes now only ever happen through `npm run create-super-admin` or
+    // an explicit admin action.
+    const isSuperAdmin = user.platformRole === PlatformRole.SUPER_ADMIN;
 
     // 1. Fetch all existing organizations created by this user
     let userOwnedOrgs: Organization[] = [];
@@ -2112,6 +2108,7 @@ export class AuthService {
       emailVerified: user.emailVerified,
       platformRole: user.platformRole,
       isSuperAdmin,
+      mustChangePassword: Boolean(user.mustChangePassword),
       memberships: userMemberships,
       mfa: {
         enabled: mfaStatus.enabled,
@@ -2273,6 +2270,7 @@ export class AuthService {
     if (memUser) {
       memUser.passwordHash = user.passwordHash;
       memUser.updatedAt = user.updatedAt;
+      await awaitPersist(memUser);
     }
 
     // Revoke all existing sessions on password reset
@@ -2639,11 +2637,12 @@ export class AuthService {
   // Helpers
   // ─────────────────────────────────────────────────────────
 
-  public isConfiguredSuperAdmin(email: string) {
-    const superAdminEmails = (process.env.SUPER_ADMIN_EMAILS || 'admin@partneriq.demo,superadmin@partneriq.demo')
-      .split(',')
-      .map((value) => value.trim().toLowerCase())
-      .filter(Boolean);
-    return superAdminEmails.includes((email || '').trim().toLowerCase());
-  }
+  // isConfiguredSuperAdmin() / SUPER_ADMIN_EMAILS removed entirely — it had
+  // FOUR call sites (register, login, getMe, and the Google OAuth signup in
+  // oauth.service.ts), and between them the role was granted: before email
+  // verification (register), with no verification check at all (getMe, and
+  // login — the login one ran before the password check even succeeded),
+  // and on Google's say-so alone (OAuth, since Google-verified emails skip
+  // PartnerIQ's own OTP flow). `npm run create-super-admin` is now the only
+  // way a SUPER_ADMIN account is ever created.
 }

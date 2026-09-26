@@ -14,6 +14,7 @@ export interface VerifiedAccessToken {
   platformRole: PlatformRole;
   isSuperAdmin: boolean;
   isApiKey: false;
+  mustChangePassword: boolean;
 }
 
 export async function verifyAccessToken(token: string): Promise<VerifiedAccessToken> {
@@ -41,6 +42,7 @@ export async function verifyAccessToken(token: string): Promise<VerifiedAccessTo
       platformRole: user.platformRole,
       isSuperAdmin: user.platformRole === PlatformRole.SUPER_ADMIN,
       isApiKey: false,
+      mustChangePassword: user.mustChangePassword === true,
     };
   } catch (err: any) {
     if (err instanceof UnauthorizedException) {

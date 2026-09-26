@@ -18,6 +18,7 @@ import {
 } from '../../../common/enums';
 import { CommissionsService } from '../../commissions/commissions.service';
 import { RewardExecutorService } from '../rewards/reward-executor.service';
+import { netCommissionAmount } from '../../../common/utils/commission.utils';
 
 export interface TierEvaluationResult {
   affiliateId: string;
@@ -575,7 +576,7 @@ export class TierEvaluatorService {
         c.affiliateId === affiliateId &&
         c.status === 'APPROVED',
     );
-    const commissionEarned = commissions.reduce((sum, c) => sum + (c.commissionAmount || 0), 0);
+    const commissionEarned = commissions.reduce((sum, c) => sum + netCommissionAmount(c), 0);
     const links = dbStore.trackingLinks.filter(
       (l) => l.organizationId === organizationId && l.programId === programId && l.affiliateId === affiliateId,
     );

@@ -16,7 +16,7 @@
  * automation workflow — through which a click could otherwise reach the affiliate ledger.
  */
 import { v4 as uuidv4 } from 'uuid';
-import { runSeed } from '../database/seeds/run-seed';
+import { runSeed } from './helpers/test-seed';
 import { dbStore } from '../database/store';
 import { TrackingService } from '../modules/tracking/tracking.service';
 import { ConversionsService } from '../modules/conversions/conversions.service';

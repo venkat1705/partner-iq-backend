@@ -23,11 +23,9 @@ import {
 import { InternalOpsGuard } from './internal-ops.guard';
 import { InternalOpsService } from './internal-ops.service';
 import {
-  CreateSuperAdminDto,
   UpdateSuperAdminDto,
   TriggerTestEmailDto,
   GenerateTestDocumentDto,
-  SeedSandboxOrgDto,
 } from './dto/internal-ops.dto';
 
 @ApiTags('Internal Ops & Private Superadmin Management')
@@ -46,17 +44,14 @@ export class InternalOpsController {
   // SUPERADMIN PROVISIONING & DIRECTORY
   // ─────────────────────────────────────────────────────────
 
-  @Post('superadmins')
-  @ApiOperation({
-    summary: 'Provision or upgrade a superadmin account',
-    description:
-      'Creates a new SuperAdmin account or upgrades an existing user to SUPER_ADMIN role with full platform privileges, hashed password, and verified email.',
-  })
-  @ApiResponse({ status: 201, description: 'SuperAdmin created or upgraded successfully' })
-  @ApiResponse({ status: 403, description: 'Forbidden - Missing or invalid internal secret' })
-  provisionSuperAdmin(@Body() dto: CreateSuperAdminDto) {
-    return this.internalOpsService.provisionSuperAdmin(dto);
-  }
+  // Super admin CREATION is deliberately not exposed over HTTP, even behind
+  // InternalOpsGuard: `npm run create-super-admin` (backend/src/database/scripts/
+  // create-super-admin.ts) is the only supported way now — it forces a
+  // generated password, a mandatory change on first login, and refuses to run
+  // if a super admin already exists unless --force. An HTTP endpoint that
+  // accepts an arbitrary caller-supplied password re-opens exactly the gap
+  // that CLI was built to close. Listing/viewing/updating/revoking existing
+  // super admins is unaffected — only provisioning a new one moved to the CLI.
 
   @Get('superadmins')
   @ApiOperation({
@@ -123,14 +118,6 @@ export class InternalOpsController {
   })
   generateTestDocument(@Body() dto: GenerateTestDocumentDto) {
     return this.internalOpsService.generateTestDocument(dto);
-  }
-
-  @Post('test-data/sandbox-org')
-  @ApiOperation({
-    summary: 'Provision a complete sandbox organization with affiliates and tracking links',
-  })
-  seedSandboxOrg(@Body() dto: SeedSandboxOrgDto) {
-    return this.internalOpsService.seedSandboxOrg(dto);
   }
 
   @Post('test-data/seed-full')

@@ -13,7 +13,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { IsNull } from 'typeorm';
 import { initializeDataSource } from '../../../database/data-source';
 import { User, UserIdentity, AuthSession, Organization, OrganizationMembership } from '../../../database/schema';
-import { dbStore } from '../../../database/store';
+import { dbStore, awaitPersist } from '../../../database/store';
 import { SecurityUtils } from '../../../common/utils/security.utils';
 import { getAppConfig } from '../../../config/app.config';
 import { AuditAction, PlatformRole, UserStatus, Role } from '../../../common/enums';
@@ -49,13 +49,16 @@ export class OAuthService {
   private readonly logger = new Logger(OAuthService.name);
 
   constructor(
+    @Inject(forwardRef(() => GoogleOAuthService))
     private readonly googleOAuthService: GoogleOAuthService,
+    @Inject(forwardRef(() => OAuthStateService))
     private readonly stateService: OAuthStateService,
     @Inject(forwardRef(() => AuthService))
     private readonly authService: AuthService,
     @Inject(forwardRef(() => MembershipsService))
     private readonly membershipsService: MembershipsService,
-    private readonly notificationsService: NotificationsService,
+    @Optional() @Inject(forwardRef(() => NotificationsService))
+    private readonly notificationsService?: NotificationsService,
     @Optional() private readonly legalAcceptance?: LegalAcceptanceService,
   ) { }
 
@@ -269,6 +272,7 @@ export class OAuthService {
       const saved = await userIdentities.save(newIdentity);
       if (!dbStore.userIdentities.some((i) => i.id === saved.id)) {
         dbStore.userIdentities.push(saved);
+        await awaitPersist(saved);
       }
     } else {
       existingIdentity.lastLoginAt = new Date();
@@ -546,6 +550,7 @@ export class OAuthService {
       const savedIdentity = await userIdentities.save(newIdentity);
       if (!dbStore.userIdentities.some((i) => i.id === savedIdentity.id)) {
         dbStore.userIdentities.push(savedIdentity);
+        await awaitPersist(savedIdentity);
       }
 
       if (!existingUserByEmail.emailVerified) {
@@ -560,7 +565,9 @@ export class OAuthService {
     }
 
     // Rule 3: Create new User and UserIdentity
-    const isSuperAdmin = this.authService.isConfiguredSuperAdmin(normalizedEmail);
+    // Google sign-in NEVER grants SUPER_ADMIN — the removed SUPER_ADMIN_EMAILS
+    // check here meant a Google-verified email alone (no PartnerIQ OTP step)
+    // was enough to mint a super admin. Bootstrap via `npm run create-super-admin`.
     const newUser = users.create({
       email: normalizedEmail,
       firstName: identity.firstName || 'User',
@@ -568,7 +575,7 @@ export class OAuthService {
       avatarUrl: identity.avatarUrl,
       status: UserStatus.ACTIVE,
       emailVerified: Boolean(identity.emailVerified),
-      platformRole: isSuperAdmin ? PlatformRole.SUPER_ADMIN : PlatformRole.USER,
+      platformRole: PlatformRole.USER,
       failedLoginAttempts: 0,
       passwordHash: undefined, // Google-only signup has no password initially
     });
@@ -576,6 +583,7 @@ export class OAuthService {
     const savedUser = await users.save(newUser);
     if (!dbStore.users.some((u) => u.id === savedUser.id)) {
       dbStore.users.push(savedUser);
+      await awaitPersist(savedUser);
     }
 
     const newIdentity = userIdentities.create({
@@ -595,6 +603,7 @@ export class OAuthService {
       const savedIdentity = await userIdentities.save(newIdentity);
       if (!dbStore.userIdentities.some((i) => i.id === savedIdentity.id)) {
         dbStore.userIdentities.push(savedIdentity);
+        await awaitPersist(savedIdentity);
       }
     } catch (err: any) {
       // A concurrent request (e.g. a double-fired callback) may have inserted the same
@@ -720,6 +729,7 @@ export class OAuthService {
     }
 
     user.passwordHash = await SecurityUtils.hashPassword(dto.password);
+    user.mustChangePassword = false;
     user.updatedAt = new Date();
     await users.save(user);
 

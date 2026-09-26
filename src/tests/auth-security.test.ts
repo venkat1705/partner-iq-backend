@@ -1,7 +1,7 @@
 import { AuthService } from '../modules/auth/auth.service';
 import { RiskEngineService } from '../modules/auth/risk-engine.service';
 import { SecurityUtils } from '../common/utils/security.utils';
-import { runSeed } from '../database/seeds/run-seed';
+import { runSeed } from './helpers/test-seed';
 import { dbStore } from '../database/store';
 import { AuthLevel, RiskLevel, SecurityEventType } from '../common/enums';
 import { lookupIp, formatLocation } from '../common/utils/geo.utils';
@@ -23,7 +23,7 @@ async function runAuthSecurityTestSuite() {
 
   try {
     // 1. Seed Initialization
-    const { admin, org } = await runSeed();
+    const { admin, adminPassword, org } = await runSeed();
     await dbStore.initialize();
     assert(!!admin && !!org, 'Seed Data Initialized');
 
@@ -109,7 +109,7 @@ async function runAuthSecurityTestSuite() {
     // 6. Login & Session Security
     console.log('\n--- 5. Login & Session Lifecycle Tests ---');
     const loginRes = (await authService.login(
-      { email: 'admin@partneriq.demo', password: 'PartnerIQ@123' },
+      { email: admin.email, password: adminPassword },
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       '192.168.1.1',
     )) as any;

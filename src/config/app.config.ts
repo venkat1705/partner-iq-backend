@@ -16,6 +16,11 @@ export interface AppConfig {
   googleAffiliateClientSecret: string;
   googleAffiliateRedirectUri: string;
   googleStateTtlSeconds: number;
+  googleCalendarClientId: string;
+  googleCalendarClientSecret: string;
+  googleCalendarRedirectUri: string;
+  googleCalendarId: string;
+  demoBookingAdminEmail: string;
 }
 
 const DEFAULT_CORS_ORIGINS = [
@@ -100,5 +105,11 @@ export const getAppConfig = (): AppConfig => {
     googleAffiliateClientSecret: process.env.GOOGLE_AFFILIATE_CLIENT_SECRET || process.env.GOOGLE_OAUTH_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET || '',
     googleAffiliateRedirectUri: process.env.GOOGLE_AFFILIATE_REDIRECT_URI || process.env.AFFILIATE_GOOGLE_REDIRECT_URI || `${appUrl}/api/v1/affiliate/auth/google/callback`,
     googleStateTtlSeconds: parseInt(process.env.GOOGLE_OAUTH_STATE_TTL_SECONDS || '600', 10),
+    googleCalendarClientId: process.env.GOOGLE_CALENDAR_CLIENT_ID || '',
+    googleCalendarClientSecret: process.env.GOOGLE_CALENDAR_CLIENT_SECRET || '',
+    googleCalendarRedirectUri:
+      process.env.GOOGLE_CALENDAR_REDIRECT_URI || `${appUrl}/api/v1/demo-bookings/google-calendar/oauth/callback`,
+    googleCalendarId: process.env.GOOGLE_CALENDAR_ID || 'primary',
+    demoBookingAdminEmail: process.env.DEMO_BOOKING_ADMIN_EMAIL || 'info@partneriq.in',
   };
 };

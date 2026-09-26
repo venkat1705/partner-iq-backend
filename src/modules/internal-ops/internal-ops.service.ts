@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -7,6 +8,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
+import { randomBytes } from 'crypto';
 import { initializeDataSource } from '../../database/data-source';
 import {
   User,
@@ -19,7 +21,7 @@ import {
   GeneratedDocument,
   Notification,
 } from '../../database/schema';
-import { dbStore } from '../../database/store';
+import { dbStore, awaitPersist } from '../../database/store';
 import { SecurityUtils } from '../../common/utils/security.utils';
 import { PLATFORM_CURRENCY } from '../../common/constants/currency';
 import {
@@ -39,14 +41,12 @@ import {
 import { EmailDesignService } from '../email-design/email-design.service';
 import { PdfGeneratorService } from '../email-design/services/pdf-generator.service';
 import { EmailQueueProducer } from '../email-design/queue/email-queue.producer';
+import { seedSystemDefaults } from '../../database/seeds/run-seed';
 import {
-  CreateSuperAdminDto,
   UpdateSuperAdminDto,
   TriggerTestEmailDto,
   GenerateTestDocumentDto,
-  SeedSandboxOrgDto,
 } from './dto/internal-ops.dto';
-import { runSeed } from '../../database/seeds/run-seed';
 
 @Injectable()
 export class InternalOpsService {
@@ -77,67 +77,9 @@ export class InternalOpsService {
   // SUPERADMIN PROVISIONING & MANAGEMENT
   // ─────────────────────────────────────────────────────────
 
-  async provisionSuperAdmin(dto: CreateSuperAdminDto) {
-    const repos = await this.getRepositories();
-    const email = dto.email.trim().toLowerCase();
-
-    const passwordHash = await SecurityUtils.hashPassword(dto.password);
-    let user = await repos.users.findOne({ where: { email } });
-
-    let isNew = false;
-    if (user) {
-      this.logger.log(`Upgrading existing user ${email} (${user.id}) to SUPER_ADMIN`);
-      user.platformRole = PlatformRole.SUPER_ADMIN;
-      user.status = UserStatus.ACTIVE;
-      user.emailVerified = dto.autoVerifyEmail !== false;
-      user.firstName = dto.firstName || user.firstName;
-      user.lastName = dto.lastName || user.lastName;
-      user.passwordHash = passwordHash;
-      user.failedLoginAttempts = 0;
-      user = await repos.users.save(user);
-
-      // Sync in dbStore
-      const storeIdx = dbStore.users.findIndex((u) => u.id === user!.id);
-      if (storeIdx !== -1) {
-        dbStore.users[storeIdx] = user;
-      } else {
-        dbStore.users.push(user);
-      }
-    } else {
-      this.logger.log(`Creating brand new SUPER_ADMIN account for ${email}`);
-      isNew = true;
-      user = repos.users.create({
-        id: uuidv4(),
-        email,
-        passwordHash,
-        firstName: dto.firstName,
-        lastName: dto.lastName,
-        status: UserStatus.ACTIVE,
-        emailVerified: dto.autoVerifyEmail !== false,
-        platformRole: PlatformRole.SUPER_ADMIN,
-        failedLoginAttempts: 0,
-      });
-      user = await repos.users.save(user);
-      dbStore.users.push(user);
-    }
-
-    return {
-      success: true,
-      message: isNew
-        ? `Superadmin created successfully for ${email}`
-        : `User ${email} upgraded to Superadmin successfully with updated password and active status`,
-      user: {
-        id: user.id,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        platformRole: user.platformRole,
-        status: user.status,
-        emailVerified: user.emailVerified,
-        createdAt: user.createdAt,
-      },
-    };
-  }
+  // Super admin CREATION moved to `npm run create-super-admin` (see the
+  // controller for why); this service no longer accepts a caller-supplied
+  // password over HTTP for a brand-new or upgraded super admin.
 
   async listSuperAdmins() {
     const repos = await this.getRepositories();
@@ -197,9 +139,8 @@ export class InternalOpsService {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
 
-    if (dto.password) {
-      user.passwordHash = await SecurityUtils.hashPassword(dto.password);
-    }
+    // Password changes are deliberately prohibited through this route.
+    // They must be performed via CLI (`npm run create-super-admin`) or the user's password reset flow.
     if (dto.firstName) user.firstName = dto.firstName;
     if (dto.lastName) user.lastName = dto.lastName;
     if (dto.status) user.status = dto.status;
@@ -236,6 +177,19 @@ export class InternalOpsService {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
 
+    // Guard: Refuse to delete or demote the last remaining SuperAdmin
+    if (user.platformRole === PlatformRole.SUPER_ADMIN) {
+      const activeSuperAdmins = repos.users
+        ? await repos.users.count({ where: { platformRole: PlatformRole.SUPER_ADMIN, status: UserStatus.ACTIVE } })
+        : dbStore.users.filter((u) => u.platformRole === PlatformRole.SUPER_ADMIN && u.status === UserStatus.ACTIVE).length;
+
+      if (activeSuperAdmins <= 1) {
+        throw new BadRequestException(
+          'Cannot delete or revoke the last remaining active SuperAdmin account. The system requires at least one active SuperAdmin.',
+        );
+      }
+    }
+
     if (deletePermanently) {
       await repos.users.remove(user);
       dbStore.users = dbStore.users.filter((u) => u.id !== id);
@@ -250,6 +204,7 @@ export class InternalOpsService {
       const idx = dbStore.users.findIndex((u) => u.id === id);
       if (idx !== -1) {
         dbStore.users[idx].platformRole = PlatformRole.USER;
+        await awaitPersist(dbStore.users[idx]);
       }
 
       return {
@@ -264,6 +219,12 @@ export class InternalOpsService {
   // ─────────────────────────────────────────────────────────
 
   async triggerTestEmail(dto: TriggerTestEmailDto) {
+    if (process.env.ENABLE_DEV_FIXTURES !== 'true') {
+      throw new ForbiddenException(
+        'Test email triggering is disabled in production and requires ENABLE_DEV_FIXTURES=true.',
+      );
+    }
+
     this.logger.log(`Triggering test email for template '${dto.templateKey}' to ${dto.recipientEmail}`);
 
     const brandSettings = this.emailDesignService
@@ -348,6 +309,12 @@ export class InternalOpsService {
   }
 
   async generateTestDocument(dto: GenerateTestDocumentDto) {
+    if (process.env.ENABLE_DEV_FIXTURES !== 'true') {
+      throw new ForbiddenException(
+        'Test document generation is disabled in production and requires ENABLE_DEV_FIXTURES=true.',
+      );
+    }
+
     this.logger.log(`Generating test document snapshot for '${dto.templateKey}'`);
 
     const templateKey = dto.templateKey || 'CUSTOMER_SUBSCRIPTION_INVOICE';
@@ -394,164 +361,28 @@ export class InternalOpsService {
     };
   }
 
-  async seedSandboxOrg(dto: SeedSandboxOrgDto) {
-    const repos = await this.getRepositories();
-    const orgName = dto.organizationName.trim();
-    const slug = orgName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    const ownerEmail = dto.ownerEmail.trim().toLowerCase();
-
-    // 1. Ensure Owner User
-    let owner = await repos.users.findOne({ where: { email: ownerEmail } });
-    if (!owner) {
-      const passwordHash = await SecurityUtils.hashPassword('SandboxPass@2026');
-      owner = repos.users.create({
-        id: uuidv4(),
-        email: ownerEmail,
-        passwordHash,
-        firstName: 'Sandbox',
-        lastName: 'Admin',
-        status: UserStatus.ACTIVE,
-        emailVerified: true,
-        platformRole: PlatformRole.USER,
-      });
-      owner = await repos.users.save(owner);
-      dbStore.users.push(owner);
-    }
-
-    // 2. Create Organization
-    let org = await repos.organizations.findOne({ where: { slug } });
-    if (!org) {
-      org = repos.organizations.create({
-        name: orgName,
-        slug,
-        website: `https://${slug}.demo`,
-        country: 'IN',
-        defaultCurrency: PLATFORM_CURRENCY,
-        status: OrganizationStatus.ACTIVE,
-        onboardingCompleted: true,
-        createdBy: owner.id,
-      });
-      org = await repos.organizations.save(org);
-      dbStore.organizations.push(org);
-    }
-
-    // 3. Create Default Program
-    let program = await repos.programs.findOne({ where: { slug: `${slug}-growth` } });
-    if (!program) {
-      program = repos.programs.create({
-        organizationId: org.id,
-        name: `${orgName} Partner Growth Program`,
-        slug: `${slug}-growth`,
-        status: ProgramStatus.ACTIVE,
-        commissionType: CommissionType.PERCENTAGE,
-        defaultCommissionValue: 20.0,
-        cookieDurationDays: 60,
-        attributionModel: AttributionModel.LAST_CLICK,
-        affiliateApprovalMode: 'AUTO',
-        createdBy: owner.id,
-      });
-      program = await repos.programs.save(program);
-      dbStore.programs.push(program);
-    }
-
-    // 4. Generate Affiliates in in-memory store and DB
-    const affiliatesCount = dto.generateAffiliatesCount || 5;
-    const createdAffiliates: any[] = [];
-
-    for (let i = 1; i <= affiliatesCount; i++) {
-      const affEmail = `partner${i}.${slug}@creators.io`;
-      let affUser = await repos.users.findOne({ where: { email: affEmail } });
-      if (!affUser) {
-        affUser = repos.users.create({
-          id: uuidv4(),
-          email: affEmail,
-          passwordHash: await SecurityUtils.hashPassword('PartnerPass@2026'),
-          firstName: `Partner`,
-          lastName: `${i}`,
-          status: UserStatus.ACTIVE,
-          emailVerified: true,
-          platformRole: PlatformRole.USER,
-        });
-        affUser = await repos.users.save(affUser);
-        dbStore.users.push(affUser);
-      }
-
-      const referralCode = `PIQ-${slug.toUpperCase().slice(0, 4)}-${i}${Math.floor(100 + Math.random() * 900)}`;
-      const affId = uuidv4();
-
-      const affObj = {
-        id: affId,
-        organizationId: org.id,
-        displayName: `Partner ${i} (${orgName})`,
-        email: affEmail,
-        companyName: `${orgName} Growth Partner ${i}`,
-        website: `https://partner${i}-${slug}.io`,
-        country: 'US',
-        status: AffiliateStatus.ACTIVE,
-        trustScore: 90,
-        payoutMethod: 'MANUAL',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-      dbStore.affiliates.push(affObj as any);
-
-      dbStore.programAffiliates.push({
-        id: uuidv4(),
-        organizationId: org.id,
-        programId: program.id,
-        affiliateId: affId,
-        status: AffiliateStatus.ACTIVE,
-        referralCode,
-        joinedAt: new Date(),
-      });
-
-      const trackingLink = {
-        id: uuidv4(),
-        organizationId: org.id,
-        programId: program.id,
-        affiliateId: affId,
-        destinationUrl: `https://${slug}.demo/?ref=${referralCode}`,
-        shortCode: referralCode.toLowerCase(),
-        status: TrackingLinkStatus.ACTIVE,
-        title: `${orgName} Primary Tracking Link`,
-        campaign: 'direct_referral',
-        clicks: 120 * i,
-        createdAt: new Date(),
-      };
-      dbStore.trackingLinks.push(trackingLink as any);
-
-      createdAffiliates.push({
-        id: affId,
-        email: affEmail,
-        referralCode,
-        trackingLink: trackingLink.destinationUrl,
-      });
-    }
-
-    return {
-      success: true,
-      message: `Sandbox organization '${orgName}' provisioned with ${createdAffiliates.length} affiliates and tracking links`,
-      organization: {
-        id: org.id,
-        name: org.name,
-        slug: org.slug,
-        ownerEmail: owner.email,
-        programId: program.id,
-        programName: program.name,
-      },
-      affiliates: createdAffiliates,
-    };
-  }
-
   async purgeAllDemoData() {
+    // The reviewed, dry-run-first SQL script (backend/scripts/cleanup-demo-data.sql)
+    // is now the recommended way to do this against a real database — it lets
+    // you see exactly what will be deleted before committing. This endpoint
+    // stays available for local dev convenience only.
+    if (process.env.ENABLE_DEV_FIXTURES !== 'true') {
+      throw new ForbiddenException(
+        'Use backend/scripts/cleanup-demo-data.sql instead — this endpoint requires ENABLE_DEV_FIXTURES=true.',
+      );
+    }
+
     this.logger.log('Purging all legacy demo organizations, demo users, and mock data...');
     const repos = await this.getRepositories();
 
     const demoOrgSlugs = ['acme-saas', 'zenpay', 'nova', 'fitlife', 'omnigrowth-labs', 'apex-analytics-corp'];
     const demoUserEmails = [
-      'admin@partneriq.demo',
-      'superadmin@partneriq.demo',
-      'venkataramireddyvenky@gmail.com',
+      // NOTE: these must only ever be fake/placeholder addresses that seed
+      // scripts create. A real user's personal email was hardcoded here
+      // before — deleting "demo" data by a real customer's email is exactly
+      // the kind of bug this purge is supposed to protect against.
+      'demo-owner@partneriq.local',
+      'demo.partner@partneriq.local',
       'sarah.lin@growthscale.agency',
       'sarah@growthpartner.com',
     ];
@@ -578,10 +409,31 @@ export class InternalOpsService {
     }
 
     // 3. Clean In-Memory Store
-    dbStore.organizations = dbStore.organizations.filter((o) => !demoOrgSlugs.includes(o.slug));
-    dbStore.users = dbStore.users.filter((u) => !demoUserEmails.includes(u.email));
-    dbStore.programs = dbStore.programs.filter((p) => !demoOrgSlugs.some((s) => p.slug?.includes(s)));
-    dbStore.affiliates = dbStore.affiliates.filter((a) => !demoUserEmails.includes(a.email));
+    // Reassigning dbStore.X = dbStore.X.filter(...) would silently replace the
+    // tracked, auto-persisting DBBackedArray instance with a plain array,
+    // breaking future writes to that store for the rest of the process. Remove
+    // matching rows in place via splice() instead, which keeps the array's
+    // persistence wrapper intact and cascades the delete to the real repo.
+    for (let i = dbStore.organizations.length - 1; i >= 0; i--) {
+      if (demoOrgSlugs.includes(dbStore.organizations[i]?.slug || '')) {
+        dbStore.organizations.splice(i, 1);
+      }
+    }
+    for (let i = dbStore.users.length - 1; i >= 0; i--) {
+      if (demoUserEmails.includes(dbStore.users[i]?.email)) {
+        dbStore.users.splice(i, 1);
+      }
+    }
+    for (let i = dbStore.programs.length - 1; i >= 0; i--) {
+      if (demoOrgSlugs.some((s) => dbStore.programs[i]?.slug?.includes(s))) {
+        dbStore.programs.splice(i, 1);
+      }
+    }
+    for (let i = dbStore.affiliates.length - 1; i >= 0; i--) {
+      if (demoUserEmails.includes(dbStore.affiliates[i]?.email)) {
+        dbStore.affiliates.splice(i, 1);
+      }
+    }
 
     return {
       success: true,
@@ -599,16 +451,16 @@ export class InternalOpsService {
   }
 
   async runFullSeedOnDemand() {
-    this.logger.log('Triggering full seed on demand via internal ops API...');
+    this.logger.log('Triggering system defaults seed on demand via internal ops API...');
     try {
-      await runSeed();
+      await seedSystemDefaults();
       return {
         success: true,
-        message: 'Database full seed completed successfully',
+        message: 'System defaults seeded successfully',
         timestamp: new Date().toISOString(),
       };
     } catch (err: any) {
-      this.logger.error(`Full seed failed: ${err?.message}`, err?.stack);
+      this.logger.error(`System defaults seed failed: ${err?.message}`, err?.stack);
       throw new InternalServerErrorException(`Seeding failed: ${err?.message}`);
     }
   }

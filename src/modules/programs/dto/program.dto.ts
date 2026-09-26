@@ -143,6 +143,25 @@ export class CreateProgramDto {
   @IsOptional()
   @IsObject()
   policy?: Record<string, unknown>;
+
+  @ApiPropertyOptional({ example: ['Content Creator', 'Agency'] })
+  @IsOptional()
+  @IsArray()
+  allowedAffiliateTypes?: string[];
+
+  @ApiPropertyOptional({ description: 'Custom commission engine rules entered in the program wizard.' })
+  @IsOptional()
+  @IsArray()
+  customRules?: Record<string, unknown>[];
+
+  @ApiPropertyOptional({ description: 'Per-program commission overrides for existing organization tiers.' })
+  @IsOptional()
+  @IsArray()
+  tierOverrides?: Record<string, unknown>[];
+
+  @ApiPropertyOptional({ description: 'Whether this program is featured on the public marketplace.' })
+  @IsOptional()
+  featured?: boolean;
 }
 
 export class UpdateProgramDto {
@@ -251,4 +270,28 @@ export class UpdateProgramDto {
   @IsOptional()
   @IsUrl()
   landingUrl?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsObject()
+  policy?: Record<string, unknown>;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsArray()
+  allowedAffiliateTypes?: string[];
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsArray()
+  customRules?: Record<string, unknown>[];
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsArray()
+  tierOverrides?: Record<string, unknown>[];
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  featured?: boolean;
 }

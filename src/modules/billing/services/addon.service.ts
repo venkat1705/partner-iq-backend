@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
-import { dbStore, BillingAddonEntity, BillingAddonPurchaseEntity } from '../../../database/store';
+import { dbStore, BillingAddonEntity, BillingAddonPurchaseEntity, awaitPersist } from '../../../database/store';
 import { AppDataSource } from '../../../database/data-source';
 import { BillingAddon } from '../../../database/schema';
 import { AuditAction } from '../../../common/enums';
@@ -139,6 +139,7 @@ export class AddonService {
             addon.sortOrder = seed.sortOrder;
             addon.rowStatus = 'ACTIVE';
             addon.modifiedDate = new Date();
+            await awaitPersist(addon);
           }
           continue;
         }
@@ -178,11 +179,12 @@ export class AddonService {
 
         if (!dbStore.billingAddons.some((item) => item.id === addon!.id)) {
           dbStore.billingAddons.push(addon);
+          await awaitPersist(addon);
         }
       }
     }
 
-    this.recordSeedVersion();
+    await this.recordSeedVersion();
     this.seeded = true;
   }
 
@@ -478,6 +480,7 @@ export class AddonService {
     })) as BillingAddonPurchaseEntity[];
 
     purchases.forEach((purchase) => dbStore.billingAddonPurchases.push(purchase));
+    await Promise.all(purchases.map((purchase) => awaitPersist(purchase)));
 
     // Charge only the new capacity now; the recurring total takes effect from
     // the next cycle, which is what the quote's `totalMinor` reflects.
@@ -497,6 +500,7 @@ export class AddonService {
       purchase.providerOrderId = order.id;
       purchase.modifiedDate = new Date();
     });
+    await Promise.all(purchases.map((purchase) => awaitPersist(purchase)));
 
     this.audit(organizationId, userId, 'BILLING_ADDON_PURCHASE_INITIATED', accountId, {
       purchaseIds: purchases.map((item) => item.id),
@@ -529,7 +533,7 @@ export class AddonService {
     };
 
     if (idempotencyKey) {
-      dbStore.idempotencyKeys.push({
+      const ikRecord = {
         id: uuidv4(),
         organizationId,
         key: idempotencyKey,
@@ -538,7 +542,9 @@ export class AddonService {
         responseBody: response,
         expiresAt: new Date(Date.now() + 24 * 3600 * 1000),
         createdAt: new Date(),
-      } as any);
+      } as any;
+      dbStore.idempotencyKeys.push(ikRecord);
+      await awaitPersist(ikRecord);
     }
 
     return response;
@@ -549,7 +555,7 @@ export class AddonService {
    * re-delivered webhooks and a verify-then-webhook sequence both land here and
    * the second call is a no-op, so capacity is never double-granted.
    */
-  activatePurchases(match: {
+  async activatePurchases(match: {
     providerOrderId?: string;
     providerPaymentId?: string;
     purchaseIds?: string[];
@@ -573,6 +579,8 @@ export class AddonService {
       activated.push(purchase);
     }
 
+    await Promise.all(activated.map((purchase) => awaitPersist(purchase)));
+
     if (activated.length) {
       this.logger.log(
         `Activated ${activated.length} add-on purchase(s) for account ${activated[0].accountId}.`,
@@ -582,7 +590,7 @@ export class AddonService {
   }
 
   /** Marks PENDING purchases on a failed order as FAILED so they never grant capacity. */
-  failPurchases(providerOrderId: string) {
+  async failPurchases(providerOrderId: string) {
     const failed = dbStore.billingAddonPurchases.filter(
       (purchase) =>
         purchase.providerOrderId === providerOrderId &&
@@ -592,6 +600,7 @@ export class AddonService {
       purchase.status = BillingAddonPurchaseStatus.FAILED;
       purchase.modifiedDate = new Date();
     });
+    await Promise.all(failed.map((purchase) => awaitPersist(purchase)));
     return failed.length;
   }
 
@@ -654,6 +663,7 @@ export class AddonService {
       quantity: dto.quantity,
     });
 
+    await awaitPersist(purchase);
     return this.serializePurchase(purchase);
   }
 
@@ -699,6 +709,7 @@ export class AddonService {
       endDate: purchase.endDate,
     });
 
+    await awaitPersist(purchase);
     return this.serializePurchase(purchase);
   }
 
@@ -716,6 +727,7 @@ export class AddonService {
       .forEach((purchase) => {
         purchase.status = BillingAddonPurchaseStatus.CANCELLED;
         purchase.modifiedDate = new Date();
+        void awaitPersist(purchase);
       });
   }
 
@@ -789,20 +801,23 @@ export class AddonService {
     };
   }
 
-  private recordSeedVersion() {
+  private async recordSeedVersion() {
     let setting = dbStore.platformSettings.find((item) => item.key === ADDON_SEED_SETTING_KEY);
     if (!setting) {
-      dbStore.platformSettings.push({
+      const newSetting = {
         id: uuidv4(),
         key: ADDON_SEED_SETTING_KEY,
         value: PLAN_CATALOG_SEED_VERSION,
         description: 'Seed version of the PartnerIQ add-on catalog',
         createdAt: new Date(),
         updatedAt: new Date(),
-      } as any);
+      } as any;
+      dbStore.platformSettings.push(newSetting);
+      await awaitPersist(newSetting);
     } else if (setting.value !== PLAN_CATALOG_SEED_VERSION) {
       setting.value = PLAN_CATALOG_SEED_VERSION;
       setting.updatedAt = new Date();
+      await awaitPersist(setting);
     }
   }
 

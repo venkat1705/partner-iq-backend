@@ -1,7 +1,20 @@
 import assert from 'node:assert/strict';
 import { DemoBookingsService } from '../modules/demo-bookings/demo-bookings.service';
+import { GoogleCalendarService } from '../modules/demo-bookings/google-calendar.service';
+import { GoogleCalendarOAuthService } from '../modules/demo-bookings/google-calendar-oauth.service';
+import { IntegrationCredentialService } from '../modules/integrations/integration-credential.service';
+import { SystemEmailDispatchService } from '../modules/email-design/services/system-email-dispatch.service';
 
-const service = new DemoBookingsService();
+// GoogleCalendarOAuthService has no connection stored yet in this test run, so
+// getValidAccessToken() naturally returns null and GoogleCalendarService no-ops
+// into its placeholder fallback — real IntegrationCredentialService is cheap
+// enough (pure crypto + dbStore) to construct directly rather than stub.
+// SystemEmailDispatchService's real constructor pulls in the full email queue
+// stack, which is unnecessary for this unit test — a minimal stub satisfies
+// the one method demo-bookings.service.ts calls.
+const emailDispatchStub = { send: async () => undefined } as unknown as SystemEmailDispatchService;
+const googleCalendarOAuth = new GoogleCalendarOAuthService(new IntegrationCredentialService());
+const service = new DemoBookingsService(new GoogleCalendarService(googleCalendarOAuth), emailDispatchStub);
 
 const booking = await service.create({
   firstName: 'Ada',

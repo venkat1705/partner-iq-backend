@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index, Unique } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, PrimaryColumn, Column, CreateDateColumn, UpdateDateColumn, Index, Unique } from 'typeorm';
 import {
   EnvironmentType,
   SubscriptionStatus,
@@ -117,6 +117,14 @@ export class User {
   @Column({ type: 'timestamp', nullable: true })
   lockedUntil?: Date;
 
+  /**
+   * Set on accounts bootstrapped with a generated password (e.g. by
+   * `create-super-admin`) so the holder is forced to set their own password
+   * before touching anything else. Cleared by `POST /auth/set-password`.
+   */
+  @Column({ type: 'boolean', default: false })
+  mustChangePassword!: boolean;
+
   @CreateDateColumn()
   createdAt!: Date;
 
@@ -174,6 +182,7 @@ export class UserIdentity {
 }
 
 @Entity('organizations')
+@Index(['createdBy', 'onboardingIdempotencyKey'], { unique: true })
 export class Organization {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -217,6 +226,49 @@ export class Organization {
 
   @Column({ type: 'uuid' })
   createdBy!: string;
+
+  /**
+   * Client-generated key (e.g. one `useRef(crypto.randomUUID())` per onboarding
+   * form mount), unique per creator. Lets a double-submit (double-click, retry,
+   * two tabs racing the same form) resolve to the SAME organization instead of
+   * creating a duplicate — enforced at the database level, not just in the UI.
+   * NULL for organizations created outside onboarding (MySQL's unique index
+   * treats NULLs as distinct, so those rows are never deduped against it).
+   *
+   * This alone isn't enough: a refresh, closed tab, or re-login starts a FRESH
+   * form mount with a NEW key, so it can't catch "user re-enters onboarding
+   * after already starting it". `onboardingStatus`/`onboardingLockKey` below
+   * are the actual guard for that; this key only covers same-session replay.
+   */
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  onboardingIdempotencyKey?: string;
+
+  /**
+   * 'IN_PROGRESS' from the moment the onboarding wizard creates the org until
+   * `completeOnboarding()` runs; 'COMPLETED' immediately for organizations
+   * created through the plain (non-wizard) create endpoint, since those have
+   * no multi-step flow to resume. Distinct from the legacy `onboardingCompleted`
+   * boolean above, which this keeps in sync but doesn't replace, since other
+   * code already reads that field.
+   */
+  @Column({ type: 'varchar', length: 20, default: 'COMPLETED' })
+  onboardingStatus!: 'IN_PROGRESS' | 'COMPLETED';
+
+  /** Which onboarding step the user last reached — lets the frontend resume there instead of restarting at step 1. */
+  @Column({ type: 'int', default: 1 })
+  onboardingStep!: number;
+
+  /**
+   * Set to `createdBy` while onboardingStatus is 'IN_PROGRESS', NULL once
+   * completed. The unique index below means MySQL itself refuses a second row
+   * with the same value — i.e. at most one in-progress onboarding org per
+   * user, no matter how many times they re-enter the wizard (new tab, new
+   * idempotency key, whatever). NULLs are distinct in a MySQL unique index,
+   * so completed/plain-create organizations (lockKey NULL) never collide.
+   */
+  @Index({ unique: true })
+  @Column({ type: 'uuid', nullable: true })
+  onboardingLockKey?: string;
 
   @CreateDateColumn()
   createdAt!: Date;
@@ -892,6 +944,41 @@ export class Program {
 
   @Column({ type: 'varchar', length: 1000, nullable: true })
   landingUrl?: string;
+
+  @Column({ type: 'text', nullable: true })
+  termsContent?: string;
+
+  @Column({ type: 'varchar', length: 1000, nullable: true })
+  termsUrl?: string;
+
+  @Column({ type: 'varchar', length: 1000, nullable: true })
+  privacyPolicyUrl?: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  promotionRules?: Record<string, unknown>;
+
+  @Column({ type: 'simple-json', nullable: true })
+  allowedAffiliateTypes?: string[];
+
+  @Column({ type: 'simple-json', nullable: true })
+  customRules?: Record<string, unknown>[];
+
+  // Per-program commission-rate overrides for existing organization-level partner tiers
+  // (e.g. "Gold tier affiliates get 22% instead of the org default of 20% on THIS
+  // program"). Stored here rather than mutated onto the shared PartnerTier record,
+  // because a PartnerTier can be reused across multiple programs and an override
+  // entered while configuring one program must not silently change another.
+  @Column({ type: 'simple-json', nullable: true })
+  tierOverrides?: Record<string, unknown>[];
+
+  // Org-admin controlled "Featured" badge for the public marketplace. Defaults to
+  // false — a program is only featured because the org explicitly said so, never
+  // because a fallback assumed every program deserves the badge. Optional in the TS
+  // type (unlike other required columns) so existing in-memory callers that build a
+  // ProgramEntity by hand without this field still compile; the DB/service default
+  // (false) still applies wherever a value is actually persisted.
+  @Column({ type: 'boolean', default: false })
+  featured?: boolean;
 
   @Column({ type: 'uuid' })
   createdBy!: string;
@@ -1907,6 +1994,24 @@ export class Click {
   @Column({ type: 'varchar', length: 255, nullable: true })
   utmContent?: string;
 
+  /**
+   * The traffic source as configured on the tracking link, captured at click
+   * time.
+   *
+   * `utmSource` above holds the *effective* value, which an inbound
+   * `?utm_source=` overrides — that override is a deliberate feature (partners
+   * tag placements per channel) and it is what gets forwarded to the merchant.
+   * But it also means a partner can decide what appears in the organization's
+   * own traffic-source reporting. Source breakdowns read this column instead,
+   * so reporting reflects how the link was set up rather than what the partner
+   * put in the URL.
+   *
+   * Stored rather than resolved from the link at query time so that editing a
+   * link's UTMs later does not silently re-bucket historical clicks.
+   */
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  canonicalUtmSource?: string;
+
   @Column({ type: 'varchar', length: 100, nullable: true })
   country?: string;
 
@@ -2144,6 +2249,16 @@ export class Conversion {
 
   @Column({ type: 'text', nullable: true })
   notes?: string;
+
+  /**
+   * When the conversion actually happened in the merchant's system, as opposed
+   * to `createdAt`, which is when PartnerIQ recorded it. The two diverge for
+   * backfilled or queued orders, and every analytics bucket, date filter and
+   * CSV export reads `occurredAt || createdAt`. `datetime` rather than
+   * `timestamp` so backdated imports and post-2038 dates both survive.
+   */
+  @Column({ type: 'datetime', nullable: true })
+  occurredAt?: Date;
 
   @CreateDateColumn()
   createdAt!: Date;
@@ -2684,6 +2799,354 @@ export class FraudMetricRollup {
   updatedAt!: Date;
 }
 
+@Entity('fraud_rules')
+@Index(['organizationId', 'status'])
+export class FraudRule {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  organizationId?: string;
+
+  @Column({ type: 'varchar', length: 150 })
+  name!: string;
+
+  @Column({ type: 'varchar', length: 80, unique: true })
+  code!: string;
+
+  @Column({ type: 'text' })
+  description!: string;
+
+  @Column({ type: 'varchar', length: 50 })
+  category!: string;
+
+  @Column({ type: 'varchar', length: 20, default: 'HIGH' })
+  severity!: string;
+
+  @Column({ type: 'varchar', length: 20, default: 'ACTIVE' })
+  status!: 'ACTIVE' | 'DISABLED' | 'DRY_RUN';
+
+  @Column({ type: 'int', default: 1 })
+  currentVersion!: number;
+
+  @Column({ type: 'json' })
+  conditions!: any;
+
+  @Column({ type: 'json' })
+  actions!: any;
+
+  @Column({ type: 'int', default: 0 })
+  triggerCount!: number;
+
+  @Column({ type: 'timestamp', nullable: true })
+  lastTriggeredAt?: Date;
+
+  @Column({ type: 'varchar', length: 100, default: 'System' })
+  createdBy!: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
+@Entity('fraud_rule_versions')
+@Index(['ruleId', 'version'])
+export class FraudRuleVersion {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  ruleId!: string;
+
+  @Column({ type: 'int' })
+  version!: number;
+
+  @Column({ type: 'json' })
+  conditions!: any;
+
+  @Column({ type: 'json' })
+  actions!: any;
+
+  @Column({ type: 'varchar', length: 20 })
+  severity!: string;
+
+  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  effectiveFrom!: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  effectiveTo?: Date;
+
+  @Column({ type: 'varchar', length: 100, default: 'System' })
+  createdBy!: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+}
+
+@Entity('fraud_alerts')
+@Index(['organizationId', 'status'])
+@Index(['severity', 'status'])
+export class FraudAlert {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column({ type: 'varchar', length: 50, unique: true })
+  alertNumber!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  title!: string;
+
+  @Column({ type: 'varchar', length: 20, default: 'HIGH' })
+  severity!: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+
+  @Column({ type: 'text' })
+  severityReason!: string;
+
+  @Column({ type: 'varchar', length: 20, default: 'OPEN' })
+  status!: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'DISMISSED';
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  organizationId?: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  affiliateId?: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  programId?: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  conversionId?: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  commissionId?: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  payoutId?: string;
+
+  @Column({ type: 'varchar', length: 80 })
+  signalCode!: string;
+
+  @Column({ type: 'varchar', length: 50 })
+  signalCategory!: string;
+
+  @Column({ type: 'json' })
+  evidenceSummary!: any;
+
+  @Column({ type: 'int', default: 0 })
+  financialExposurePaise!: number;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  assignedTo?: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  acknowledgedAt?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  resolvedAt?: Date;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  resolvedBy?: string;
+
+  @Column({ type: 'text', nullable: true })
+  resolutionNotes?: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
+@Entity('fraud_investigations')
+@Index(['organizationId', 'status'])
+@Index(['severity', 'status'])
+export class FraudInvestigation {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column({ type: 'varchar', length: 50, unique: true })
+  caseNumber!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  title!: string;
+
+  @Column({ type: 'varchar', length: 20, default: 'HIGH' })
+  severity!: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+
+  @Column({ type: 'varchar', length: 30, default: 'OPEN' })
+  status!: 'OPEN' | 'INVESTIGATING' | 'ACTION_REQUIRED' | 'RESOLVED' | 'CLOSED';
+
+  @Column({ type: 'varchar', length: 30, nullable: true })
+  outcome?: 'NO_ISSUE' | 'SUSPICIOUS' | 'CONFIRMED_FRAUD' | 'FALSE_POSITIVE' | 'INCONCLUSIVE';
+
+  @Column({ type: 'text', nullable: true })
+  outcomeReason?: string;
+
+  @Column({ type: 'text', nullable: true })
+  actionTaken?: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  assignedTo?: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  assignedAt?: Date;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  organizationId?: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  affiliateId?: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  programId?: string;
+
+  @Column({ type: 'int', default: 0 })
+  financialExposurePaise!: number;
+
+  @Column({ type: 'json', nullable: true })
+  linkedAlertIds?: string[];
+
+  @Column({ type: 'json', nullable: true })
+  linkedConversionIds?: string[];
+
+  @Column({ type: 'json', nullable: true })
+  linkedCommissionIds?: string[];
+
+  @Column({ type: 'json', nullable: true })
+  linkedPayoutIds?: string[];
+
+  @Column({ type: 'json', nullable: true })
+  notes?: any[];
+
+  @Column({ type: 'json', nullable: true })
+  timeline?: any[];
+
+  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  openedAt!: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  resolvedAt?: Date;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  resolvedBy?: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
+@Entity('fraud_holds')
+@Index(['entityType', 'entityId'])
+@Index(['organizationId', 'status'])
+export class FraudHold {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column({ type: 'varchar', length: 50, unique: true })
+  holdNumber!: string;
+
+  @Column({ type: 'varchar', length: 30 })
+  entityType!: 'CONVERSION' | 'COMMISSION' | 'PAYOUT';
+
+  @Index()
+  @Column({ type: 'uuid' })
+  entityId!: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  organizationId?: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  affiliateId?: string;
+
+  @Column({ type: 'int', default: 0 })
+  amountPaise!: number;
+
+  @Column({ type: 'varchar', length: 10, default: 'INR' })
+  currency!: string;
+
+  @Column({ type: 'text' })
+  reason!: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  alertId?: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  investigationId?: string;
+
+  @Column({ type: 'varchar', length: 20, default: 'ACTIVE' })
+  status!: 'ACTIVE' | 'RELEASED' | 'RESOLVED';
+
+  @Column({ type: 'varchar', length: 100, default: 'System' })
+  createdBy!: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  releasedAt?: Date;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  releasedBy?: string;
+
+  @Column({ type: 'text', nullable: true })
+  releaseReason?: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
+@Entity('fraud_exceptions')
+export class FraudException {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column({ type: 'varchar', length: 80 })
+  type!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  title!: string;
+
+  @Column({ type: 'text' })
+  description!: string;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  entityType?: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  entityId?: string;
+
+  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  detectedAt!: Date;
+
+  @Column({ type: 'varchar', length: 50, default: 'PENDING_RETRY' })
+  retryState!: string;
+
+  @Column({ type: 'varchar', length: 100, default: 'LOW' })
+  currentImpact!: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+}
+
 @Entity('payout_batches')
 @Index(['organizationId', 'environment'])
 export class PayoutBatch {
@@ -2873,6 +3336,8 @@ export class WebhookDelivery {
 }
 
 @Entity('audit_logs')
+@Index(['organizationId', 'createdAt'])
+@Index(['action', 'createdAt'])
 export class AuditLog {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -2881,14 +3346,29 @@ export class AuditLog {
   @Column({ type: 'uuid', nullable: true })
   organizationId?: string;
 
-  @Column({ type: 'varchar', length: 20 })
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  organizationName?: string;
+
+  @Column({ type: 'varchar', length: 50, default: 'USER' })
   actorType!: string;
 
-  @Column({ type: 'uuid' })
+  @Column({ type: 'varchar', length: 255 })
   actorId!: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  actorEmail?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  actorName?: string;
 
   @Column({ type: 'varchar', length: 100 })
   action!: AuditAction;
+
+  @Column({ type: 'varchar', length: 50, default: 'ADMINISTRATION' })
+  category?: string;
+
+  @Column({ type: 'varchar', length: 20, default: 'SUCCESS' })
+  result?: 'SUCCESS' | 'FAILED' | 'DENIED' | 'PARTIAL' | 'SYSTEM_ERROR';
 
   @Column({ type: 'varchar', length: 100 })
   resourceType!: string;
@@ -2897,10 +3377,40 @@ export class AuditLog {
   resourceId!: string;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
-  ipAddress?: string;
+  targetName?: string;
+
+  @Column({ type: 'varchar', length: 50, default: 'ADMIN_PORTAL' })
+  source?: string;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
+  requestId?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  correlationId?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  traceId?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  ipAddress?: string;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
   userAgent?: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  beforeState?: any;
+
+  @Column({ type: 'simple-json', nullable: true })
+  afterState?: any;
+
+  @Column({ type: 'text', nullable: true })
+  reason?: string;
+
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  eventHash?: string;
+
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  previousEventHash?: string;
 
   @Column({ type: 'simple-json', nullable: true })
   metadata?: any;
@@ -2965,6 +3475,200 @@ export class DemoBooking {
 
   @Column({ type: 'varchar', length: 40, default: 'new' })
   status!: 'new' | 'confirmed' | 'completed' | 'rescheduled' | 'cancelled';
+
+  @Column({ type: 'varchar', length: 40, default: 'UNREVIEWED', nullable: true })
+  qualificationStatus?: 'UNREVIEWED' | 'QUALIFIED' | 'DISQUALIFIED' | 'NEEDS_INFO';
+
+  @Column({ type: 'simple-array', nullable: true })
+  qualificationSignals?: string[];
+
+  @Column({ type: 'text', nullable: true })
+  qualificationNotes?: string;
+
+  @Column({ type: 'varchar', length: 40, default: 'NOT_STARTED', nullable: true })
+  attendanceStatus?: 'NOT_STARTED' | 'ATTENDED' | 'PARTIALLY_ATTENDED' | 'NO_SHOW' | 'CANCELLED';
+
+  @Column({ type: 'timestamp', nullable: true })
+  attendedAt?: Date;
+
+  @Column({ type: 'int', nullable: true })
+  attendanceDurationMinutes?: number;
+
+  @Column({ type: 'text', nullable: true })
+  attendanceNotes?: string;
+
+  @Column({ type: 'varchar', length: 80, default: 'GOOGLE_MEET', nullable: true })
+  meetingProvider?: string;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  meetingUrl?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  googleEventId?: string;
+
+  @Column({ type: 'int', default: 0, nullable: true })
+  rescheduleCount?: number;
+
+  @Column({ type: 'json', nullable: true })
+  rescheduleHistory?: any[];
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  cancellationReason?: string;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  cancelledBy?: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  cancelledAt?: Date;
+
+  @Column({ type: 'varchar', length: 40, default: 'NONE', nullable: true })
+  followUpStatus?: 'NONE' | 'PENDING' | 'OVERDUE' | 'COMPLETED';
+
+  @Column({ type: 'timestamp', nullable: true })
+  followUpDueDate?: Date;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  followUpAction?: string;
+
+  @Column({ type: 'text', nullable: true })
+  followUpNotes?: string;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  followUpOwner?: string;
+
+  @Column({ type: 'varchar', length: 80, default: 'PENDING', nullable: true })
+  opportunityStage?: string;
+
+  @Column({ type: 'bigint', nullable: true })
+  estimatedValuePaise?: number;
+
+  @Column({ type: 'varchar', length: 10, default: 'INR', nullable: true })
+  opportunityCurrency?: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  opportunityCloseDate?: Date;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  convertedCustomerId?: string;
+
+  @Column({ type: 'varchar', length: 120, default: 'Organic / Direct', nullable: true })
+  source?: string;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  medium?: string;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  campaign?: string;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  utmSource?: string;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  utmMedium?: string;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  utmCampaign?: string;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  utmTerm?: string;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  utmContent?: string;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  referrer?: string;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  landingPage?: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  rescheduleToken?: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  rescheduleTokenExpiresAt?: Date;
+
+  @Index()
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  idempotencyKey?: string;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  ownerId?: string;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  ownerName?: string;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  preferredFormat?: string;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  industry?: string;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  currentSolution?: string;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  monthlyRevenueRange?: string;
+
+  @Column({ type: 'simple-array', nullable: true })
+  goals?: string[];
+
+  @Column({ type: 'simple-array', nullable: true })
+  requestedFeatures?: string[];
+
+  @Column({ type: 'int', default: 30, nullable: true })
+  durationMinutes?: number;
+
+  @Column({ type: 'text', nullable: true })
+  notes?: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
+/**
+ * Single platform-wide connection (one admin connects PartnerIQ's own sales
+ * calendar — this is not a per-organization tenant integration, so it
+ * intentionally sits outside the OrganizationIntegration/Integration catalog
+ * used for tenant-facing integrations). Exactly one row is expected to exist,
+ * keyed by the fixed id GOOGLE_CALENDAR_CONNECTION_ID.
+ *
+ * access_token/refresh_token themselves are NOT stored here — they're
+ * encrypted via IntegrationCredentialService into `integration_credentials`,
+ * keyed by GOOGLE_CALENDAR_CONNECTION_ID. This row only tracks connection
+ * metadata/status.
+ */
+@Entity('google_calendar_connections')
+export class GoogleCalendarConnection {
+  @PrimaryColumn({ type: 'varchar', length: 64 })
+  id!: string;
+
+  @Column({ type: 'varchar', length: 20, default: 'DISCONNECTED' })
+  status!: 'CONNECTED' | 'DISCONNECTED' | 'ERROR';
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  connectedEmail?: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  connectedByUserId?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  connectedByName?: string;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  scope?: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  accessTokenExpiresAt?: Date;
+
+  @Column({ type: 'text', nullable: true })
+  lastError?: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  connectedAt?: Date;
 
   @CreateDateColumn()
   createdAt!: Date;
@@ -4791,10 +5495,14 @@ export class AffiliatePerformanceSummary {
   @Column({ type: 'varchar', length: 50, default: 'LIFETIME' })
   periodKey!: string;
 
-  @Column({ type: 'timestamp' })
+  // `datetime`, not `timestamp`: the LIFETIME period is stored as epoch 0 to
+  // year 9999, and MySQL's TIMESTAMP only spans 1970-01-01 00:00:01 UTC to
+  // 2038-01-19. Under a non-UTC session timezone epoch 0 also lands *below*
+  // that floor, so every LIFETIME upsert was rejected with ER_TRUNCATED_WRONG_VALUE.
+  @Column({ type: 'datetime' })
   periodStart!: Date;
 
-  @Column({ type: 'timestamp' })
+  @Column({ type: 'datetime' })
   periodEnd!: Date;
 
   @Column({ type: 'int', default: 0 })
@@ -5812,7 +6520,7 @@ export class UserLegalAcceptance {
 @Entity('blog_posts')
 @Unique(['slug'])
 export class BlogPost {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryColumn({ type: 'varchar', length: 255 })
   id!: string;
 
   @Column({ type: 'varchar', length: 255 })
@@ -5902,3 +6610,584 @@ export class BlogPost {
   @UpdateDateColumn()
   updatedAt!: Date;
 }
+
+@Entity('security_events')
+export class SecurityEvent {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column({ type: 'varchar', length: 64, unique: true })
+  eventNumber!: string;
+
+  @Column({ type: 'varchar', length: 16, default: '1.0' })
+  eventSchemaVersion!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 100 })
+  eventType!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 50 })
+  category!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20 })
+  severity!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20 })
+  result!: string;
+
+  @Column({ type: 'varchar', length: 50 })
+  actorType!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 255 })
+  actorId!: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  actorEmail?: string;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  organizationId?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  organizationName?: string;
+
+  @Column({ type: 'varchar', length: 100 })
+  resourceType!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  resourceId!: string;
+
+  @Column({ type: 'varchar', length: 100 })
+  source!: string;
+
+  @Column({ type: 'varchar', length: 100, default: 'core-api' })
+  service!: string;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  endpoint?: string;
+
+  @Column({ type: 'varchar', length: 10, nullable: true })
+  httpMethod?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  sessionId?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  requestId?: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  correlationId?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  traceId?: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  ipAddress?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  deviceId?: string;
+
+  @Column({ type: 'text', nullable: true })
+  userAgent?: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  country?: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  city?: string;
+
+  @Column({ type: 'text', nullable: true })
+  reason?: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  metadata?: Record<string, any>;
+
+  @Column({ type: 'datetime' })
+  occurredAt!: Date;
+
+  @Column({ type: 'datetime' })
+  detectedAt!: Date;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+}
+
+@Entity('security_signals')
+export class SecuritySignal {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column({ type: 'varchar', length: 64, unique: true })
+  signalNumber!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 100 })
+  signalType!: string;
+
+  @Column({ type: 'varchar', length: 20 })
+  severity!: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  eventId?: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  organizationId?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  actorId?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  resourceId?: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  observedValue!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  expectedValue!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  threshold!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  difference!: string;
+
+  @Column({ type: 'varchar', length: 100 })
+  source!: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  ruleId?: string;
+
+  @Column({ type: 'int', default: 1 })
+  ruleVersion!: number;
+
+  @Column({ type: 'varchar', length: 50, default: 'ACTIVE' })
+  status!: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  metadata?: Record<string, any>;
+
+  @Column({ type: 'datetime' })
+  detectedAt!: Date;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+}
+
+@Entity('security_alerts')
+export class SecurityAlert {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column({ type: 'varchar', length: 64, unique: true })
+  alertNumber!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  title!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20 })
+  severity!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 50, default: 'OPEN' })
+  status!: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  ruleId?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  ruleName?: string;
+
+  @Column({ type: 'int', default: 1 })
+  ruleVersion!: number;
+
+  @Column({ type: 'uuid', nullable: true })
+  signalId?: string;
+
+  @Column({ type: 'int', default: 1 })
+  eventCount!: number;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  actorType?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  actorId?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  actorEmail?: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  organizationId?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  organizationName?: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  resourceType?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  resourceId?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  assignedTo?: string;
+
+  @Column({ type: 'text', nullable: true })
+  impact?: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  evidence?: any;
+
+  @Column({ type: 'datetime', nullable: true })
+  acknowledgedAt?: Date;
+
+  @Column({ type: 'datetime', nullable: true })
+  resolvedAt?: Date;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  resolvedBy?: string;
+
+  @Column({ type: 'text', nullable: true })
+  resolutionReason?: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
+@Entity('security_investigations')
+export class SecurityInvestigation {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column({ type: 'varchar', length: 64, unique: true })
+  caseNumber!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  title!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20 })
+  severity!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 50, default: 'OPEN' })
+  status!: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  outcome?: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  alertId?: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  organizationId?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  organizationName?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  actorId?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  actorEmail?: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  resourceType?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  resourceId?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  assignedTo?: string;
+
+  @Column({ type: 'text', nullable: true })
+  securityImpact?: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  notes?: any[];
+
+  @Column({ type: 'simple-json', nullable: true })
+  evidence?: any[];
+
+  @Column({ type: 'simple-json', nullable: true })
+  actions?: any[];
+
+  @Column({ type: 'datetime' })
+  openedAt!: Date;
+
+  @Column({ type: 'datetime', nullable: true })
+  resolvedAt?: Date;
+
+  @Column({ type: 'datetime', nullable: true })
+  closedAt?: Date;
+
+  @Column({ type: 'text', nullable: true })
+  resolution?: string;
+
+  @Column({ type: 'text', nullable: true })
+  resolutionReason?: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
+@Entity('security_incidents')
+export class SecurityIncident {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column({ type: 'varchar', length: 64, unique: true })
+  incidentNumber!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  title!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 100 })
+  category!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 20 })
+  severity!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 50, default: 'OPEN' })
+  status!: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  assignedOwner?: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  affectedOrganizations?: any[];
+
+  @Column({ type: 'simple-json', nullable: true })
+  affectedUsers?: any[];
+
+  @Column({ type: 'simple-json', nullable: true })
+  affectedResources?: any[];
+
+  @Column({ type: 'text', nullable: true })
+  securityImpact?: string;
+
+  @Column({ type: 'text', nullable: true })
+  containmentAction?: string;
+
+  @Column({ type: 'text', nullable: true })
+  remediationAction?: string;
+
+  @Column({ type: 'text', nullable: true })
+  communicationNotes?: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  outcome?: string;
+
+  @Column({ type: 'text', nullable: true })
+  resolutionReason?: string;
+
+  @Column({ type: 'datetime' })
+  openedAt!: Date;
+
+  @Column({ type: 'datetime', nullable: true })
+  resolvedAt?: Date;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
+@Entity('security_rules')
+export class SecurityRule {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column({ type: 'varchar', length: 100, unique: true })
+  code!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  name!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 100 })
+  category!: string;
+
+  @Column({ type: 'text' })
+  description!: string;
+
+  @Column({ type: 'varchar', length: 20 })
+  severity!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 50, default: 'ACTIVE' })
+  status!: string;
+
+  @Column({ type: 'simple-json' })
+  conditions!: any;
+
+  @Column({ type: 'simple-json' })
+  actions!: any;
+
+  @Column({ type: 'int', default: 1 })
+  version!: number;
+
+  @Column({ type: 'int', default: 0 })
+  triggerCount!: number;
+
+  @Column({ type: 'int', default: 0 })
+  alertCount!: number;
+
+  @Column({ type: 'int', default: 0 })
+  incidentCount!: number;
+
+  @Column({ type: 'datetime', nullable: true })
+  lastTriggeredAt?: Date;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  createdBy?: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
+@Entity('security_rule_versions')
+export class SecurityRuleVersion {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  ruleId!: string;
+
+  @Column({ type: 'int' })
+  version!: number;
+
+  @Column({ type: 'simple-json' })
+  conditions!: any;
+
+  @Column({ type: 'simple-json' })
+  actions!: any;
+
+  @Column({ type: 'varchar', length: 20 })
+  severity!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  changedBy!: string;
+
+  @Column({ type: 'text', nullable: true })
+  changeReason?: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+}
+
+@Entity('security_actions')
+export class SecurityAction {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 100 })
+  actionType!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  actorId!: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  actorEmail?: string;
+
+  @Column({ type: 'varchar', length: 50 })
+  targetType!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  targetId!: string;
+
+  @Column({ type: 'simple-json', nullable: true })
+  beforeState?: any;
+
+  @Column({ type: 'simple-json', nullable: true })
+  afterState?: any;
+
+  @Column({ type: 'text' })
+  reason!: string;
+
+  @Column({ type: 'varchar', length: 100, default: 'admin_portal' })
+  source!: string;
+
+  @Column({ type: 'boolean', default: true })
+  success!: boolean;
+
+  @Column({ type: 'text', nullable: true })
+  failureReason?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  requestId?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  correlationId?: string;
+
+  @CreateDateColumn()
+  executedAt!: Date;
+}
+
+@Entity('security_exceptions')
+export class SecurityException {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 100 })
+  exceptionCode!: string;
+
+  @Column({ type: 'varchar', length: 20 })
+  severity!: string;
+
+  @Column({ type: 'varchar', length: 100 })
+  component!: string;
+
+  @Column({ type: 'varchar', length: 100 })
+  entity!: string;
+
+  @Column({ type: 'text' })
+  expected!: string;
+
+  @Column({ type: 'text' })
+  actual!: string;
+
+  @Column({ type: 'varchar', length: 50, default: 'PENDING' })
+  retryState!: string;
+
+  @Column({ type: 'int', default: 0 })
+  retryCount!: number;
+
+  @Column({ type: 'text' })
+  impact!: string;
+
+  @Column({ type: 'text', nullable: true })
+  resolution?: string;
+
+  @CreateDateColumn()
+  detectedAt!: Date;
+}
+
+export * from './schema-api-activity';
+export * from './schema-webhooks';
+export * from './schema-system-health';
+export * from './schema-jobs';
+export * from './schema-feature-flags';
+export * from './schema-organization-settings';
+
+

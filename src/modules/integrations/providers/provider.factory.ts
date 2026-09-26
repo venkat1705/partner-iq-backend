@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException, Optional, forwardRef } from '@nestjs/common';
 import { IntegrationProvider } from './provider.interface';
 import { HubSpotProvider } from './hubspot.provider';
 import { ZohoCrmProvider } from './zoho-crm.provider';
@@ -10,19 +10,21 @@ export class IntegrationProviderFactory {
   private readonly providers: Map<string, IntegrationProvider> = new Map();
 
   constructor(
-    private readonly hubspotProvider: HubSpotProvider,
-    private readonly zohoCrmProvider: ZohoCrmProvider,
-    private readonly razorpayProvider: RazorpayProvider,
-    private readonly cashfreeProvider: CashfreeProvider,
+    @Optional() @Inject(forwardRef(() => HubSpotProvider)) private readonly hubspotProvider?: HubSpotProvider,
+    @Optional() @Inject(forwardRef(() => ZohoCrmProvider)) private readonly zohoCrmProvider?: ZohoCrmProvider,
+    @Optional() @Inject(forwardRef(() => RazorpayProvider)) private readonly razorpayProvider?: RazorpayProvider,
+    @Optional() @Inject(forwardRef(() => CashfreeProvider)) private readonly cashfreeProvider?: CashfreeProvider,
   ) {
-    this.register(this.hubspotProvider);
-    this.register(this.zohoCrmProvider);
-    this.register(this.razorpayProvider);
-    this.register(this.cashfreeProvider);
+    if (this.hubspotProvider) this.register(this.hubspotProvider);
+    if (this.zohoCrmProvider) this.register(this.zohoCrmProvider);
+    if (this.razorpayProvider) this.register(this.razorpayProvider);
+    if (this.cashfreeProvider) this.register(this.cashfreeProvider);
   }
 
-  private register(provider: IntegrationProvider) {
-    this.providers.set(provider.provider.toUpperCase(), provider);
+  private register(provider?: IntegrationProvider) {
+    if (provider?.provider) {
+      this.providers.set(provider.provider.toUpperCase(), provider);
+    }
   }
 
   getProvider(key: string): IntegrationProvider {

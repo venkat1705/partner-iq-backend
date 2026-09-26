@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import { dbStore } from '../../../database/store';
+import { dbStore, awaitPersist } from '../../../database/store';
 import { OrganizationIntegrationStatus } from '../../../common/enums';
 import { IntegrationCredentialService } from '../integration-credential.service';
 import { RazorpayProvider } from '../providers/razorpay.provider';
@@ -67,7 +67,7 @@ export class RazorpayTokenService {
 
     const refreshToken = this.safeGet(connectionId, 'refresh_token');
     if (!refreshToken) {
-      this.markBroken(connection, 'Razorpay did not issue a refresh token. Reconnect Razorpay.');
+      await this.markBroken(connection, 'Razorpay did not issue a refresh token. Reconnect Razorpay.');
       throw new BadRequestException('Razorpay did not issue a refresh token. Reconnect Razorpay.');
     }
 
@@ -79,16 +79,17 @@ export class RazorpayTokenService {
         environment: connection.environment as any,
       });
 
-      this.storeTokenSet(connectionId, token);
+      await this.storeTokenSet(connectionId, token);
       connection.status = OrganizationIntegrationStatus.CONNECTED;
       connection.lastError = undefined;
       connection.lastCheckedAt = new Date();
       connection.updatedAt = new Date();
+      await awaitPersist(connection);
       this.logger.log(`[Razorpay] Refreshed access token for connection ${connectionId}`);
       return token.accessToken;
     } catch (error: any) {
       this.logger.error(`[Razorpay] Token refresh failed for connection ${connectionId}: ${error?.message}`);
-      this.markBroken(connection, 'Razorpay authentication failed. Reconnect Razorpay.');
+      await this.markBroken(connection, 'Razorpay authentication failed. Reconnect Razorpay.');
       throw new BadRequestException('Razorpay authentication failed. Reconnect Razorpay.');
     }
   }
@@ -132,23 +133,29 @@ export class RazorpayTokenService {
     }
   }
 
-  storeTokenSet(connectionId: string, token: OAuthTokenResult) {
+  async storeTokenSet(connectionId: string, token: OAuthTokenResult) {
     if (!token.accessToken) throw new BadRequestException('Razorpay did not return an access token.');
 
-    this.credentials.storeCredential(connectionId, 'access_token', token.accessToken);
+    const pending: Promise<unknown>[] = [];
+    const accessEntity = this.credentials.storeCredential(connectionId, 'access_token', token.accessToken);
+    if (accessEntity) pending.push(awaitPersist(accessEntity));
     if (token.refreshToken) {
-      this.credentials.storeCredential(connectionId, 'refresh_token', token.refreshToken);
+      const refreshEntity = this.credentials.storeCredential(connectionId, 'refresh_token', token.refreshToken);
+      if (refreshEntity) pending.push(awaitPersist(refreshEntity));
     }
     if (token.expiresIn) {
-      this.credentials.storeCredential(
+      const expiryEntity = this.credentials.storeCredential(
         connectionId,
         'access_token_expires_at',
         String(Date.now() + token.expiresIn * 1000),
       );
+      if (expiryEntity) pending.push(awaitPersist(expiryEntity));
     }
     for (const [key, value] of Object.entries(token.extraCredentials || {})) {
-      this.credentials.storeCredential(connectionId, key, value);
+      const extraEntity = this.credentials.storeCredential(connectionId, key, value);
+      if (extraEntity) pending.push(awaitPersist(extraEntity));
     }
+    await Promise.all(pending);
   }
 
   private platformConfig() {
@@ -159,10 +166,11 @@ export class RazorpayTokenService {
    * Flags the connection as broken and notifies the organization — but only on the
    * transition into that state, so a repeatedly-retried call cannot spam members.
    */
-  private markBroken(connection: { id: string; organizationId: string; status: any; lastError?: string }, reason: string) {
+  private async markBroken(connection: { id: string; organizationId: string; status: any; lastError?: string }, reason: string) {
     const wasAlreadyBroken = connection.status === OrganizationIntegrationStatus.AUTHENTICATION_ERROR;
     connection.status = OrganizationIntegrationStatus.AUTHENTICATION_ERROR;
     connection.lastError = reason;
+    await awaitPersist(connection);
     if (!wasAlreadyBroken) {
       this.notifyIntegrationDisconnected(connection, 'Razorpay access was revoked and the connection could not refresh')
         .catch(() => undefined);

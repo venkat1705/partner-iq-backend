@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
-import { dbStore, PartnerDealEntity } from '../../database/store';
+import { dbStore, PartnerDealEntity, awaitPersist } from '../../database/store';
 import {
   AttributionModel,
   ConversionStatus,
@@ -86,6 +86,7 @@ export class PartnerDealsService {
       updatedAt: new Date(),
     };
     dbStore.partnerDeals.push(deal);
+    await awaitPersist(deal);
     this.audit(organizationId, user.userId, 'DEAL_REGISTERED', deal.id, { dealRegistrationNumber: deal.dealRegistrationNumber, duplicateSignals, direct: !affiliate });
     this.notifyOrganizationAdmins(organizationId, 'New deal registration', `${affiliate?.displayName || 'Direct lead'} registered ${deal.companyName}.`);
     this.dealsGateway.emitDealCreated(organizationId, this.publicDeal(deal, true));
@@ -112,8 +113,11 @@ export class PartnerDealsService {
     deal.approvedAt = new Date();
     deal.approvedBy = user.userId;
     deal.protectedUntil = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000);
-    this.ensureB2BAttribution(deal);
-    await this.syncToHubSpot(organizationId, deal);
+    await this.ensureB2BAttribution(deal);
+    if (this.canAutoSyncOutbound(organizationId, { requireAutoCreate: true })) {
+      await this.syncToHubSpot(organizationId, deal);
+    }
+    await awaitPersist(deal);
     this.audit(organizationId, user.userId, 'DEAL_APPROVED', deal.id, { crmDealId: deal.crmDealId });
     const publicDeal = this.publicDeal(deal, true);
     this.dealsGateway.emitDealUpdated(organizationId, publicDeal);
@@ -153,7 +157,7 @@ export class PartnerDealsService {
       deal.status = targetStatus;
     }
 
-    if (deal.crmProvider === HUBSPOT_PROVIDER) {
+    if (deal.crmProvider === HUBSPOT_PROVIDER && this.canAutoSyncOutbound(organizationId)) {
       await this.pushStageToHubSpot(organizationId, deal, targetStatus);
     }
 
@@ -211,11 +215,20 @@ export class PartnerDealsService {
     const deal = dbStore.partnerDeals.find((item) => item.organizationId === organizationId && item.crmDealId === externalDealId);
     if (!deal) return { ignored: true, reason: 'No PartnerIQ deal mapping found' };
     const connection = this.hubSpot.requireConnection(organizationId);
+    const syncSettings = this.hubSpot.getSyncSettings(organizationId);
+    if (syncSettings.syncDirection === 'outbound') {
+      return { ignored: true, reason: 'Inbound sync disabled by organization sync settings' };
+    }
     const mapping = dbStore.crmPipelineMappings.find((item) => item.organizationIntegrationId === connection.id && item.isActive && (!deal.crmPipelineId || item.externalPipelineId === deal.crmPipelineId));
     const mappedStatus = mapping?.stageMappings?.[stageId] as PartnerDealStatus | undefined;
     deal.crmStageId = stageId;
     deal.status = mappedStatus || deal.status;
     if (mapping?.closedWonStageId === stageId || mappedStatus === PartnerDealStatus.CLOSED_WON) {
+      if (!syncSettings.autoConvertOnWon) {
+        const publicDeal = this.publicDeal(deal, true);
+        this.dealsGateway.emitDealUpdated(organizationId, publicDeal, source);
+        return { deal: publicDeal, conversion: null, ignored: true, reason: 'Auto-convert-on-won disabled by organization sync settings' };
+      }
       const result = await this.closeWon(deal, amount);
       this.dealsGateway.emitDealUpdated(organizationId, this.publicDeal(deal, true), source);
       return result;
@@ -231,6 +244,17 @@ export class PartnerDealsService {
     const publicDeal = this.publicDeal(deal, true);
     this.dealsGateway.emitDealUpdated(organizationId, publicDeal, source);
     return { deal: publicDeal, conversion: null };
+  }
+
+  private canAutoSyncOutbound(organizationId: string, options?: { requireAutoCreate?: boolean }) {
+    try {
+      const settings = this.hubSpot.getSyncSettings(organizationId);
+      if (settings.syncDirection === 'inbound') return false;
+      if (options?.requireAutoCreate && !settings.autoCreateDealInCrm) return false;
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private async pushStageToHubSpot(organizationId: string, deal: PartnerDealEntity, targetStatus: PartnerDealStatus) {
@@ -823,9 +847,7 @@ export class PartnerDealsService {
     }
 
     // CRM sync status
-    const crmConnection = dbStore.organizationIntegrations?.find(
-      (item) => item.organizationId === organizationId && item.provider === HUBSPOT_PROVIDER,
-    );
+    const crmConnection = this.findHubSpotConnection(organizationId);
     const syncedCount = allDeals.filter((d) => d.status === PartnerDealStatus.SYNCED).length;
     const pendingCount = allDeals.filter(
       (d) => d.status === PartnerDealStatus.SYNC_PENDING,
@@ -855,7 +877,7 @@ export class PartnerDealsService {
             OrganizationIntegrationStatus.DEGRADED,
           ].includes(crmConnection.status),
         ),
-        provider: crmConnection?.provider || HUBSPOT_PROVIDER,
+        provider: HUBSPOT_PROVIDER,
         lastSyncAt: crmConnection?.lastSyncAt?.toISOString(),
         syncedCount,
         pendingCount,
@@ -906,9 +928,7 @@ export class PartnerDealsService {
   }
 
   async getSyncAnalytics(organizationId: string, user: AuthUserPayload): Promise<DealSyncAnalytics> {
-    const connection = dbStore.organizationIntegrations?.find(
-      (item) => item.organizationId === organizationId && item.provider === HUBSPOT_PROVIDER,
-    );
+    const connection = this.findHubSpotConnection(organizationId);
 
     const syncLogs = (dbStore.integrationSyncLogs || [])
       .filter((log) => log.organizationId === organizationId && log.entityType === 'DEAL')
@@ -923,7 +943,7 @@ export class PartnerDealsService {
     const successRate = totalAttempts > 0 ? Math.round((totalSynced / totalAttempts) * 100) : 100;
 
     return {
-      provider: connection?.provider || HUBSPOT_PROVIDER,
+      provider: HUBSPOT_PROVIDER,
       connected: Boolean(
         connection &&
         [
@@ -992,18 +1012,17 @@ export class PartnerDealsService {
         createdAt: c.createdAt.toISOString(),
       }));
 
-    // Linked commissions
+    // Linked commissions. A commission carries no deal reference of its own — it
+    // reaches the deal only through its conversion — and no currency column
+    // either, so the amount is denominated by the conversion that produced it.
     const conversionIds = new Set(conversions.map((c) => c.id));
+    const conversionCurrencies = new Map(conversions.map((c) => [c.id, c.currency]));
     const commissions = dbStore.commissions
-      .filter(
-        (comm) =>
-          comm.organizationId === organizationId &&
-          (conversionIds.has(comm.conversionId) || (comm.metadata as any)?.partnerDealId === deal.id),
-      )
+      .filter((comm) => comm.organizationId === organizationId && conversionIds.has(comm.conversionId))
       .map((c) => ({
         id: c.id,
-        amount: c.amount,
-        currency: c.currency,
+        amount: c.commissionAmount,
+        currency: conversionCurrencies.get(c.conversionId) || PLATFORM_CURRENCY,
         status: c.status,
         createdAt: c.createdAt.toISOString(),
       }));
@@ -1133,5 +1152,19 @@ export class PartnerDealsService {
       message: `Bulk action ${dto.action} processed on ${affected} deal${affected === 1 ? '' : 's'}.`,
     };
   }
+
+  /**
+   * The HubSpot connection row for an org. Connections reference their
+   * integration by `integrationId`; the provider code lives on the integration
+   * definition, so this has to resolve the definition first.
+   */
+  private findHubSpotConnection(organizationId: string) {
+    const integration = dbStore.integrations.find((item) => item.code === HUBSPOT_PROVIDER);
+    if (!integration) return undefined;
+    return (dbStore.organizationIntegrations || []).find(
+      (item) => item.organizationId === organizationId && item.integrationId === integration.id,
+    );
+  }
+
 }
 

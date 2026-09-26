@@ -53,6 +53,10 @@ export enum SystemTemplateKey {
 
   // Integrations (Organization Scope)
   INTEGRATION_DISCONNECTED = 'INTEGRATION_DISCONNECTED',
+
+  // Demo Bookings (System Scope)
+  DEMO_BOOKING_CONFIRMED = 'DEMO_BOOKING_CONFIRMED',
+  DEMO_BOOKING_ADMIN_NOTIFIED = 'DEMO_BOOKING_ADMIN_NOTIFIED',
 }
 
 export type TemplateOwnership = 'SYSTEM' | 'PLATFORM' | 'ORGANIZATION';
@@ -663,6 +667,46 @@ export const SYSTEM_TEMPLATE_CATALOG: Record<SystemTemplateKey, SystemTemplateMe
       { key: 'organizationName', required: true, type: 'string', description: 'Organization name' },
       { key: 'disconnectedBy', required: false, type: 'string', description: 'Who or what triggered the disconnect' },
       { key: 'reconnectUrl', required: true, type: 'url', description: 'Link to reconnect the integration' },
+    ],
+  },
+  [SystemTemplateKey.DEMO_BOOKING_CONFIRMED]: {
+    key: SystemTemplateKey.DEMO_BOOKING_CONFIRMED,
+    name: 'Demo Booking Confirmed',
+    category: 'DEMO',
+    ownership: 'SYSTEM',
+    defaultSubject: 'Your PartnerIQ Demo is confirmed — {{demoDate}}',
+    defaultPreheader: 'We look forward to showing you how PartnerIQ can scale your partner revenue.',
+    description: 'Sent to the prospect when they book a demo, with the real Google Meet link and calendar details.',
+    requiredVariables: ['prospectName', 'companyName', 'demoDate', 'demoTime', 'hostName', 'meetingUrl'],
+    variablesSchema: [
+      { key: 'prospectName', required: true, type: 'string', description: 'Prospect first/full name' },
+      { key: 'companyName', required: true, type: 'string', description: 'Prospect company name' },
+      { key: 'demoDate', required: true, type: 'string', description: 'Formatted demo date' },
+      { key: 'demoTime', required: true, type: 'string', description: 'Formatted demo time with timezone' },
+      { key: 'hostName', required: true, type: 'string', description: 'PartnerIQ host/specialist name' },
+      { key: 'meetingUrl', required: true, type: 'url', description: 'Google Meet join link' },
+      { key: 'calendarUrl', required: false, type: 'url', description: 'Add-to-calendar / booking management link' },
+    ],
+  },
+  [SystemTemplateKey.DEMO_BOOKING_ADMIN_NOTIFIED]: {
+    key: SystemTemplateKey.DEMO_BOOKING_ADMIN_NOTIFIED,
+    name: 'Demo Booking — Admin Notification',
+    category: 'DEMO',
+    ownership: 'SYSTEM',
+    defaultSubject: 'New demo booked: {{companyName}} — {{demoDate}}',
+    defaultPreheader: '{{prospectName}} from {{companyName}} just booked a PartnerIQ demo.',
+    description: 'Sent to the internal sales inbox whenever a new demo is booked, with prospect and scheduling details.',
+    requiredVariables: ['prospectName', 'companyName', 'prospectEmail', 'demoDate', 'demoTime', 'meetingUrl'],
+    variablesSchema: [
+      { key: 'prospectName', required: true, type: 'string', description: 'Prospect first/full name' },
+      { key: 'companyName', required: true, type: 'string', description: 'Prospect company name' },
+      { key: 'prospectEmail', required: true, type: 'string', description: 'Prospect email address' },
+      { key: 'prospectPhone', required: false, type: 'string', description: 'Prospect phone number' },
+      { key: 'demoDate', required: true, type: 'string', description: 'Formatted demo date' },
+      { key: 'demoTime', required: true, type: 'string', description: 'Formatted demo time with timezone' },
+      { key: 'challenge', required: false, type: 'string', description: 'Prospect-stated challenge / notes' },
+      { key: 'meetingUrl', required: true, type: 'url', description: 'Google Meet join link' },
+      { key: 'adminUrl', required: false, type: 'url', description: 'Link to the booking in the admin dashboard' },
     ],
   },
 };

@@ -11,6 +11,7 @@ import {
   UpdateCouponDto,
   UpdateCouponSettingsDto,
 } from './dto/coupon.dto';
+import { netCommissionAmount } from '../../common/utils/commission.utils';
 
 const normalizeCode = (code: string) => code.trim().toUpperCase().replace(/\s+/g, '');
 
@@ -339,7 +340,7 @@ export class CouponsService {
 
           // Find associated commissions
           const comms = dbStore.commissions.filter((cm: any) => cm.conversionId === conv.id);
-          const convComm = comms.reduce((sum: number, cm: any) => sum + Number(cm.commissionAmount || cm.amount || 0), 0);
+          const convComm = comms.reduce((sum: number, cm: any) => sum + netCommissionAmount(cm), 0);
           commissionGenerated += convComm;
 
           // Date key YYYY-MM-DD
@@ -419,7 +420,7 @@ export class CouponsService {
         revenue += Number(conv.amount || 0);
         discount += this.calculateDiscount(coupon, Number(conv.amount || 0));
         const comms = dbStore.commissions.filter((cm: any) => cm.conversionId === conv.id);
-        commission += comms.reduce((sum: number, cm: any) => sum + Number(cm.commissionAmount || cm.amount || 0), 0);
+        commission += comms.reduce((sum: number, cm: any) => sum + netCommissionAmount(cm), 0);
       }
 
       const aov = redemptions > 0 ? Math.round(revenue / redemptions) / 100 : 0;
@@ -482,7 +483,7 @@ export class CouponsService {
           revenue += Number(conv.amount || 0);
           discount += this.calculateDiscount(coupon, Number(conv.amount || 0));
           const comms = dbStore.commissions.filter((cm: any) => cm.conversionId === conv.id);
-          commission += comms.reduce((sum: number, cm: any) => sum + Number(cm.commissionAmount || cm.amount || 0), 0);
+          commission += comms.reduce((sum: number, cm: any) => sum + netCommissionAmount(cm), 0);
         }
       }
 
@@ -490,9 +491,10 @@ export class CouponsService {
 
       return {
         affiliateId: aff.id,
-        affiliateName: aff.displayName || 'Unnamed Partner',
+        displayName: aff.displayName || 'Unnamed Partner',
         email: aff.email,
         assignedCouponsCount: assignedCoupons.length,
+        couponCodes: assignedCoupons.map((c) => c!.code),
         redemptions,
         conversions: redemptions,
         revenue: revenue / 100,
@@ -525,7 +527,7 @@ export class CouponsService {
           revenue += Number(conv.amount || 0);
           discount += this.calculateDiscount(coupon, Number(conv.amount || 0));
           const comms = dbStore.commissions.filter((cm: any) => cm.conversionId === conv.id);
-          commission += comms.reduce((sum: number, cm: any) => sum + Number(cm.commissionAmount || cm.amount || 0), 0);
+          commission += comms.reduce((sum: number, cm: any) => sum + netCommissionAmount(cm), 0);
         }
       }
 
@@ -588,7 +590,7 @@ export class CouponsService {
       revenue += Number(conv.amount || 0);
       discount += this.calculateDiscount(coupon, Number(conv.amount || 0));
       const comms = dbStore.commissions.filter((cm: any) => cm.conversionId === conv.id);
-      commission += comms.reduce((sum: number, cm: any) => sum + Number(cm.commissionAmount || cm.amount || 0), 0);
+      commission += comms.reduce((sum: number, cm: any) => sum + netCommissionAmount(cm), 0);
 
       const d = new Date(conv.occurredAt || conv.createdAt).toISOString().split('T')[0];
       const bucket = dayMap.get(d) || { redemptions: 0, revenue: 0 };

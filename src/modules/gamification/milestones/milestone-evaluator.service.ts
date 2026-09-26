@@ -12,6 +12,7 @@ import {
   AuditAction,
 } from '../../../common/enums';
 import { RewardExecutorService } from '../rewards/reward-executor.service';
+import { netCommissionAmount } from '../../../common/utils/commission.utils';
 
 export interface MilestoneProgressItem {
   milestone: MilestoneEntity;
@@ -248,7 +249,7 @@ export class MilestoneEvaluatorService {
         return Math.round(
           dbStore.commissions
             .filter((c) => c.organizationId === organizationId && c.programId === programId && c.affiliateId === affiliateId && c.status === 'APPROVED')
-            .reduce((sum, c) => sum + (c.commissionAmount || 0), 0) / 100,
+            .reduce((sum, c) => sum + netCommissionAmount(c), 0) / 100,
         );
       case GamificationMetric.TRACKING_LINK_CLICKS:
         return dbStore.clicks.filter((c) => c.organizationId === organizationId && c.affiliateId === affiliateId).length;

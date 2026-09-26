@@ -62,6 +62,7 @@ import {
   PartnerTier,
   AffiliateTier,
   AffiliateApplication,
+  Milestone,
 } from '../../database/schema';
 import { IsNull, In } from 'typeorm';
 import { UserStatus, PlatformRole } from '../../common/enums';
@@ -69,18 +70,19 @@ import { assertUserEligibleForAffiliate } from './affiliate-eligibility.policy';
 import { evaluateProfileCompleteness } from './profile-completeness';
 import { AffiliatesService } from './affiliates.service';
 import { AffiliateAuthService } from './auth/affiliate-auth.service';
+import { netCommissionAmount, sumNetCommissions } from '../../common/utils/commission.utils';
 
 @ApiTags('Affiliate Self Portal')
 @Controller()
 export class AffiliatePortalController {
   constructor(
-    @Optional() private readonly authService?: AuthService,
-    private readonly affiliatesService?: AffiliatesService,
+    @Optional() @Inject(forwardRef(() => AuthService)) private readonly authService?: AuthService,
+    @Inject(forwardRef(() => AffiliatesService)) private readonly affiliatesService?: AffiliatesService,
     @Optional()
     @Inject(forwardRef(() => AffiliateAuthService))
     private readonly affiliateAuthService?: AffiliateAuthService,
-    @Optional() private readonly mediaService?: MediaService,
-    @Optional() private readonly auditService?: AuditService,
+    @Optional() @Inject(forwardRef(() => MediaService)) private readonly mediaService?: MediaService,
+    @Optional() @Inject(forwardRef(() => AuditService)) private readonly auditService?: AuditService,
   ) { }
 
   private resolveAffiliateEmail(req: any): string {
@@ -116,6 +118,7 @@ export class AffiliatePortalController {
       partnerTiers: dataSource.getRepository(PartnerTier),
       affiliateTiers: dataSource.getRepository(AffiliateTier),
       affiliateApplications: dataSource.getRepository(AffiliateApplication),
+      milestones: dataSource.getRepository(Milestone),
     };
   }
 
@@ -583,7 +586,7 @@ export class AffiliatePortalController {
     // are never created in any other status), so summing raw commissionAmount here counted
     // money that was later reversed as still "earned" forever.
     const totalEarnings = commList.reduce(
-      (sum, c: any) => sum + (Number(c.amount || c.commissionAmount || 0) - Number(c.reversedAmount || 0)),
+      (sum, c: any) => sum + netCommissionAmount(c),
       0,
     );
     // Conversions held for fraud review never get a Commission row in the first place (one
@@ -609,7 +612,7 @@ export class AffiliatePortalController {
     }, 0);
     const payableCommission = commList
       .filter((c: any) => c.status === ConversionStatus.APPROVED)
-      .reduce((sum, c: any) => sum + (Number(c.amount || c.commissionAmount || 0) - Number(c.reversedAmount || 0)), 0);
+      .reduce((sum, c: any) => sum + netCommissionAmount(c), 0);
     const paidCommission = poList.reduce((sum, item: any) => sum + Number(item.amount || (item as any).netAmount || 0), 0);
     const clicks = links.reduce((sum, link: any) => sum + Number((link as any).clickCount || (link as any).clicks || 0), 0);
 
@@ -811,7 +814,7 @@ export class AffiliatePortalController {
       }, 0);
       const payableCommission = comms
         .filter((c: any) => c.status === ConversionStatus.APPROVED)
-        .reduce((acc, c: any) => acc + (Number(c.amount || c.commissionAmount || 0) - Number(c.reversedAmount || 0)), 0);
+        .reduce((acc, c: any) => acc + netCommissionAmount(c), 0);
       const paidCommission = pos.reduce((acc, p: any) => acc + Number(p.amount || (p as any).netAmount || 0), 0);
       const attributedRevenue = convs
         .filter((c: any) => c.status !== ConversionStatus.REJECTED)
@@ -1069,56 +1072,17 @@ export class AffiliatePortalController {
     const brandingMap: Record<string, any> = {};
     for (const b of brandingList) brandingMap[b.organizationId] = b;
 
-    return programList.map((p) => {
-      const org = orgList.find((o) => o.id === p.organizationId) || dbStore.organizations?.find((o: any) => o.id === p.organizationId);
-      const isFlat = (p as any).commissionType === 'FIXED_AMOUNT' || (p as any).commissionType === 'flat';
-      const rawVal = p.defaultCommissionValue ?? (p as any).commissionValue ?? 2500;
-      const rate = rawVal >= 100 ? (rawVal / 100) : rawVal;
-      const currency = (p as any).currency || (org as any)?.currency || 'INR';
-      const currencySymbol = currency === 'INR' ? '₹' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : '$';
-      // Commission is always stated per qualified conversion — the unit matters, because a bare
-      // "25%" or "₹500" on a marketplace tile is what lets a partner assume they are paid for traffic.
-      const commissionFormatted = isFlat ? `${currencySymbol}${rate} per conversion` : `${rate}% per conversion`;
-      const commissionBasis = isFlat
-        ? `${currencySymbol}${rate} for every qualified conversion`
-        : `${rate}% of every qualified conversion's value`;
-      const brandName = org?.name || (p as any).brandName || 'PartnerIQ Brand';
-      const brandLogo = (brandingMap[org?.id]?.logoUrl) || (org as any)?.branding?.logoUrl || (p as any).logoUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80';
-      const cookieDays = p.cookieDurationDays || (p as any).cookieWindowDays || (p as any).attributionWindowDays || 60;
+    const { partnerTiers, milestones } = await this.repositories();
+    let tierList: any[] = [];
+    let milestoneList: any[] = [];
+    try {
+      tierList = orgIds.length ? await partnerTiers.find({ where: { organizationId: In(orgIds), isActive: true, deletedAt: IsNull() } }) : [];
+    } catch { }
+    try {
+      milestoneList = orgIds.length ? await milestones.find({ where: { organizationId: In(orgIds), isActive: true } }) : [];
+    } catch { }
 
-      return {
-        id: p.id,
-        organizationId: p.organizationId,
-        brandName,
-        brandLogo,
-        name: p.name,
-        title: p.name,
-        slug: p.slug,
-        category: (p as any).category || 'SAAS',
-        commission: commissionFormatted,
-        commissionSummary: commissionFormatted,
-        commissionType: isFlat ? 'flat' : 'percentage',
-        commissionValue: rate,
-        cookieWindow: `${cookieDays} Days`,
-        attributionWindowDays: cookieDays,
-        cookieDurationDays: cookieDays,
-        currency,
-        commissionBasis,
-        commissionUnit: 'QUALIFIED_CONVERSION',
-        /**
-         * @deprecated Retained only so older marketplace clients do not break on a missing key.
-         * It previously served a hardcoded placeholder figure that read as a guaranteed
-         * per-click rate — affiliates are paid per qualified conversion, never per click.
-         * Always null; never use it for a calculation or present it as earnings.
-         */
-        avgEpc: null,
-        featured: (p as any).featured ?? true,
-        affiliateApprovalMode: p.affiliateApprovalMode || 'AUTO',
-        instantApproval: p.affiliateApprovalMode === 'AUTO',
-        description: (p as any).description || `Earn commission on every qualified conversion you refer to ${brandName}.`,
-        status: p.status,
-      };
-    });
+    return programList.map((p) => this.mapProgramForPublic(p, orgList, brandingMap, tierList, milestoneList));
   }
 
   @Get('api/v1/public/organizations/:slug/programs')
@@ -1128,6 +1092,176 @@ export class AffiliatePortalController {
     @Query('category') category?: string,
   ) {
     return this.getPublicPrograms(category, undefined, slug);
+  }
+
+  /**
+   * Single public program detail — the marketplace card's click-through target.
+   * Reuses the exact same real-data mapping as the list endpoint (mapProgramForPublic)
+   * plus the fuller fields (policy/terms, tiers, milestones) a detail page needs, and
+   * enforces the same ACTIVE / not-deleted / not-PRIVATE-or-UNLISTED guard so a direct
+   * link to a paused or private program 404s instead of leaking its data.
+   */
+  @Get('api/v1/public/programs/:id')
+  @ApiOperation({ summary: 'Public marketplace program detail' })
+  async getPublicProgramById(@Param('id') id: string) {
+    const { programs, organizations, organizationBrandings, partnerTiers, milestones } = await this.repositories();
+
+    let p: any = null;
+    try {
+      p = await programs.findOne({ where: { id } });
+    } catch { }
+    if (!p) {
+      p = dbStore.programs.find((prog: any) => prog.id === id);
+    }
+
+    if (
+      !p ||
+      p.deletedAt ||
+      p.status !== ProgramStatus.ACTIVE ||
+      ['PRIVATE', 'UNLISTED'].includes(String(p.visibility || 'PUBLIC').toUpperCase())
+    ) {
+      throw new NotFoundException('Program not found');
+    }
+
+    let org: any = null;
+    try {
+      org = await organizations.findOne({ where: { id: p.organizationId } });
+    } catch { }
+    if (!org) org = dbStore.organizations?.find((o: any) => o.id === p.organizationId);
+
+    let branding: any = null;
+    try {
+      branding = await organizationBrandings.findOne({ where: { organizationId: p.organizationId } });
+    } catch { }
+    const brandingMap: Record<string, any> = branding ? { [p.organizationId]: branding } : {};
+
+    let tierList: any[] = [];
+    let milestoneList: any[] = [];
+    try {
+      tierList = await partnerTiers.find({ where: { organizationId: p.organizationId, isActive: true, deletedAt: IsNull() } });
+    } catch { }
+    try {
+      milestoneList = await milestones.find({ where: { organizationId: p.organizationId, isActive: true } });
+    } catch { }
+
+    const base = this.mapProgramForPublic(p, org ? [org] : [], brandingMap, tierList, milestoneList);
+
+    return {
+      ...base,
+      // Detail-only fields not needed on a marketplace tile.
+      longDescription: p.description || base.description,
+      websiteUrl: p.websiteUrl || null,
+      landingUrl: p.landingUrl || null,
+      attributionModel: p.attributionModel || null,
+      payoutSchedule: p.payoutSchedule || null,
+      payoutDay: p.payoutDay || null,
+      minimumPayoutAmount: Number(p.minimumPayoutAmount || 0),
+      payoutMethods: Array.isArray(p.payoutMethods) ? p.payoutMethods : [],
+      tags: Array.isArray(p.tags) ? p.tags : [],
+      termsContent: p.termsContent || null,
+      termsUrl: p.termsUrl || null,
+      privacyPolicyUrl: p.privacyPolicyUrl || null,
+      promotionRules: p.promotionRules || null,
+      allowedAffiliateTypes: Array.isArray(p.allowedAffiliateTypes) ? p.allowedAffiliateTypes : [],
+      tierOverrides: Array.isArray(p.tierOverrides) ? p.tierOverrides : [],
+      tiers: tierList
+        .filter((t) => !t.programId || t.programId === p.id)
+        .map((t) => ({
+          id: t.id,
+          name: t.name,
+          level: t.level,
+          colorToken: t.colorToken,
+          commissionRateOverride: t.commissionRateOverride ? t.commissionRateOverride / 100 : null,
+          fixedCommissionOverride: t.fixedCommissionOverride ? t.fixedCommissionOverride / 100 : null,
+        })),
+      milestones: milestoneList
+        .filter((m) => !m.programId || m.programId === p.id)
+        .map((m) => ({
+          id: m.id,
+          name: m.name,
+          metric: m.metric,
+          targetValue: m.targetValue,
+          rewardType: m.rewardType,
+          rewardConfig: m.rewardConfig || null,
+          period: m.period,
+        })),
+    };
+  }
+
+  /**
+   * Shared public-program mapping used by both the marketplace list and the single-
+   * program detail endpoint, so a program never displays differently depending on
+   * which endpoint fetched it. Only maps facts the org actually configured — no
+   * fabricated rating, no "always featured", no generic tier copy.
+   */
+  private mapProgramForPublic(p: any, orgList: any[], brandingMap: Record<string, any>, tierList: any[], milestoneList: any[]) {
+    const org = orgList.find((o) => o.id === p.organizationId) || dbStore.organizations?.find((o: any) => o.id === p.organizationId);
+    const isFlat = (p as any).commissionType === 'FIXED_AMOUNT' || (p as any).commissionType === 'flat';
+    const rawVal = p.defaultCommissionValue ?? (p as any).commissionValue ?? 2500;
+    // defaultCommissionValue is ALWAYS stored as percent*100 (basis points) for
+    // PERCENTAGE/RECURRING_PERCENTAGE, or rupees*100 (paise) for FIXED_AMOUNT — never a
+    // bare percent — so the conversion is unconditional. A conditional `>= 100 ? /100 : as-is`
+    // here previously corrupted any program with a sub-1% commission (e.g. 50 -> "50%").
+    const rate = rawVal / 100;
+    const currency = (p as any).currency || (org as any)?.currency || 'INR';
+    const currencySymbol = currency === 'INR' ? '₹' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : '$';
+    // Commission is always stated per qualified conversion — the unit matters, because a bare
+    // "25%" or "₹500" on a marketplace tile is what lets a partner assume they are paid for traffic.
+    const commissionFormatted = isFlat ? `${currencySymbol}${rate} per conversion` : `${rate}% per conversion`;
+    const commissionBasis = isFlat
+      ? `${currencySymbol}${rate} for every qualified conversion`
+      : `${rate}% of every qualified conversion's value`;
+    const brandName = org?.name || (p as any).brandName || 'PartnerIQ Brand';
+    const brandLogo = (brandingMap[org?.id]?.logoUrl) || (org as any)?.branding?.logoUrl || (p as any).logoUrl || null;
+    const cookieDays = p.cookieDurationDays || (p as any).cookieWindowDays || (p as any).attributionWindowDays || 60;
+
+    // Real tier/milestone summary: only state a fact the org actually configured for
+    // THIS program (or org-wide, if the tier/milestone has no programId of its own).
+    // No programs configured -> tierRewards is omitted entirely, not a generic string.
+    const programTiers = tierList.filter((t) => t.organizationId === p.organizationId && (!t.programId || t.programId === p.id));
+    const programMilestones = milestoneList.filter((m) => m.organizationId === p.organizationId && (!m.programId || m.programId === p.id));
+    let tierRewards: string | null = null;
+    if (programTiers.length > 0) {
+      tierRewards = `${programTiers.length} Partner Tier${programTiers.length > 1 ? 's' : ''}`;
+    } else if (programMilestones.length > 0) {
+      tierRewards = `${programMilestones.length} Milestone Reward${programMilestones.length > 1 ? 's' : ''}`;
+    }
+
+    return {
+      id: p.id,
+      organizationId: p.organizationId,
+      brandName,
+      brandLogo,
+      name: p.name,
+      title: p.name,
+      slug: p.slug,
+      category: (p as any).category || 'SAAS',
+      commission: commissionFormatted,
+      commissionSummary: commissionFormatted,
+      commissionType: isFlat ? 'flat' : 'percentage',
+      commissionValue: rate,
+      cookieWindow: `${cookieDays} Days`,
+      attributionWindowDays: cookieDays,
+      cookieDurationDays: cookieDays,
+      currency,
+      commissionBasis,
+      commissionUnit: 'QUALIFIED_CONVERSION',
+      /**
+       * @deprecated Retained only so older marketplace clients do not break on a missing key.
+       * It previously served a hardcoded placeholder figure that read as a guaranteed
+       * per-click rate — affiliates are paid per qualified conversion, never per click.
+       * Always null; never use it for a calculation or present it as earnings.
+       */
+      avgEpc: null,
+      // Only true when the org actually flagged this program as featured — never a
+      // default, since a default of "true" makes every program equally "featured".
+      featured: (p as any).featured === true,
+      tierRewards,
+      affiliateApprovalMode: p.affiliateApprovalMode || 'AUTO',
+      instantApproval: p.affiliateApprovalMode === 'AUTO',
+      description: (p as any).description || `Earn commission on every qualified conversion you refer to ${brandName}.`,
+      status: p.status,
+    };
   }
 
   // ----------------------------------------------------
@@ -1297,7 +1431,7 @@ export class AffiliatePortalController {
       const linkConversions = convList.filter((c: any) => (c.trackingLinkId === l.id || c.metadata?.trackingLinkId === l.id)).length;
       const commissionEarned = commList
         .filter((c: any) => (c.trackingLinkId === l.id || (c as any).linkId === l.id))
-        .reduce((acc, c: any) => acc + Number(c.amount || c.commissionAmount || 0), 0);
+        .reduce((acc, c: any) => acc + netCommissionAmount(c), 0);
 
       return {
         id: l.id,
@@ -2010,7 +2144,7 @@ export class AffiliatePortalController {
         .getMany();
 
       const grossAmount = payableCommissions.reduce(
-        (sum, commission: any) => sum + Number(commission.amount || commission.commissionAmount || 0),
+        (sum, commission: any) => sum + netCommissionAmount(commission),
         0,
       );
       if (grossAmount <= 0) throw new BadRequestException('No payable balance is available.');
@@ -2443,7 +2577,7 @@ export class AffiliatePortalController {
         clicks: dayLinks.reduce((sum, link: any) => sum + Number((link as any).clickCount || (link as any).clicks || 0), 0),
         conversions: dayConversions.length,
         revenue: dayConversions.reduce((sum, conversion: any) => sum + Number(conversion.amount || (conversion as any).value || 0), 0),
-        commissions: dayCommissions.reduce((sum, commission: any) => sum + Number(commission.amount || (commission as any).commissionAmount || 0), 0),
+        commissions: sumNetCommissions(dayCommissions),
       });
     }
 
@@ -2877,7 +3011,7 @@ export class AffiliatePortalController {
     const conversionRate = totalClicks > 0 ? Number(((totalConversions / totalClicks) * 100).toFixed(2)) : 0;
 
     // Commission buckets
-    const getNet = (c: any) => Number(c.amount || c.commissionAmount || 0) - Number(c.reversedAmount || 0);
+    const getNet = netCommissionAmount;
 
     const approvedCommission = currentCommissions
       .filter((c: any) => c.status === ConversionStatus.APPROVED || (c.status as any) === 'PAYABLE')

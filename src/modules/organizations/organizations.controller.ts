@@ -95,7 +95,34 @@ export class OrganizationsController {
   @RequirePermissions('manage.organization')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Onboarding Step: Complete Onboarding' })
-  async completeOnboarding(@Body('organizationId') organizationId: string) {
-    return this.orgsService.completeOnboarding(organizationId);
+  async completeOnboarding(
+    @CurrentUser() user: AuthUserPayload,
+    @Body('organizationId') organizationId: string,
+  ) {
+    return this.orgsService.completeOnboarding(organizationId, user.userId);
+  }
+
+  @Get('api/v1/onboarding/status')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get the current user\'s in-progress onboarding, if any',
+    description:
+      'Lets the frontend resume onboarding after a refresh, closed tab, or re-login instead of restarting the wizard (and, absent this, risking a duplicate organization).',
+  })
+  async getOnboardingStatus(@CurrentUser() user: AuthUserPayload) {
+    return this.orgsService.getOnboardingStatus(user.userId);
+  }
+
+  @Post('api/v1/onboarding/step')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Record which onboarding step the user last reached, for resume' })
+  async updateOnboardingStep(
+    @CurrentUser() user: AuthUserPayload,
+    @Body('organizationId') organizationId: string,
+    @Body('step') step: number,
+  ) {
+    return this.orgsService.updateOnboardingStep(user.userId, organizationId, step);
   }
 }

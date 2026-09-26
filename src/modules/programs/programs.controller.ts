@@ -203,5 +203,18 @@ export class ProgramsController {
   ) {
     return this.programsService.remove(organizationId, programId, user.userId, environment);
   }
+
+  @Post(':programId/restore')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('manage.programs')
+  @ApiOperation({ summary: 'Restore an archived partner program' })
+  async restore(
+    @Param('organizationId') organizationId: string,
+    @Param('programId') programId: string,
+    @CurrentUser() user: AuthUserPayload,
+    @CurrentEnvironment() environment: EnvironmentType,
+  ) {
+    return this.programsService.restore(organizationId, programId, user.userId, environment);
+  }
 }
 

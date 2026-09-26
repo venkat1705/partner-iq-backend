@@ -4,7 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
-import { dbStore, ApiKeyEntity } from '../../database/store';
+import { dbStore, ApiKeyEntity, awaitPersist } from '../../database/store';
 import { SecurityUtils } from '../../common/utils/security.utils';
 import { AuditAction, EnvironmentType } from '../../common/enums';
 import { API_KEY_SCOPES, API_KEY_SCOPE_PRESETS, CreateApiKeyDto } from './dto/api-key.dto';
@@ -96,6 +96,7 @@ export class ApiKeysService {
     };
 
     dbStore.apiKeys.push(apiKey);
+    await awaitPersist(apiKey);
 
     dbStore.auditLogs.push({
       id: uuidv4(),
@@ -158,6 +159,7 @@ export class ApiKeysService {
 
     apiKey.revokedAt = new Date();
     (apiKey as any).status = 'REVOKED';
+    await awaitPersist(apiKey);
 
     dbStore.auditLogs.push({
       id: uuidv4(),

@@ -1,6 +1,6 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+﻿import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
-import { dbStore, PayoutBatchEntity, PayoutItemEntity } from '../../database/store';
+import { dbStore, PayoutBatchEntity, PayoutItemEntity, awaitPersist } from '../../database/store';
 import {
   PayoutStatus,
   LedgerEntryType,
@@ -115,242 +115,12 @@ export class PayoutsService {
     }).catch(() => undefined);
   }
 
-  /**
-   * Seeds baseline payout batches and items for an organization if none exist,
-   * providing rich operational data across all statuses (Completed, Processing, Failed, Held).
-   */
-  ensureDefaultPayouts(organizationId: string) {
-    const existing = dbStore.payoutBatches.filter((b) => b.organizationId === organizationId);
-    if (existing.length >= 2) return;
-
-    const affiliates = dbStore.affiliates.filter((a) => a.organizationId === organizationId);
-    if (affiliates.length === 0) return;
-
-    const org = dbStore.organizations.find((o) => o.id === organizationId);
-    const currency = org?.defaultCurrency || PLATFORM_CURRENCY;
-    const now = new Date();
-
-    // Ensure some ledger accounts have positive earned balances for testing "Payable Now"
-    for (let i = 0; i < Math.min(affiliates.length, 3); i++) {
-      const aff = affiliates[i];
-      let acc = dbStore.ledgerAccounts.find(
-        (a) => a.organizationId === organizationId && a.affiliateId === aff.id && a.type === 'EARNED',
-      );
-      if (!acc) {
-        acc = {
-          id: uuidv4(),
-          organizationId,
-          affiliateId: aff.id,
-          type: 'EARNED',
-          balance: 145000 + i * 85000, // in cents
-          currency,
-          environment: EnvironmentType.LIVE,
-          createdAt: new Date(now.getTime() - 20 * 86400000),
-          updatedAt: now,
-        };
-        dbStore.ledgerAccounts.push(acc);
-      } else if (acc.balance === 0) {
-        acc.balance = 125000 + i * 50000;
-        acc.updatedAt = now;
-      }
-    }
-
-    // Batch 1: Completed via RazorpayX (Past Week)
-    const batch1Id = uuidv4();
-    const batch1Date = new Date(now.getTime() - 7 * 86400000);
-    const batch1Items: PayoutItemEntity[] = [];
-    let batch1Total = 0;
-
-    const aff1 = affiliates[0] || { id: uuidv4(), displayName: 'Velocity Growth Labs' };
-    const aff2 = affiliates[1] || { id: uuidv4(), displayName: 'Summit Media Partners' };
-    const aff3 = affiliates[2] || { id: uuidv4(), displayName: 'Apex Creators Collective' };
-
-    const b1Affs = [aff1, aff2, aff3];
-    const b1Amounts = [425000, 280000, 195000]; // in cents
-
-    for (let i = 0; i < b1Affs.length; i++) {
-      const a = b1Affs[i];
-      const amount = b1Amounts[i];
-      batch1Total += amount;
-      const itemId = uuidv4();
-      const item: PayoutItemEntity = {
-        id: itemId,
-        batchId: batch1Id,
-        organizationId,
-        environment: EnvironmentType.LIVE,
-        affiliateId: a.id,
-        amount,
-        currency,
-        status: PayoutStatus.COMPLETED,
-        gateway: 'RazorpayX',
-        disbursementAccount: `••••${4100 + i * 12} (HDFC Bank)`,
-        providerReference: `rzp_pout_${uuidv4().replace(/-/g, '').substring(0, 14)}`,
-        beneficiaryName: a.displayName,
-        payoutMethod: 'BANK_ACCOUNT',
-        reconciliationStatus: 'MATCHED',
-        reconciledAt: new Date(batch1Date.getTime() + 1800000),
-        createdAt: batch1Date,
-      };
-      batch1Items.push(item);
-      dbStore.payoutItems.push(item);
-    }
-
-    const batch1: PayoutBatchEntity = {
-      id: batch1Id,
-      organizationId,
-      environment: EnvironmentType.LIVE,
-      status: PayoutStatus.COMPLETED,
-      totalAmount: batch1Total,
-      currency,
-      gateway: 'RazorpayX',
-      createdBy: 'system-ops',
-      createdAt: batch1Date,
-      updatedAt: new Date(batch1Date.getTime() + 3600000),
-    };
-    dbStore.payoutBatches.push(batch1);
-
-    // Batch 2: Completed via Cashfree Payouts (3 Days Ago)
-    const batch2Id = uuidv4();
-    const batch2Date = new Date(now.getTime() - 3 * 86400000);
-    const batch2Items: PayoutItemEntity[] = [];
-    let batch2Total = 0;
-
-    const b2Affs = [aff2, aff3];
-    const b2Amounts = [310000, 175000];
-
-    for (let i = 0; i < b2Affs.length; i++) {
-      const a = b2Affs[i];
-      const amount = b2Amounts[i];
-      batch2Total += amount;
-      const itemId = uuidv4();
-      const item: PayoutItemEntity = {
-        id: itemId,
-        batchId: batch2Id,
-        organizationId,
-        environment: EnvironmentType.LIVE,
-        affiliateId: a.id,
-        amount,
-        currency,
-        status: PayoutStatus.COMPLETED,
-        gateway: 'Cashfree Payouts',
-        disbursementAccount: i === 0 ? `••••CF88 (ICICI Bank)` : `upi: ve${a.displayName.slice(0, 3).toLowerCase()}@okaxis`,
-        providerReference: `cf_pout_${uuidv4().replace(/-/g, '').substring(0, 14)}`,
-        beneficiaryName: a.displayName,
-        payoutMethod: i === 0 ? 'BANK_ACCOUNT' : 'UPI',
-        reconciliationStatus: 'MATCHED',
-        reconciledAt: new Date(batch2Date.getTime() + 1200000),
-        createdAt: batch2Date,
-      };
-      batch2Items.push(item);
-      dbStore.payoutItems.push(item);
-    }
-
-    const batch2: PayoutBatchEntity = {
-      id: batch2Id,
-      organizationId,
-      environment: EnvironmentType.LIVE,
-      status: PayoutStatus.COMPLETED,
-      totalAmount: batch2Total,
-      currency,
-      gateway: 'Cashfree Payouts',
-      createdBy: 'system-ops',
-      createdAt: batch2Date,
-      updatedAt: new Date(batch2Date.getTime() + 2400000),
-    };
-    dbStore.payoutBatches.push(batch2);
-
-    // Batch 3: Mixed Settlement Run (Yesterday) - In-Flight, Failed, Held
-    const batch3Id = uuidv4();
-    const batch3Date = new Date(now.getTime() - 1 * 86400000);
-    let batch3Total = 0;
-
-    // Item 3a: Processing via Direct Bank Transfer
-    const item3a: PayoutItemEntity = {
-      id: uuidv4(),
-      batchId: batch3Id,
-      organizationId,
-      environment: EnvironmentType.LIVE,
-      affiliateId: aff1.id,
-      amount: 220000,
-      currency,
-      status: PayoutStatus.PROCESSING,
-      gateway: 'Direct Bank Transfer',
-      disbursementAccount: '••••7721 (State Bank of India)',
-      providerReference: `pout_${uuidv4().substring(0, 10)}`,
-      beneficiaryName: aff1.displayName,
-      payoutMethod: 'BANK_ACCOUNT',
-      reconciliationStatus: 'PENDING',
-      createdAt: batch3Date,
-    };
-    batch3Total += item3a.amount;
-    dbStore.payoutItems.push(item3a);
-
-    // Item 3b: Failed item due to invalid IFSC code
-    const item3b: PayoutItemEntity = {
-      id: uuidv4(),
-      batchId: batch3Id,
-      organizationId,
-      environment: EnvironmentType.LIVE,
-      affiliateId: aff2.id,
-      amount: 85000,
-      currency,
-      status: PayoutStatus.FAILED,
-      gateway: 'RazorpayX',
-      disbursementAccount: '••••1092 (Axis Bank)',
-      providerReference: `rzp_pout_${uuidv4().replace(/-/g, '').substring(0, 12)}`,
-      failureReason: 'BENEFICIARY_IFSC_INVALID: Bank branch closed or invalid IFSC identifier provided by partner.',
-      retryCount: 1,
-      lastRetryAt: new Date(batch3Date.getTime() + 3600000),
-      beneficiaryName: aff2.displayName,
-      payoutMethod: 'BANK_ACCOUNT',
-      reconciliationStatus: 'DISCREPANCY',
-      createdAt: batch3Date,
-    };
-    batch3Total += item3b.amount;
-    dbStore.payoutItems.push(item3b);
-
-    // Item 3c: Held for Risk / Velocity Check
-    const item3c: PayoutItemEntity = {
-      id: uuidv4(),
-      batchId: batch3Id,
-      organizationId,
-      environment: EnvironmentType.LIVE,
-      affiliateId: aff3.id,
-      amount: 450000,
-      currency,
-      status: PayoutStatus.HELD,
-      gateway: 'Cashfree Payouts',
-      disbursementAccount: `upi: ${aff3.displayName.slice(0, 4).toLowerCase()}@okhdfcbank`,
-      providerReference: `cf_pout_${uuidv4().replace(/-/g, '').substring(0, 12)}`,
-      failureReason: 'RISK_SCORE_THRESHOLD: Payout flagged by automated fraud rule: spike in weekly commission volume.',
-      beneficiaryName: aff3.displayName,
-      payoutMethod: 'UPI',
-      reconciliationStatus: 'PENDING',
-      createdAt: batch3Date,
-    };
-    batch3Total += item3c.amount;
-    dbStore.payoutItems.push(item3c);
-
-    const batch3: PayoutBatchEntity = {
-      id: batch3Id,
-      organizationId,
-      environment: EnvironmentType.LIVE,
-      status: PayoutStatus.PARTIALLY_FAILED,
-      totalAmount: batch3Total,
-      currency,
-      gateway: 'RazorpayX',
-      createdBy: 'system-ops',
-      createdAt: batch3Date,
-      updatedAt: now,
-    };
-    dbStore.payoutBatches.push(batch3);
-  }
 
   private hydrateItem(item: PayoutItemEntity): HydratedPayoutItem {
     const affiliate = dbStore.affiliates.find((a) => a.id === item.affiliateId);
     let masked = item.disbursementAccount;
     if (!masked) {
-      masked = item.payoutMethod === 'UPI' ? '••••@upi' : '••••7812 (Direct Bank)';
+      masked = item.payoutMethod === 'UPI' ? 'â€¢â€¢â€¢â€¢@upi' : 'â€¢â€¢â€¢â€¢7812 (Direct Bank)';
     }
 
     return {
@@ -374,7 +144,10 @@ export class PayoutsService {
       successfulCount: items.filter((i) => i.status === PayoutStatus.COMPLETED).length,
       failedCount: items.filter((i) => i.status === PayoutStatus.FAILED).length,
       heldCount: items.filter((i) => i.status === PayoutStatus.HELD).length,
-      createdByUserName: user?.displayName || user?.email?.split('@')[0] || 'Operations Lead',
+      createdByUserName:
+        [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim() ||
+        user?.email?.split('@')[0] ||
+        'Operations Lead',
     };
   }
 
@@ -383,7 +156,6 @@ export class PayoutsService {
     environment: EnvironmentType = EnvironmentType.LIVE,
     query?: PayoutAnalyticsQueryDto,
   ) {
-    this.ensureDefaultPayouts(organizationId);
 
     const org = dbStore.organizations.find((o) => o.id === organizationId);
     const currency = org?.defaultCurrency || PLATFORM_CURRENCY;
@@ -536,7 +308,6 @@ export class PayoutsService {
     environment: EnvironmentType = EnvironmentType.LIVE,
     dto: ValidateBatchDto,
   ) {
-    this.ensureDefaultPayouts(organizationId);
 
     const org = dbStore.organizations.find((o) => o.id === organizationId);
     const currency = org?.defaultCurrency || PLATFORM_CURRENCY;
@@ -621,7 +392,7 @@ export class PayoutsService {
         email: affiliate.email,
         amount: acc.balance,
         payoutMethod: affiliate.payoutMethod || 'Direct Bank Transfer',
-        maskedAccount: affiliate.payoutMethod === 'UPI' ? '••••@upi' : '••••7812',
+        maskedAccount: affiliate.payoutMethod === 'UPI' ? 'â€¢â€¢â€¢â€¢@upi' : 'â€¢â€¢â€¢â€¢7812',
         riskScore: affiliate.trustScore || 85,
         status: partnerStatus,
         issues: issues.length > 0 ? issues : undefined,
@@ -654,7 +425,6 @@ export class PayoutsService {
     environment: EnvironmentType = EnvironmentType.LIVE,
     query: ListPayoutsQueryDto,
   ) {
-    this.ensureDefaultPayouts(organizationId);
 
     const page = Math.max(1, Number(query.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(query.limit) || 20));
@@ -741,7 +511,6 @@ export class PayoutsService {
     environment: EnvironmentType = EnvironmentType.LIVE,
     query: ListPayoutsQueryDto,
   ) {
-    this.ensureDefaultPayouts(organizationId);
 
     const page = Math.max(1, Number(query.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(query.limit) || 20));
@@ -793,7 +562,6 @@ export class PayoutsService {
     organizationId: string,
     environment: EnvironmentType = EnvironmentType.LIVE,
   ) {
-    this.ensureDefaultPayouts(organizationId);
 
     const org = dbStore.organizations.find((o) => o.id === organizationId);
     const currency = org?.defaultCurrency || PLATFORM_CURRENCY;
@@ -922,6 +690,7 @@ export class PayoutsService {
       createdAt: new Date(),
     });
 
+    await awaitPersist(item);
     return { success: true, item: this.hydrateItem(item) };
   }
 
@@ -942,11 +711,13 @@ export class PayoutsService {
 
     batch.status = PayoutStatus.CANCELLED;
     batch.updatedAt = new Date();
+    const pendingPersist: Promise<unknown>[] = [awaitPersist(batch)];
 
     const items = dbStore.payoutItems.filter((i) => i.batchId === batchId);
     for (const item of items) {
       if (item.status !== PayoutStatus.COMPLETED) {
         item.status = PayoutStatus.CANCELLED;
+        pendingPersist.push(awaitPersist(item));
 
         // Restore reserved balance to affiliate ledger account
         const acc = dbStore.ledgerAccounts.find(
@@ -955,6 +726,7 @@ export class PayoutsService {
         if (acc) {
           acc.balance += item.amount;
           acc.updatedAt = new Date();
+          pendingPersist.push(awaitPersist(acc));
         }
       }
     }
@@ -971,6 +743,7 @@ export class PayoutsService {
       createdAt: new Date(),
     });
 
+    await Promise.all(pendingPersist);
     return { success: true, batch: this.hydrateBatch(batch) };
   }
 
@@ -1028,6 +801,7 @@ export class PayoutsService {
       throw new BadRequestException(`No eligible affiliate balances available for payout in ${environment} mode.`);
     }
 
+    const pendingPersist: Promise<unknown>[] = [];
     for (const acc of eligibleAccounts) {
       const amount = acc.balance;
       totalAmount += amount;
@@ -1035,6 +809,7 @@ export class PayoutsService {
       // Reserve balance immediately to prevent double-spending
       acc.balance = 0;
       acc.updatedAt = new Date();
+      pendingPersist.push(awaitPersist(acc));
 
       const affiliate = dbStore.affiliates.find((a) => a.id === acc.affiliateId);
 
@@ -1050,11 +825,12 @@ export class PayoutsService {
         gateway: gatewayDisplay,
         beneficiaryName: affiliate?.displayName,
         payoutMethod: affiliate?.payoutMethod || 'BANK_ACCOUNT',
-        disbursementAccount: affiliate?.payoutMethod === 'UPI' ? '••••@upi' : '••••7812 (Direct Bank)',
+        disbursementAccount: affiliate?.payoutMethod === 'UPI' ? 'â€¢â€¢â€¢â€¢@upi' : 'â€¢â€¢â€¢â€¢7812 (Direct Bank)',
         createdAt: new Date(),
       };
       items.push(item);
       dbStore.payoutItems.push(item);
+      pendingPersist.push(awaitPersist(item));
     }
 
     const batch: PayoutBatchEntity = {
@@ -1071,6 +847,7 @@ export class PayoutsService {
     };
 
     dbStore.payoutBatches.push(batch);
+    pendingPersist.push(awaitPersist(batch));
 
     dbStore.auditLogs.push({
       id: uuidv4(),
@@ -1095,6 +872,7 @@ export class PayoutsService {
       });
     }
 
+    await Promise.all(pendingPersist);
     return { batch: this.hydrateBatch(batch), items: items.map((i) => this.hydrateItem(i)) };
   }
 
@@ -1126,6 +904,7 @@ export class PayoutsService {
     }
     batch.status = PayoutStatus.PROCESSING;
     batch.updatedAt = new Date();
+    await awaitPersist(batch);
 
     let fraudResult;
     try {
@@ -1133,6 +912,7 @@ export class PayoutsService {
     } catch (error: any) {
       batch.status = PayoutStatus.DRAFT;
       batch.updatedAt = new Date();
+      await awaitPersist(batch);
       this.logger.error(`Fraud evaluation failed for payout batch ${batchId}; batch reverted to DRAFT. ${error?.message || error}`);
       throw new BadRequestException('PAYOUT_FRAUD_CHECK_FAILED');
     }
@@ -1140,6 +920,7 @@ export class PayoutsService {
     if (fraudResult.decision === FraudDecision.HOLD || fraudResult.decision === FraudDecision.REVIEW) {
       batch.status = PayoutStatus.HELD;
       batch.updatedAt = new Date();
+      await awaitPersist(batch);
       throw new BadRequestException('PAYOUT_HELD_FOR_RISK');
     }
 
@@ -1166,15 +947,16 @@ export class PayoutsService {
 
     if (targetGateway.includes('RAZORPAY')) {
       resolvedGateway = 'RazorpayX';
-      disbursementAccount = rzpConn?.config?.maskedCredentials?.accountNumber || (isSimulated ? '••••5678 (RazorpayX)' : undefined);
+      disbursementAccount = rzpConn?.config?.maskedCredentials?.accountNumber || (isSimulated ? 'â€¢â€¢â€¢â€¢5678 (RazorpayX)' : undefined);
     } else if (targetGateway.includes('CASHFREE')) {
       resolvedGateway = 'Cashfree Payouts';
-      disbursementAccount = cfConn?.config?.maskedCredentials?.payoutClientId || (isSimulated ? '••••CF01 (Cashfree)' : undefined);
+      disbursementAccount = cfConn?.config?.maskedCredentials?.payoutClientId || (isSimulated ? 'â€¢â€¢â€¢â€¢CF01 (Cashfree)' : undefined);
     } else {
       resolvedGateway = isSimulated ? 'Simulated Disburser' : 'Direct Bank Transfer';
     }
 
     batch.gateway = resolvedGateway;
+    const pendingPersist: Promise<unknown>[] = [awaitPersist(batch)];
 
     for (const item of items) {
       this.notifyAffiliatePayout(
@@ -1237,6 +1019,8 @@ export class PayoutsService {
           paymentMethod: resolvedGateway,
         },
       ).catch(() => undefined);
+
+      pendingPersist.push(awaitPersist(item));
     }
 
     dbStore.auditLogs.push({
@@ -1256,11 +1040,11 @@ export class PayoutsService {
       createdAt: new Date(),
     });
 
+    await Promise.all(pendingPersist);
     return { success: true, batch: this.hydrateBatch(batch), isSimulated };
   }
 
   async findAll(organizationId: string, environment: EnvironmentType = EnvironmentType.LIVE) {
-    this.ensureDefaultPayouts(organizationId);
     return dbStore.payoutBatches
       .filter(
         (b) =>
@@ -1271,7 +1055,6 @@ export class PayoutsService {
   }
 
   async findOne(organizationId: string, batchId: string, environment?: EnvironmentType) {
-    this.ensureDefaultPayouts(organizationId);
     const batch = dbStore.payoutBatches.find(
       (b) =>
         b.id === batchId &&
@@ -1289,7 +1072,6 @@ export class PayoutsService {
   }
 
   async generateCsvExport(organizationId: string, batchId?: string): Promise<string> {
-    this.ensureDefaultPayouts(organizationId);
     let items = dbStore.payoutItems.filter((i) => i.organizationId === organizationId);
     if (batchId && batchId !== 'all') {
       items = items.filter((i) => i.batchId === batchId);
@@ -1324,7 +1106,6 @@ export class PayoutsService {
   }
 
   async getBatches(organizationId: string, environment: EnvironmentType = EnvironmentType.LIVE) {
-    this.ensureDefaultPayouts(organizationId);
     return dbStore.payoutBatches
       .filter(
         (b) =>
@@ -1335,7 +1116,6 @@ export class PayoutsService {
   }
 
   async getItems(organizationId: string, environment: EnvironmentType = EnvironmentType.LIVE) {
-    this.ensureDefaultPayouts(organizationId);
     const items = dbStore.payoutItems.filter(
       (item) =>
         item.organizationId === organizationId &&

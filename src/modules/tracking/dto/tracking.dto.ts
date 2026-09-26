@@ -14,13 +14,15 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { TrackingLinkStatus } from '../../../common/enums';
 
 export class CreateTrackingLinkDto {
-  @ApiProperty({ example: 'program_uuid' })
+  @ApiPropertyOptional({ example: 'program_uuid' })
+  @IsOptional()
   @IsString()
-  programId!: string;
+  programId?: string;
 
-  @ApiProperty({ example: 'affiliate_uuid' })
+  @ApiPropertyOptional({ example: 'affiliate_uuid' })
+  @IsOptional()
   @IsString()
-  affiliateId!: string;
+  affiliateId?: string;
 
   @ApiProperty({ example: 'https://acme.com/pricing' })
   @IsUrl(

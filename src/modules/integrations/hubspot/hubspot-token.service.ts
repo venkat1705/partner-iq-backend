@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { dbStore } from '../../../database/store';
+import { dbStore, awaitPersist } from '../../../database/store';
 import { OrganizationIntegrationStatus } from '../../../common/enums';
 import { IntegrationCredentialService } from '../integration-credential.service';
 import { HUBSPOT_PROVIDER } from './hubspot.constants';
@@ -54,7 +54,7 @@ export class HubSpotTokenService {
       code,
     });
     const token = await this.postToken(body);
-    this.storeTokenSet(connectionId, token);
+    await this.storeTokenSet(connectionId, token);
     return token;
   }
 
@@ -73,9 +73,10 @@ export class HubSpotTokenService {
         client_secret: clientSecret,
         refresh_token: refreshToken,
       }));
-      this.storeTokenSet(connectionId, token);
+      await this.storeTokenSet(connectionId, token);
       connection.status = OrganizationIntegrationStatus.CONNECTED;
       connection.lastError = undefined;
+      await awaitPersist(connection);
       return this.credentials.getCredential(connectionId, 'access_token');
     } catch {
       // Only notify on the transition into a broken state — not on every retried
@@ -83,6 +84,7 @@ export class HubSpotTokenService {
       const wasAlreadyBroken = connection.status === OrganizationIntegrationStatus.AUTHENTICATION_ERROR;
       connection.status = OrganizationIntegrationStatus.AUTHENTICATION_ERROR;
       connection.lastError = 'HubSpot authentication failed. Reconnect HubSpot.';
+      await awaitPersist(connection);
       if (!wasAlreadyBroken) {
         this.notifyIntegrationDisconnected(connection, 'HubSpot access was revoked and the connection could not refresh').catch(() => undefined);
       }
@@ -137,15 +139,22 @@ export class HubSpotTokenService {
     }
   }
 
-  storeTokenSet(connectionId: string, token: TokenResponse) {
+  async storeTokenSet(connectionId: string, token: TokenResponse) {
     const accessToken = token.access_token || token.accessToken;
     const refreshToken = token.refresh_token || token.refreshToken;
     const expiresIn = Number(token.expires_in || token.expiresIn || 1800);
     if (!accessToken) throw new BadRequestException('HubSpot did not return an access token');
 
-    this.credentials.storeCredential(connectionId, 'access_token', accessToken);
-    this.credentials.storeCredential(connectionId, 'access_token_expires_at', String(Date.now() + expiresIn * 1000));
-    if (refreshToken) this.credentials.storeCredential(connectionId, 'refresh_token', refreshToken);
+    const pending: Promise<unknown>[] = [];
+    const accessEntity = this.credentials.storeCredential(connectionId, 'access_token', accessToken);
+    if (accessEntity) pending.push(awaitPersist(accessEntity));
+    const expiryEntity = this.credentials.storeCredential(connectionId, 'access_token_expires_at', String(Date.now() + expiresIn * 1000));
+    if (expiryEntity) pending.push(awaitPersist(expiryEntity));
+    if (refreshToken) {
+      const refreshEntity = this.credentials.storeCredential(connectionId, 'refresh_token', refreshToken);
+      if (refreshEntity) pending.push(awaitPersist(refreshEntity));
+    }
+    await Promise.all(pending);
   }
 
   private async postToken(body: URLSearchParams): Promise<TokenResponse> {

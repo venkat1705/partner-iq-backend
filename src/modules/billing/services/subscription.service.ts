@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
-import { dbStore } from '../../../database/store';
+import { dbStore, awaitPersist } from '../../../database/store';
 import { AuditAction } from '../../../common/enums';
 import { BillingInterval, PaymentProviderType, SubscriptionStatus } from '../enums/billing.enums';
 import { PlanService } from './plan.service';
@@ -104,6 +104,7 @@ export class SubscriptionService {
       accountId,
     });
 
+    await awaitPersist(subscription);
     return { subscription, plan, limits: await this.limits.getEffectiveLimits(accountId) };
   }
 
@@ -148,6 +149,7 @@ export class SubscriptionService {
       accountId,
     });
 
+    await awaitPersist(subscription);
     return { subscription, pendingPlan: plan, preview };
   }
 
@@ -164,6 +166,7 @@ export class SubscriptionService {
     subscription.modifiedBy = userId;
     subscription.modifiedDate = new Date();
     this.audit(organizationId, userId, 'SUBSCRIPTION_CANCELLED', subscription.id, { immediate });
+    await awaitPersist(subscription);
     return subscription;
   }
 
@@ -173,12 +176,13 @@ export class SubscriptionService {
     return this.activateSubscription(subscription.id);
   }
 
-  activateSubscription(subscriptionId: string) {
+  async activateSubscription(subscriptionId: string) {
     const subscription = dbStore.billingSubscriptions.find((item) => item.id === subscriptionId);
     if (!subscription) return null;
 
     // Supersede any other live subscription on the same account — not just the
     // same organization — so an account never ends up paying twice.
+    const pending: Promise<unknown>[] = [];
     dbStore.billingSubscriptions
       .filter((item) =>
         (subscription.accountId
@@ -199,6 +203,7 @@ export class SubscriptionService {
         item.status = SubscriptionStatus.EXPIRED;
         item.rowStatus = 'INACTIVE';
         item.modifiedDate = new Date();
+        pending.push(awaitPersist(item));
       });
 
     subscription.status = SubscriptionStatus.ACTIVE;
@@ -207,6 +212,8 @@ export class SubscriptionService {
     subscription.currentPeriodEnd = subscription.currentPeriodEnd || this.calculatePeriodEnd(subscription.billingInterval as BillingInterval);
     subscription.nextBillingDate = subscription.currentPeriodEnd;
     subscription.modifiedDate = new Date();
+    pending.push(awaitPersist(subscription));
+    await Promise.all(pending);
     return subscription;
   }
 
@@ -238,6 +245,12 @@ export class SubscriptionService {
       createdDate: new Date(),
       modifiedDate: new Date(),
     };
+    // NOTE: cannot be made async / await the persist here — its only caller,
+    // billing.service.ts, is out of scope for this pass and uses the return
+    // value synchronously (subscription.id) immediately after calling this.
+    // Making this return a Promise would break that caller. Left as a
+    // fire-and-forget insert; the background write still lands via dbStore's
+    // own tracking, just not confirmed before this method returns.
     dbStore.billingSubscriptions.push(subscription as any);
     return subscription;
   }

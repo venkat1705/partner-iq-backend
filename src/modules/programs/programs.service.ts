@@ -4,7 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
-import { dbStore, ProgramEntity } from '../../database/store';
+import { dbStore, ProgramEntity, awaitPersist } from '../../database/store';
 import { ProgramStatus, AuditAction, EnvironmentType, AffiliateStatus } from '../../common/enums';
 import { PLATFORM_CURRENCY } from '../../common/constants/currency';
 import { CreateProgramDto, UpdateProgramDto } from './dto/program.dto';
@@ -30,6 +30,7 @@ import {
   ProgramTimeSeriesPoint,
   ProgramSetupChecklistItem,
 } from './dto/program-analytics.dto';
+import { netCommissionAmount } from '../../common/utils/commission.utils';
 
 @Injectable()
 export class ProgramsService {
@@ -145,6 +146,13 @@ export class ProgramsService {
       throw new BadRequestException(`Program with slug '${slug}' already exists in ${environment} environment.`);
     }
 
+    const policy = (dto.policy || {}) as {
+      termsContent?: string;
+      termsUrl?: string;
+      privacyPolicyUrl?: string;
+      promotionRules?: Record<string, unknown>;
+    };
+
     const program: ProgramEntity = {
       id: uuidv4(),
       organizationId,
@@ -175,12 +183,21 @@ export class ProgramsService {
       tags: dto.tags,
       websiteUrl: dto.websiteUrl,
       landingUrl: dto.landingUrl,
+      termsContent: policy.termsContent,
+      termsUrl: policy.termsUrl,
+      privacyPolicyUrl: policy.privacyPolicyUrl,
+      promotionRules: policy.promotionRules,
+      allowedAffiliateTypes: dto.allowedAffiliateTypes,
+      customRules: dto.customRules,
+      tierOverrides: dto.tierOverrides,
+      featured: dto.featured ?? false,
       createdBy: createdByUserId,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
 
     dbStore.programs.push(program);
+    await awaitPersist(program);
 
     this.notifyProgramCreated(organizationId, createdByUserId, program).catch(() => undefined);
 
@@ -325,8 +342,25 @@ export class ProgramsService {
     if (dto.tags !== undefined) rawProgram.tags = dto.tags;
     if (dto.websiteUrl !== undefined) rawProgram.websiteUrl = dto.websiteUrl;
     if (dto.landingUrl !== undefined) rawProgram.landingUrl = dto.landingUrl;
+    if (dto.allowedAffiliateTypes !== undefined) rawProgram.allowedAffiliateTypes = dto.allowedAffiliateTypes;
+    if (dto.customRules !== undefined) rawProgram.customRules = dto.customRules;
+    if (dto.tierOverrides !== undefined) rawProgram.tierOverrides = dto.tierOverrides;
+    if (dto.featured !== undefined) rawProgram.featured = dto.featured;
+    if (dto.policy !== undefined) {
+      const policy = dto.policy as {
+        termsContent?: string;
+        termsUrl?: string;
+        privacyPolicyUrl?: string;
+        promotionRules?: Record<string, unknown>;
+      };
+      if (policy.termsContent !== undefined) rawProgram.termsContent = policy.termsContent;
+      if (policy.termsUrl !== undefined) rawProgram.termsUrl = policy.termsUrl;
+      if (policy.privacyPolicyUrl !== undefined) rawProgram.privacyPolicyUrl = policy.privacyPolicyUrl;
+      if (policy.promotionRules !== undefined) rawProgram.promotionRules = policy.promotionRules;
+    }
 
     rawProgram.updatedAt = new Date();
+    await awaitPersist(rawProgram);
 
     dbStore.auditLogs.push({
       id: uuidv4(),
@@ -484,19 +518,39 @@ export class ProgramsService {
   }
 
   async pause(organizationId: string, programId: string, actorId: string, environment?: EnvironmentType) {
-    const program = await this.findOne(organizationId, programId, environment);
-    program.status = ProgramStatus.PAUSED;
-    program.updatedAt = new Date();
-    this.audit(organizationId, actorId, 'PROGRAM_PAUSED', 'program', program.id, { name: program.name, environment: program.environment });
-    return program;
+    // Validates existence/environment scope via findOne(), but findOne() returns a spread
+    // copy (plus computed fields like affiliatesCount) — mutating that copy would never touch
+    // the actual dbStore.programs entity or its auto-persisting Proxy, so the status change
+    // would silently vanish on the next read. Look up and mutate the raw entity instead.
+    await this.findOne(organizationId, programId, environment);
+    const rawProgram = dbStore.programs.find((p) => {
+      if (p.id !== programId || p.organizationId !== organizationId || p.deletedAt) return false;
+      if (environment) {
+        return p.environment === environment || (!p.environment && environment === EnvironmentType.LIVE);
+      }
+      return true;
+    })!;
+    rawProgram.status = ProgramStatus.PAUSED;
+    rawProgram.updatedAt = new Date();
+    await awaitPersist(rawProgram);
+    this.audit(organizationId, actorId, 'PROGRAM_PAUSED', 'program', rawProgram.id, { name: rawProgram.name, environment: rawProgram.environment });
+    return { ...rawProgram, visibility: rawProgram.visibility || 'PUBLIC' };
   }
 
   async activate(organizationId: string, programId: string, actorId: string, environment?: EnvironmentType) {
-    const program = await this.findOne(organizationId, programId, environment);
-    program.status = ProgramStatus.ACTIVE;
-    program.updatedAt = new Date();
-    this.audit(organizationId, actorId, 'PROGRAM_ACTIVATED', 'program', program.id, { name: program.name, environment: program.environment });
-    return program;
+    await this.findOne(organizationId, programId, environment);
+    const rawProgram = dbStore.programs.find((p) => {
+      if (p.id !== programId || p.organizationId !== organizationId || p.deletedAt) return false;
+      if (environment) {
+        return p.environment === environment || (!p.environment && environment === EnvironmentType.LIVE);
+      }
+      return true;
+    })!;
+    rawProgram.status = ProgramStatus.ACTIVE;
+    rawProgram.updatedAt = new Date();
+    await awaitPersist(rawProgram);
+    this.audit(organizationId, actorId, 'PROGRAM_ACTIVATED', 'program', rawProgram.id, { name: rawProgram.name, environment: rawProgram.environment });
+    return { ...rawProgram, visibility: rawProgram.visibility || 'PUBLIC' };
   }
 
   async remove(organizationId: string, programId: string, actorId: string, environment?: EnvironmentType) {
@@ -512,8 +566,33 @@ export class ProgramsService {
 
     rawProgram.deletedAt = new Date();
     rawProgram.status = ProgramStatus.ARCHIVED;
+    await awaitPersist(rawProgram);
     this.audit(organizationId, actorId, 'PROGRAM_ARCHIVED', 'program', rawProgram.id, { name: rawProgram.name, environment: rawProgram.environment });
     return { success: true, message: 'Program archived' };
+  }
+
+  // Archived programs are soft-deleted (deletedAt set), so this looks past findOne()'s
+  // deletedAt guard on purpose — that guard is what keeps a restored program out of every
+  // other listing until this clears it. Restoring brings it back as PAUSED rather than ACTIVE,
+  // so an admin reviews it before it goes live for affiliates again.
+  async restore(organizationId: string, programId: string, actorId: string, environment?: EnvironmentType) {
+    const rawProgram = dbStore.programs.find((p) => {
+      if (p.id !== programId || p.organizationId !== organizationId) return false;
+      if (environment) {
+        return p.environment === environment || (!p.environment && environment === EnvironmentType.LIVE);
+      }
+      return true;
+    });
+    if (!rawProgram || rawProgram.status !== ProgramStatus.ARCHIVED) {
+      throw new NotFoundException('Archived program not found in current environment context');
+    }
+
+    rawProgram.deletedAt = undefined;
+    rawProgram.status = ProgramStatus.PAUSED;
+    rawProgram.updatedAt = new Date();
+    await awaitPersist(rawProgram);
+    this.audit(organizationId, actorId, 'PROGRAM_RESTORED', 'program', rawProgram.id, { name: rawProgram.name, environment: rawProgram.environment });
+    return { ...rawProgram, visibility: rawProgram.visibility || 'PUBLIC', affiliatesCount: 0 };
   }
 
   private audit(
@@ -862,7 +941,7 @@ export class ProgramsService {
       });
 
       const bRev = bConvs.reduce((sum, c) => sum + Number(c.amount || 0), 0) / 100;
-      const bComm = bComms.reduce((sum, cm) => sum + Number((cm as any).commissionAmount || (cm as any).amount || 0), 0) / 100;
+      const bComm = bComms.reduce((sum, cm) => sum + netCommissionAmount(cm as any), 0) / 100;
 
       activityTrend.push({
         date: dateKey,
@@ -908,11 +987,15 @@ export class ProgramsService {
   ): Promise<ProgramPerformanceItem[]> {
     const { start, end } = this.parseDateRange(query?.period, query?.dateFrom, query?.dateTo);
 
+    // Archiving soft-deletes a program (sets deletedAt) alongside status=ARCHIVED, so an
+    // explicit request for archived programs must look past the deletedAt guard — otherwise
+    // an "Archived Programs" view could never show anything.
+    const wantsArchived = query?.status?.toUpperCase() === ProgramStatus.ARCHIVED;
     let programs = dbStore.programs.filter(
       (p) =>
         p.organizationId === organizationId &&
         (p.environment === environment || (!p.environment && environment === EnvironmentType.LIVE)) &&
-        !p.deletedAt,
+        (wantsArchived ? p.status === ProgramStatus.ARCHIVED : !p.deletedAt),
     );
 
     if (query?.status && query.status.toUpperCase() !== 'ALL') {
@@ -1135,7 +1218,7 @@ export class ProgramsService {
       const affId = (cm as any).affiliateId;
       if (affId && affiliateMap.has(affId)) {
         const entry = affiliateMap.get(affId)!;
-        entry.commission += Number((cm as any).commissionAmount || (cm as any).amount || 0) / 100;
+        entry.commission += netCommissionAmount(cm as any) / 100;
       }
     }
 
@@ -1267,7 +1350,7 @@ export class ProgramsService {
         date: dateKey,
         revenue: Math.round(bConvs.reduce((sum, c) => sum + Number(c.amount || 0), 0) / 100),
         conversions: bConvs.length,
-        commission: Math.round(bComms.reduce((sum, cm) => sum + Number((cm as any).commissionAmount || (cm as any).amount || 0), 0) / 100),
+        commission: Math.round(bComms.reduce((sum, cm) => sum + netCommissionAmount(cm as any), 0) / 100),
         clicks: bClicks.length,
         affiliates: 0,
         payouts: 0,
@@ -1374,6 +1457,7 @@ export class ProgramsService {
     };
 
     dbStore.programs.push(clonedProgram);
+    const pending: Promise<unknown>[] = [awaitPersist(clonedProgram)];
 
     // Copy rules if selected
     if (dto.copyRules !== false) {
@@ -1381,13 +1465,15 @@ export class ProgramsService {
         (r) => r.organizationId === organizationId && r.programId === programId,
       );
       for (const rule of rules) {
-        dbStore.commissionRules.push({
+        const clonedRule = {
           ...rule,
           id: uuidv4(),
           programId: newProgramId,
           createdAt: new Date(),
           updatedAt: new Date(),
-        });
+        };
+        dbStore.commissionRules.push(clonedRule);
+        pending.push(awaitPersist(clonedRule));
       }
     }
 
@@ -1397,13 +1483,15 @@ export class ProgramsService {
         (t) => t.organizationId === organizationId && t.programId === programId,
       );
       for (const tier of tiers) {
-        dbStore.partnerTiers.push({
+        const clonedTier = {
           ...tier,
           id: uuidv4(),
           programId: newProgramId,
           createdAt: new Date(),
           updatedAt: new Date(),
-        });
+        };
+        dbStore.partnerTiers.push(clonedTier);
+        pending.push(awaitPersist(clonedTier));
       }
     }
 
@@ -1413,15 +1501,19 @@ export class ProgramsService {
         (m) => m.organizationId === organizationId && m.programId === programId,
       );
       for (const ms of milestones) {
-        dbStore.milestones.push({
+        const clonedMilestone = {
           ...ms,
           id: uuidv4(),
           programId: newProgramId,
           createdAt: new Date(),
           updatedAt: new Date(),
-        });
+        };
+        dbStore.milestones.push(clonedMilestone);
+        pending.push(awaitPersist(clonedMilestone));
       }
     }
+
+    await Promise.all(pending);
 
     this.audit(organizationId, actorId, 'PROGRAM_DUPLICATED', 'program', newProgramId, {
       sourceProgramId: programId,
@@ -1446,6 +1538,7 @@ export class ProgramsService {
     }
 
     let updatedCount = 0;
+    const pending: Promise<unknown>[] = [];
     for (const progId of dto.programIds) {
       const prog = dbStore.programs.find(
         (p) =>
@@ -1459,21 +1552,26 @@ export class ProgramsService {
       if (dto.action === 'ACTIVATE') {
         prog.status = ProgramStatus.ACTIVE;
         prog.updatedAt = new Date();
+        pending.push(awaitPersist(prog));
         this.audit(organizationId, actorId, 'PROGRAM_ACTIVATED', 'program', prog.id, { bulk: true });
         updatedCount++;
       } else if (dto.action === 'PAUSE') {
         prog.status = ProgramStatus.PAUSED;
         prog.updatedAt = new Date();
+        pending.push(awaitPersist(prog));
         this.audit(organizationId, actorId, 'PROGRAM_PAUSED', 'program', prog.id, { bulk: true });
         updatedCount++;
       } else if (dto.action === 'ARCHIVE') {
         prog.status = ProgramStatus.ARCHIVED;
         prog.deletedAt = new Date();
         prog.updatedAt = new Date();
+        pending.push(awaitPersist(prog));
         this.audit(organizationId, actorId, 'PROGRAM_ARCHIVED', 'program', prog.id, { bulk: true });
         updatedCount++;
       }
     }
+
+    await Promise.all(pending);
 
     return {
       success: true,

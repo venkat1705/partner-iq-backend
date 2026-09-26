@@ -1,4 +1,4 @@
-import {
+﻿import {
   Injectable,
   ConflictException,
   NotFoundException,
@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import * as crypto from 'crypto';
-import { dbStore, ConversionEntity, IdempotencyKeyEntity, ClickEntity, AttributionEntity } from '../../database/store';
+import { dbStore, ConversionEntity, IdempotencyKeyEntity, ClickEntity, AttributionEntity, awaitPersist } from '../../database/store';
 import { FraudService } from '../fraud/fraud.service';
 import { CommissionsService } from '../commissions/commissions.service';
 import { LedgerService } from '../ledger/ledger.service';
@@ -39,6 +39,7 @@ import { AutomationEngineService } from '../automations/engine/automation-engine
 import { SystemTemplateKey } from '../email-design/constants/email-template-keys';
 import { AuditService } from '../audit/audit.service';
 import { PLATFORM_CURRENCY } from '../../common/constants/currency';
+import { netCommissionAmount } from '../../common/utils/commission.utils';
 
 export interface HydratedConversion extends ConversionEntity {
   affiliateName: string;
@@ -106,280 +107,6 @@ export class ConversionsService {
     });
   }
 
-  /**
-   * Guarantees realistic baseline conversions across all lifecycle statuses
-   * (Approved, Pending, Rejected, Partially Refunded, Refunded) with diverse attribution models.
-   */
-  ensureDefaultConversions(organizationId: string) {
-    const existing = dbStore.conversions.filter((c) => c.organizationId === organizationId);
-    if (existing.length >= 5) return;
-
-    let program = dbStore.programs.find((p) => p.organizationId === organizationId && !p.deletedAt);
-    if (!program) {
-      program = {
-        id: uuidv4(),
-        organizationId,
-        name: 'Enterprise Growth Program',
-        slug: 'growth-program',
-        currency: PLATFORM_CURRENCY,
-        defaultCommissionValue: 1200, // 12%
-        commissionType: 'PERCENTAGE' as any,
-        attributionModel: AttributionModel.LAST_CLICK,
-        cookieDays: 30,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      } as any;
-      dbStore.programs.push(program);
-    }
-
-    let affiliates = dbStore.affiliates.filter((a) => a.organizationId === organizationId);
-    if (affiliates.length === 0) {
-      const aff1 = {
-        id: uuidv4(),
-        organizationId,
-        displayName: 'Summit Peak Media',
-        email: 'partners@summitpeak.io',
-        companyName: 'Summit Peak Media Ltd',
-        country: 'IN',
-        status: AffiliateStatus.ACTIVE,
-        trustScore: 95,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      } as any;
-      const aff2 = {
-        id: uuidv4(),
-        organizationId,
-        displayName: 'Velocity Growth Labs',
-        email: 'growth@velocitylabs.co',
-        companyName: 'Velocity Labs Corp',
-        country: 'IN',
-        status: AffiliateStatus.ACTIVE,
-        trustScore: 88,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      } as any;
-      dbStore.affiliates.push(aff1, aff2);
-      affiliates = [aff1, aff2];
-    }
-
-    const aff0 = affiliates[0];
-    const aff1 = affiliates[1] || affiliates[0];
-
-    const now = new Date();
-    const currency = program.currency || PLATFORM_CURRENCY;
-
-    // Conversion 1: Approved, High Value (Google Search, Last Click)
-    const c1Id = uuidv4();
-    const c1ClickId = uuidv4();
-    const click1: ClickEntity = {
-      id: c1ClickId,
-      organizationId,
-      environment: EnvironmentType.LIVE,
-      programId: program.id,
-      affiliateId: aff0.id,
-      trackingLinkId: uuidv4(),
-      anonymousId: 'anon_c1',
-      ipHash: crypto.createHash('sha256').update('103.21.244.12').digest('hex'),
-      utmSource: 'google-ads',
-      utmMedium: 'cpc',
-      utmCampaign: 'enterprise-launch',
-      country: 'IN',
-      deviceType: 'desktop',
-      browser: 'Chrome',
-      fraudScore: 8,
-      fraudStatus: 'LOW' as any,
-      createdAt: new Date(now.getTime() - 8 * 86400000),
-    } as any;
-    dbStore.clicks.push(click1);
-
-    const conv1: ConversionEntity = {
-      id: c1Id,
-      organizationId,
-      environment: EnvironmentType.LIVE,
-      programId: program.id,
-      affiliateId: aff0.id,
-      clickId: c1ClickId,
-      externalId: 'ORD-98241',
-      customerExternalId: 'CUS-4812',
-      amount: 4500000, // ₹45,000.00
-      refundedAmount: 0,
-      currency,
-      type: 'PURCHASE',
-      status: ConversionStatus.APPROVED,
-      source: 'SDK',
-      validationStatus: 'VALID',
-      validatedAt: new Date(now.getTime() - 7 * 86400000),
-      validatedBy: 'system-validator',
-      occurredAt: new Date(now.getTime() - 8 * 86400000),
-      createdAt: new Date(now.getTime() - 8 * 86400000),
-      updatedAt: new Date(now.getTime() - 7 * 86400000),
-    };
-    dbStore.conversions.push(conv1);
-
-    // Associated commission for conv1
-    dbStore.commissions.push({
-      id: uuidv4(),
-      organizationId,
-      conversionId: c1Id,
-      affiliateId: aff0.id,
-      programId: program.id,
-      commissionAmount: 540000, // ₹5,400.00 (12%)
-      status: ConversionStatus.APPROVED,
-      environment: EnvironmentType.LIVE,
-      ruleSnapshot: { ruleName: 'Standard 12% Tier', commissionType: 'PERCENTAGE', commissionValue: 1200 },
-      createdAt: new Date(now.getTime() - 7 * 86400000),
-    } as any);
-
-    // Conversion 2: Approved (YouTube Review, First Click)
-    const c2Id = uuidv4();
-    const c2ClickId = uuidv4();
-    dbStore.clicks.push({
-      id: c2ClickId,
-      organizationId,
-      environment: EnvironmentType.LIVE,
-      programId: program.id,
-      affiliateId: aff1.id,
-      trackingLinkId: uuidv4(),
-      anonymousId: 'anon_c2',
-      ipHash: crypto.createHash('sha256').update('49.36.12.8').digest('hex'),
-      utmSource: 'youtube',
-      utmMedium: 'video-review',
-      utmCampaign: 'creator-showcase',
-      country: 'IN',
-      deviceType: 'mobile',
-      browser: 'Safari',
-      fraudScore: 12,
-      fraudStatus: 'LOW' as any,
-      createdAt: new Date(now.getTime() - 5 * 86400000),
-    } as any);
-
-    const conv2: ConversionEntity = {
-      id: c2Id,
-      organizationId,
-      environment: EnvironmentType.LIVE,
-      programId: program.id,
-      affiliateId: aff1.id,
-      clickId: c2ClickId,
-      externalId: 'ORD-98319',
-      customerExternalId: 'CUS-7193',
-      amount: 1850000, // ₹18,500.00
-      refundedAmount: 0,
-      currency,
-      type: 'PURCHASE',
-      status: ConversionStatus.APPROVED,
-      source: 'API',
-      validationStatus: 'VALID',
-      validatedAt: new Date(now.getTime() - 5 * 86400000),
-      validatedBy: 'system-validator',
-      occurredAt: new Date(now.getTime() - 5 * 86400000),
-      createdAt: new Date(now.getTime() - 5 * 86400000),
-      updatedAt: new Date(now.getTime() - 5 * 86400000),
-    };
-    dbStore.conversions.push(conv2);
-
-    dbStore.commissions.push({
-      id: uuidv4(),
-      organizationId,
-      conversionId: c2Id,
-      affiliateId: aff1.id,
-      programId: program.id,
-      commissionAmount: 222000, // ₹2,220.00
-      status: ConversionStatus.APPROVED,
-      environment: EnvironmentType.LIVE,
-      ruleSnapshot: { ruleName: 'Standard 12% Tier', commissionType: 'PERCENTAGE', commissionValue: 1200 },
-      createdAt: new Date(now.getTime() - 5 * 86400000),
-    } as any);
-
-    // Conversion 3: Pending Validation (High Order Value Review)
-    const c3Id = uuidv4();
-    const conv3: ConversionEntity = {
-      id: c3Id,
-      organizationId,
-      environment: EnvironmentType.LIVE,
-      programId: program.id,
-      affiliateId: aff0.id,
-      externalId: 'ORD-99042',
-      customerExternalId: 'CUS-9102',
-      amount: 8900000, // ₹89,000.00
-      refundedAmount: 0,
-      currency,
-      type: 'PURCHASE',
-      status: ConversionStatus.PENDING,
-      source: 'WEBHOOK',
-      validationStatus: 'PENDING',
-      validationNotes: 'Order value exceeds standard auto-approval threshold (₹50,000); requires merchant sign-off.',
-      occurredAt: new Date(now.getTime() - 1 * 86400000),
-      createdAt: new Date(now.getTime() - 1 * 86400000),
-    };
-    dbStore.conversions.push(conv3);
-
-    // Conversion 4: Partially Refunded (Clawback applied)
-    const c4Id = uuidv4();
-    const conv4: ConversionEntity = {
-      id: c4Id,
-      organizationId,
-      environment: EnvironmentType.LIVE,
-      programId: program.id,
-      affiliateId: aff1.id,
-      externalId: 'ORD-97510',
-      customerExternalId: 'CUS-3021',
-      amount: 2500000, // ₹25,000.00
-      refundedAmount: 1000000, // ₹10,000.00 refunded
-      refundHistory: [
-        {
-          refundExternalId: 'RFND-97510-1',
-          amount: 1000000,
-          reason: 'Customer returned 1 of 2 ordered items',
-          createdAt: new Date(now.getTime() - 2 * 86400000).toISOString(),
-        },
-      ],
-      currency,
-      type: 'PURCHASE',
-      status: ConversionStatus.PARTIALLY_REFUNDED,
-      source: 'SDK',
-      validationStatus: 'VALID',
-      occurredAt: new Date(now.getTime() - 12 * 86400000),
-      createdAt: new Date(now.getTime() - 12 * 86400000),
-      updatedAt: new Date(now.getTime() - 2 * 86400000),
-    };
-    dbStore.conversions.push(conv4);
-
-    dbStore.commissions.push({
-      id: uuidv4(),
-      organizationId,
-      conversionId: c4Id,
-      affiliateId: aff1.id,
-      programId: program.id,
-      commissionAmount: 300000, // original ₹3,000
-      reversedAmount: 120000, // ₹1,200 clawed back
-      status: ConversionStatus.PARTIALLY_REFUNDED,
-      environment: EnvironmentType.LIVE,
-      createdAt: new Date(now.getTime() - 12 * 86400000),
-    } as any);
-
-    // Conversion 5: Rejected (Fraud Block)
-    const c5Id = uuidv4();
-    const conv5: ConversionEntity = {
-      id: c5Id,
-      organizationId,
-      environment: EnvironmentType.LIVE,
-      programId: program.id,
-      affiliateId: aff0.id,
-      externalId: 'ORD-96102',
-      customerExternalId: 'CUS-9914',
-      amount: 1200000, // ₹12,000.00
-      refundedAmount: 0,
-      currency,
-      type: 'PURCHASE',
-      status: ConversionStatus.REJECTED,
-      source: 'API',
-      validationStatus: 'REJECTED',
-      rejectionReason: 'FRAUD_BLOCK: IP velocity threshold violated and datacenter proxy detected.',
-      occurredAt: new Date(now.getTime() - 10 * 86400000),
-      createdAt: new Date(now.getTime() - 10 * 86400000),
-    };
-    dbStore.conversions.push(conv5);
-  }
 
   private hydrateConversion(c: ConversionEntity): HydratedConversion {
     const affiliate = c.affiliateId ? dbStore.affiliates.find((a) => a.id === c.affiliateId) : undefined;
@@ -391,9 +118,9 @@ export class ConversionsService {
     let maskedCustomer = c.customerExternalId;
     if (maskedCustomer.includes('@')) {
       const parts = maskedCustomer.split('@');
-      maskedCustomer = `${parts[0].slice(0, 2)}••••@${parts[1]}`;
+      maskedCustomer = `${parts[0].slice(0, 2)}â€¢â€¢â€¢â€¢@${parts[1]}`;
     } else if (maskedCustomer.length > 5) {
-      maskedCustomer = `${maskedCustomer.slice(0, 3)}••••${maskedCustomer.slice(-2)}`;
+      maskedCustomer = `${maskedCustomer.slice(0, 3)}â€¢â€¢â€¢â€¢${maskedCustomer.slice(-2)}`;
     }
 
     const clickData = click
@@ -427,7 +154,6 @@ export class ConversionsService {
     environment: EnvironmentType = EnvironmentType.LIVE,
     query?: ConversionAnalyticsQueryDto,
   ) {
-    this.ensureDefaultConversions(organizationId);
 
     const org = dbStore.organizations.find((o) => o.id === organizationId);
     const currency = org?.defaultCurrency || PLATFORM_CURRENCY;
@@ -510,9 +236,9 @@ export class ConversionsService {
       // Commission lookup
       const comm = dbStore.commissions.find((c) => c.conversionId === conv.id);
       if (comm) {
-        totalCommission += comm.commissionAmount || 0;
-        if (programMap[conv.programId]) programMap[conv.programId].commission += comm.commissionAmount || 0;
-        if (conv.affiliateId && affiliateMap[conv.affiliateId]) affiliateMap[conv.affiliateId].commission += comm.commissionAmount || 0;
+        totalCommission += netCommissionAmount(comm);
+        if (programMap[conv.programId]) programMap[conv.programId].commission += netCommissionAmount(comm);
+        if (conv.affiliateId && affiliateMap[conv.affiliateId]) affiliateMap[conv.affiliateId].commission += netCommissionAmount(comm);
       }
     }
 
@@ -537,7 +263,7 @@ export class ConversionsService {
         trajectoryMap[key].conversions++;
         trajectoryMap[key].revenue += conv.amount || 0;
         const comm = dbStore.commissions.find((c) => c.conversionId === conv.id);
-        if (comm) trajectoryMap[key].commission += comm.commissionAmount || 0;
+        if (comm) trajectoryMap[key].commission += netCommissionAmount(comm);
       }
     }
 
@@ -628,7 +354,6 @@ export class ConversionsService {
     environment: EnvironmentType = EnvironmentType.LIVE,
     query: ListConversionsQueryDto,
   ) {
-    this.ensureDefaultConversions(organizationId);
 
     const page = Math.max(1, Number(query.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(query.limit) || 20));
@@ -719,7 +444,6 @@ export class ConversionsService {
     conversionId: string,
     environment: EnvironmentType = EnvironmentType.LIVE,
   ) {
-    this.ensureDefaultConversions(organizationId);
 
     const conversion = dbStore.conversions.find(
       (c) =>
@@ -852,6 +576,7 @@ export class ConversionsService {
       currency: conversion.currency,
     });
 
+    await awaitPersist(conversion);
     return {
       success: true,
       conversion: this.hydrateConversion(conversion),
@@ -885,8 +610,10 @@ export class ConversionsService {
 
     // If a commission was already generated, claw it back
     const commission = dbStore.commissions.find((c) => c.conversionId === conversion.id);
+    const pendingPersist: Promise<unknown>[] = [awaitPersist(conversion)];
     if (commission && conversion.affiliateId) {
       commission.status = ConversionStatus.REJECTED;
+      pendingPersist.push(awaitPersist(commission));
       await this.ledgerService.recordTransaction(
         organizationId,
         conversion.affiliateId,
@@ -913,6 +640,7 @@ export class ConversionsService {
       reason: dto.reason,
     });
 
+    await Promise.all(pendingPersist);
     return {
       success: true,
       conversion: this.hydrateConversion(conversion),
@@ -981,6 +709,7 @@ export class ConversionsService {
     };
 
     dbStore.conversions.push(conversion);
+    await awaitPersist(conversion);
 
     let commission: any = null;
     if (dto.affiliateId) {
@@ -1014,7 +743,6 @@ export class ConversionsService {
     environment: EnvironmentType = EnvironmentType.LIVE,
     query?: ListConversionsQueryDto,
   ): Promise<string> {
-    this.ensureDefaultConversions(organizationId);
 
     const res = await this.getConversionsPaginated(organizationId, environment, { ...query, limit: 1000 });
     const items = res.data;
@@ -1227,6 +955,7 @@ export class ConversionsService {
       commission,
     };
 
+    const pendingPersist: Promise<unknown>[] = [awaitPersist(conversion)];
     if (idempotencyKey) {
       const ikRecord: IdempotencyKeyEntity = {
         id: uuidv4(),
@@ -1241,8 +970,10 @@ export class ConversionsService {
         createdAt: new Date(),
       };
       dbStore.idempotencyKeys.push(ikRecord);
+      pendingPersist.push(awaitPersist(ikRecord));
     }
 
+    await Promise.all(pendingPersist);
     return responsePayload;
   }
 
@@ -1316,6 +1047,7 @@ export class ConversionsService {
     });
 
     const commission = dbStore.commissions.find((c) => c.conversionId === conversion.id);
+    const pendingPersist: Promise<unknown>[] = [awaitPersist(conversion)];
     let commissionReversedAmount = 0;
     if (commission && conversion.affiliateId) {
       const proportionalReversal = Math.round((commission.commissionAmount * refundAmount) / conversion.amount);
@@ -1326,6 +1058,7 @@ export class ConversionsService {
         commission.status = commission.reversedAmount >= commission.commissionAmount
           ? ConversionStatus.REFUNDED
           : ConversionStatus.PARTIALLY_REFUNDED;
+        pendingPersist.push(awaitPersist(commission));
 
         await this.ledgerService.recordTransaction(
           organizationId,
@@ -1370,13 +1103,14 @@ export class ConversionsService {
         createdAt: new Date(),
       };
       dbStore.idempotencyKeys.push(ikRecord);
+      pendingPersist.push(awaitPersist(ikRecord));
     }
 
+    await Promise.all(pendingPersist);
     return responsePayload;
   }
 
   async findAll(organizationId: string, environment: EnvironmentType | 'test' | 'live' = EnvironmentType.LIVE, programId?: string) {
-    this.ensureDefaultConversions(organizationId);
     const currentEnvironment = EnvironmentUtils.normalizeEnvironment(environment);
     const conversions = dbStore.conversions.filter((c) =>
       c.organizationId === organizationId &&
@@ -1387,7 +1121,6 @@ export class ConversionsService {
   }
 
   async findOne(organizationId: string, id: string, environment: EnvironmentType | 'test' | 'live' = EnvironmentType.LIVE) {
-    this.ensureDefaultConversions(organizationId);
     const currentEnvironment = EnvironmentUtils.normalizeEnvironment(environment);
     const conversion = dbStore.conversions.find(
       (c) =>

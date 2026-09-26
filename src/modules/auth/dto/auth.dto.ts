@@ -46,11 +46,11 @@ export class RegisterDto {
 }
 
 export class LoginDto {
-  @ApiProperty({ example: 'admin@partneriq.demo' })
+  @ApiProperty({ example: 'you@company.com' })
   @IsEmail()
   email!: string;
 
-  @ApiProperty({ example: 'PartnerIQ@123' })
+  @ApiProperty({ example: 'your-account-password' })
   @IsString()
   password!: string;
 }
@@ -63,7 +63,7 @@ export class RefreshTokenDto {
 }
 
 export class ChangePasswordDto {
-  @ApiProperty({ example: 'PartnerIQ@123' })
+  @ApiProperty({ example: 'your-current-password' })
   @IsString()
   currentPassword!: string;
 
@@ -123,7 +123,7 @@ export class MfaChallengeDto {
   @IsEmail()
   email!: string;
 
-  @ApiProperty({ example: 'PartnerIQ@123' })
+  @ApiProperty({ example: 'your-account-password' })
   @IsString()
   password!: string;
 }
@@ -156,7 +156,7 @@ export class MfaSetupVerifyDto {
 }
 
 export class MfaDisableDto {
-  @ApiProperty({ example: 'PartnerIQ@123' })
+  @ApiProperty({ example: 'your-account-password' })
   @IsString()
   password!: string;
 
