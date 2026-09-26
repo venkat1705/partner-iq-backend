@@ -1,8 +1,15 @@
-version: '3.8'
-
 # All secrets are read from environment variables (e.g. via a local, git-ignored .env file
 # or your orchestrator's secret store) — never hardcode credentials in this file. See
 # docker-compose.env.example for the required variable names.
+#
+# MySQL and Redis are NOT managed by this file — they live in the separate
+# ~/partneriq/infrastructure project (partneriq-mysql / partneriq-redis on the
+# partneriq-internal network). Start that project first:
+#   cd ~/partneriq/infrastructure && docker compose up -d
+# then start this one. DATABASE_PASSWORD / REDIS_PASSWORD below must be set to
+# the exact same values as MYSQL_PASSWORD / REDIS_PASSWORD in
+# infrastructure/.env — these are two separate .env files that both need to
+# agree on the same credentials.
 
 services:
   partneriq-api:
@@ -16,11 +23,12 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=5000
-      - DATABASE_HOST=postgres
-      - DATABASE_PORT=5432
-      - DATABASE_NAME=${POSTGRES_DB:?POSTGRES_DB is required}
-      - DATABASE_USER=${POSTGRES_USER:?POSTGRES_USER is required}
-      - DATABASE_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      - APP_URL=${APP_URL:?APP_URL is required}
+      - DATABASE_HOST=mysql
+      - DATABASE_PORT=3306
+      - DATABASE_NAME=${DATABASE_NAME:?DATABASE_NAME is required}
+      - DATABASE_USER=${DATABASE_USER:?DATABASE_USER is required}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD:?DATABASE_PASSWORD is required}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD is required}
@@ -28,13 +36,16 @@ services:
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
       - INTERNAL_OPS_KEY=${INTERNAL_OPS_KEY:?INTERNAL_OPS_KEY is required}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+    networks:
+      - partneriq-internal
     restart: unless-stopped
 
+  # affiliate-backend: references a sibling project (../affiliate-backend) not
+  # present in this checkout, so it isn't verified here — its own database
+  # engine/config hasn't been inspected. Left as-is below except for the
+  # dangling `postgres`/`redis` service references, which no longer exist in
+  # this file; update its DATABASE_HOST/REDIS_HOST and confirm its actual DB
+  # type before relying on this service.
   affiliate-backend:
     build:
       context: ../affiliate-backend
@@ -48,22 +59,19 @@ services:
       - PORT=3006
       - APP_URL=http://localhost:3006
       - AFFILIATE_PORTAL_URL=http://localhost:3005
-      - DATABASE_HOST=postgres
-      - DATABASE_PORT=5432
-      - DATABASE_NAME=${POSTGRES_DB:?POSTGRES_DB is required}
-      - DATABASE_USER=${POSTGRES_USER:?POSTGRES_USER is required}
-      - DATABASE_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      - DATABASE_HOST=mysql
+      - DATABASE_PORT=3306
+      - DATABASE_NAME=${DATABASE_NAME:?DATABASE_NAME is required}
+      - DATABASE_USER=${DATABASE_USER:?DATABASE_USER is required}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD:?DATABASE_PASSWORD is required}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+    networks:
+      - partneriq-internal
     restart: unless-stopped
 
   partneriq-worker:
@@ -75,60 +83,26 @@ services:
     command: ["node", "dist/server.js", "--worker"]
     environment:
       - NODE_ENV=production
-      - DATABASE_HOST=postgres
-      - DATABASE_NAME=${POSTGRES_DB:?POSTGRES_DB is required}
-      - DATABASE_USER=${POSTGRES_USER:?POSTGRES_USER is required}
-      - DATABASE_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      - DATABASE_HOST=mysql
+      - DATABASE_PORT=3306
+      - DATABASE_NAME=${DATABASE_NAME:?DATABASE_NAME is required}
+      - DATABASE_USER=${DATABASE_USER:?DATABASE_USER is required}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD:?DATABASE_PASSWORD is required}
       - REDIS_HOST=redis
+      - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+    networks:
+      - partneriq-internal
     restart: unless-stopped
 
-  postgres:
-    image: postgres:16-alpine
-    container_name: partneriq-postgres
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
-      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
-    ports:
-      # Bind to loopback only — the app containers reach Postgres over the internal Docker
-      # network by service name, so this port never needs to be reachable from the LAN/internet.
-      - "127.0.0.1:5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
-  redis:
-    image: redis:7-alpine
-    container_name: partneriq-redis
-    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"]
-    ports:
-      # Bind to loopback only — see postgres note above. Redis has no auth by default, so an
-      # internet/LAN-reachable port with no password (the previous config) lets any network
-      # peer read cache data and manipulate queues.
-      - "127.0.0.1:6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
-volumes:
-  postgres_data:
-  redis_data:
+networks:
+  # Created by the infrastructure project, not this one. `external: true`
+  # tells Compose to join the existing network rather than create it — it
+  # must already exist (i.e. infrastructure's `docker compose up -d` must
+  # have run first) or `docker compose up` here will fail.
+  partneriq-internal:
+    external: true
+    name: partneriq-internal
