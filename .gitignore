@@ -6,3 +6,13 @@ coverage/
 *.log
 .env*
 !.env.example
+!.env.test.example
+
+# typescript incremental build info
+*.tsbuildinfo
+
+# editor / OS junk
+.vscode/*
+!.vscode/extensions.json
+.idea/
+Thumbs.db
