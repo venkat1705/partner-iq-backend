@@ -7,14 +7,14 @@ export default {
         '^.+\\.tsx?$': [
           'ts-jest',
           {
-            useESM: true,
             tsconfig: '<rootDir>/tsconfig.backend.json',
           },
         ],
       },
-      extensionsToTreatAsEsm: ['.ts'],
+      // uuid ships ESM-only; see test/shims/uuid.cjs for why this is needed
+      // only under Jest, not in the real app.
       moduleNameMapper: {
-        '^(\\.{1,2}/.*)\\.js$': '$1',
+        '^uuid$': '<rootDir>/test/shims/uuid.cjs',
       },
       setupFiles: ['<rootDir>/test/setup-env-unit.ts'],
       setupFilesAfterEnv: ['<rootDir>/test/setup-unit.ts'],
@@ -26,14 +26,12 @@ export default {
         '^.+\\.tsx?$': [
           'ts-jest',
           {
-            useESM: true,
             tsconfig: '<rootDir>/tsconfig.backend.json',
           },
         ],
       },
-      extensionsToTreatAsEsm: ['.ts'],
       moduleNameMapper: {
-        '^(\\.{1,2}/.*)\\.js$': '$1',
+        '^uuid$': '<rootDir>/test/shims/uuid.cjs',
       },
       globalSetup: '<rootDir>/test/global-setup.ts',
       globalTeardown: '<rootDir>/test/global-teardown.ts',

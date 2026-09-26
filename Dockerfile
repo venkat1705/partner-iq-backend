@@ -19,8 +19,9 @@ FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# tsc compiles ESM output (package.json has "type": "module") to dist/server.js.
-RUN npm run build:server
+# Plain tsc, CommonJS output (package.json has no "type" field, so .js is
+# CommonJS by default) — no ts-node/experimental flags needed at runtime.
+RUN npm run build
 
 # ---- Runtime ------------------------------------------------------------------
 FROM base AS runner
@@ -39,4 +40,8 @@ USER nestjs
 EXPOSE 5000
 ENV PORT=5000
 
-CMD ["node", "dist/server.js"]
+# The real entrypoint is src/main.ts (compiled to dist/src/main.js) — not the
+# root server.ts, which is a separate, older, unused duplicate bootstrap that
+# happens to still compile alongside it. --worker (see docker-compose.yml)
+# is read by main.ts itself to switch into worker mode on the same file.
+CMD ["node", "dist/src/main.js"]

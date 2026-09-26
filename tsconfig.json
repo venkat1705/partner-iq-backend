@@ -4,15 +4,15 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "useDefineForClassFields": false,
-    "module": "ESNext",
+    "module": "CommonJS",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
-    "moduleResolution": "node",
+    "moduleResolution": "Node",
     "isolatedModules": false,
     "allowJs": false,
     "esModuleInterop": true,
     "noEmit": true
   },
   "include": ["api/**/*.ts", "src/**/*.ts", "server.ts"],
-  "exclude": ["dist", "node_modules", "src/**/*.tsx"]
+  "exclude": ["dist", "node_modules", "src/**/*.tsx", "src/tests/**"]
 }

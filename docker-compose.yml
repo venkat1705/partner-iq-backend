@@ -82,7 +82,7 @@ services:
       dockerfile: Dockerfile
     container_name: partneriq-worker
     user: "node"
-    command: ["node", "dist/server.js", "--worker"]
+    command: ["node", "dist/src/main.js", "--worker"]
     environment:
       - NODE_ENV=production
       - DATABASE_HOST=mysql

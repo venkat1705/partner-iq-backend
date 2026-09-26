@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import path from 'path';
 import dotenv from 'dotenv';
 import { DataSource } from 'typeorm';
 import {
@@ -390,7 +391,13 @@ export const AppDataSource = new DataSource({
     GovernanceEmergencyControl,
     GovernanceViolation,
   ],
-  migrations: ['src/database/migrations/*.ts'],
+  // __dirname-relative so this resolves correctly whether the app is running
+  // compiled (dist/src/database -> dist/src/database/migrations/*.js) or via
+  // tsx in dev (src/database -> src/database/migrations/*.ts). A hardcoded
+  // 'src/database/migrations/*.ts' path only ever worked because the old
+  // setup kept a ts-node/esm loader registered for the whole process, so it
+  // could require() raw .ts files even in "production".
+  migrations: [path.join(__dirname, 'migrations', '*.{js,ts}')],
   migrationsRun: false,
 });
 

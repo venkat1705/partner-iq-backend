@@ -17,7 +17,7 @@ import { RoleType } from '../../common/enums/rbac';
 import { PERMISSIONS, BUILT_IN_ROLES } from '../../common/constants/permission-catalog';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
+import { pathToFileURL } from 'url';
 
 /**
  * Seeds ONLY essential system definitions (RBAC permissions, built-in system roles, email/document templates, settings).
@@ -248,7 +248,7 @@ async function seedEmailDesignSettings(emailDesignSettingsRepo: any) {
 }
 
 async function seedEmailDesignDefaults(emailDesignTemplatesRepo: any) {
-  const seedDir = path.dirname(fileURLToPath(import.meta.url));
+  const seedDir = __dirname;
   const registryUrl = pathToFileURL(
     path.resolve(seedDir, '..', '..', '..', '..', 'email-design', 'src', 'emails', 'templates', 'registry.ts'),
   ).href;
@@ -341,9 +341,6 @@ async function seedDefaultBlogs(blogPostsRepo: any) {
 
 // `npm run seed` executes this file directly and applies only the
 // production-safe system defaults (RBAC, templates, integration catalog, blogs).
-//
-// pathToFileURL() normalizes both sides the same way, so this guard works on
-// Windows as well as macOS/Linux.
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (require.main === module) {
   seedSystemDefaults().catch(console.error);
 }
