@@ -40,39 +40,41 @@ services:
       - partneriq-internal
     restart: unless-stopped
 
-  # affiliate-backend: references a sibling project (../affiliate-backend) not
-  # present in this checkout, so it isn't verified here — its own database
-  # engine/config hasn't been inspected. Left as-is below except for the
-  # dangling `postgres`/`redis` service references, which no longer exist in
-  # this file; update its DATABASE_HOST/REDIS_HOST and confirm its actual DB
-  # type before relying on this service.
-  affiliate-backend:
-    build:
-      context: ../affiliate-backend
-      dockerfile: Dockerfile
-    container_name: partneriq-affiliate-backend
-    user: "node"
-    ports:
-      - "3006:3006"
-    environment:
-      - NODE_ENV=production
-      - PORT=3006
-      - APP_URL=http://localhost:3006
-      - AFFILIATE_PORTAL_URL=http://localhost:3005
-      - DATABASE_HOST=mysql
-      - DATABASE_PORT=3306
-      - DATABASE_NAME=${DATABASE_NAME:?DATABASE_NAME is required}
-      - DATABASE_USER=${DATABASE_USER:?DATABASE_USER is required}
-      - DATABASE_PASSWORD=${DATABASE_PASSWORD:?DATABASE_PASSWORD is required}
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD is required}
-      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}
-      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
-    networks:
-      - partneriq-internal
-    restart: unless-stopped
+  # affiliate-backend: disabled — references a sibling project
+  # (../affiliate-backend) that isn't cloned on this server, so
+  # `docker compose build`/`up` fails outright with it enabled. Its database
+  # engine/config also hasn't been verified. Clone ../affiliate-backend
+  # alongside this repo, confirm its actual DB type, and uncomment this block
+  # (fixing DATABASE_HOST/REDIS_HOST below if needed) when you're ready to
+  # run it.
+  #
+  # affiliate-backend:
+  #   build:
+  #     context: ../affiliate-backend
+  #     dockerfile: Dockerfile
+  #   container_name: partneriq-affiliate-backend
+  #   user: "node"
+  #   ports:
+  #     - "3006:3006"
+  #   environment:
+  #     - NODE_ENV=production
+  #     - PORT=3006
+  #     - APP_URL=http://localhost:3006
+  #     - AFFILIATE_PORTAL_URL=http://localhost:3005
+  #     - DATABASE_HOST=mysql
+  #     - DATABASE_PORT=3306
+  #     - DATABASE_NAME=${DATABASE_NAME:?DATABASE_NAME is required}
+  #     - DATABASE_USER=${DATABASE_USER:?DATABASE_USER is required}
+  #     - DATABASE_PASSWORD=${DATABASE_PASSWORD:?DATABASE_PASSWORD is required}
+  #     - REDIS_HOST=redis
+  #     - REDIS_PORT=6379
+  #     - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+  #     - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}
+  #     - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
+  #     - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
+  #   networks:
+  #     - partneriq-internal
+  #   restart: unless-stopped
 
   partneriq-worker:
     build:
