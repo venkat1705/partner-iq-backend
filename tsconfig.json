@@ -11,6 +11,7 @@
     "isolatedModules": false,
     "allowJs": false,
     "esModuleInterop": true,
+    "resolveJsonModule": true,
     "noEmit": true
   },
   "include": ["api/**/*.ts", "src/**/*.ts", "server.ts"],

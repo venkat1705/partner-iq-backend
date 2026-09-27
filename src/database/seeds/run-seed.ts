@@ -16,8 +16,22 @@ import {
 import { RoleType } from '../../common/enums/rbac';
 import { PERMISSIONS, BUILT_IN_ROLES } from '../../common/constants/permission-catalog';
 import { v4 as uuidv4 } from 'uuid';
-import path from 'path';
-import { pathToFileURL } from 'url';
+import EMAIL_TEMPLATE_SEEDS from './email-templates.generated.json';
+
+interface EmailTemplateSeed {
+  id: string;
+  name: string;
+  category: string;
+  description?: string;
+  tags?: string[];
+  defaultSubject?: string;
+  defaultPreheader?: string;
+  variables?: unknown[];
+  defaultData?: Record<string, unknown>;
+  samplePresets?: unknown;
+  bodyTemplate?: string;
+  securityNotice?: string;
+}
 
 /**
  * Seeds ONLY essential system definitions (RBAC permissions, built-in system roles, email/document templates, settings).
@@ -248,57 +262,57 @@ async function seedEmailDesignSettings(emailDesignSettingsRepo: any) {
 }
 
 async function seedEmailDesignDefaults(emailDesignTemplatesRepo: any) {
-  const seedDir = __dirname;
-  const registryUrl = pathToFileURL(
-    path.resolve(seedDir, '..', '..', '..', '..', 'email-design', 'src', 'emails', 'templates', 'registry.ts'),
-  ).href;
+  // Bundled inside the backend repo (generated from the email-design project's template
+  // registry — regenerate with `npx tsx scripts/generate-email-template-seed.mjs` whenever a
+  // template changes there) so seeding works the same in
+  // every environment, including a Docker/AWS container that never has the email-design
+  // project's source checked out alongside this one. Previously this dynamically
+  // `import()`ed ../../../../email-design/src/emails/templates/registry.ts by relative
+  // filesystem path, which only resolved when that sibling project happened to exist on
+  // disk (i.e. local dev) — in Docker the import always threw, was swallowed by a
+  // try/catch, and every design (welcome emails, payout notices, demo booking
+  // confirmations, etc.) silently fell back to the generic CODE_REGISTRY_FALLBACK body.
+  const defaults: EmailTemplateSeed[] = EMAIL_TEMPLATE_SEEDS as EmailTemplateSeed[];
+  let savedCount = 0;
 
-  try {
-    const registry = await import(registryUrl);
-    const defaults = Array.isArray(registry.ALL_TEMPLATES) ? registry.ALL_TEMPLATES : [];
-    let savedCount = 0;
+  for (const template of defaults) {
+    if (!template?.id) continue;
 
-    for (const template of defaults) {
-      if (!template?.id) continue;
+    const existing = await emailDesignTemplatesRepo.findOne({ where: { templateId: template.id } });
+    if (existing?.isCustom || existing?.isEdited) continue;
 
-      const existing = await emailDesignTemplatesRepo.findOne({ where: { templateId: template.id } });
-      if (existing?.isCustom || existing?.isEdited) continue;
+    const payload = {
+      id: template.id,
+      name: template.name,
+      category: template.category,
+      description: template.description,
+      tags: template.tags || [],
+      defaultSubject: template.defaultSubject,
+      defaultPreheader: template.defaultPreheader,
+      variables: template.variables || [],
+      defaultData: template.defaultData || {},
+      samplePresets: template.samplePresets,
+      bodyTemplate: template.bodyTemplate || '',
+      securityNotice: template.securityNotice,
+      isCustom: false,
+      isEdited: false,
+      updatedAt: new Date().toISOString(),
+    };
 
-      const payload = {
-        id: template.id,
-        name: template.name,
-        category: template.category,
-        description: template.description,
-        tags: template.tags || [],
-        defaultSubject: template.defaultSubject,
-        defaultPreheader: template.defaultPreheader,
-        variables: template.variables || [],
-        defaultData: template.defaultData || {},
-        samplePresets: template.samplePresets,
-        bodyTemplate: typeof template.renderBody === 'function' ? template.renderBody(template.defaultData || {}) : '',
-        securityNotice: template.securityNotice,
-        isCustom: false,
-        isEdited: false,
-        updatedAt: new Date().toISOString(),
-      };
+    await emailDesignTemplatesRepo.save(emailDesignTemplatesRepo.create({
+      ...(existing || { id: uuidv4() }),
+      templateId: template.id,
+      name: template.name,
+      category: template.category,
+      isCustom: false,
+      isEdited: false,
+      payload,
+    }));
+    savedCount += 1;
+  }
 
-      await emailDesignTemplatesRepo.save(emailDesignTemplatesRepo.create({
-        ...(existing || { id: uuidv4() }),
-        templateId: template.id,
-        name: template.name,
-        category: template.category,
-        isCustom: false,
-        isEdited: false,
-        payload,
-      }));
-      savedCount += 1;
-    }
-
-    if (savedCount > 0) {
-      console.log(`Seeded ${savedCount} email design default templates`);
-    }
-  } catch (error) {
-    console.warn('Unable to seed email design defaults from registry:', error instanceof Error ? error.message : error);
+  if (savedCount > 0) {
+    console.log(`Seeded ${savedCount} email design default templates`);
   }
 }
 
@@ -341,6 +355,13 @@ async function seedDefaultBlogs(blogPostsRepo: any) {
 
 // `npm run seed` executes this file directly and applies only the
 // production-safe system defaults (RBAC, templates, integration catalog, blogs).
+// Exits explicitly on completion — otherwise the open TypeORM connection pool keeps
+// the process (and this command) running forever.
 if (require.main === module) {
-  seedSystemDefaults().catch(console.error);
+  seedSystemDefaults()
+    .then(() => process.exit(0))
+    .catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
 }
