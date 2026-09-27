@@ -11,6 +11,93 @@
 # infrastructure/.env — these are two separate .env files that both need to
 # agree on the same credentials.
 
+x-partneriq-env: &partneriq-env
+  NODE_ENV: production
+  APP_URL: ${APP_URL:?APP_URL is required}
+  FRONTEND_URL: ${FRONTEND_URL:-https://app.partneriq.in}
+  AFFILIATE_FRONTEND_URL: ${AFFILIATE_FRONTEND_URL:-https://affiliates.partneriq.in}
+
+  # Database (host/port are fixed to the infrastructure project's service names)
+  DATABASE_HOST: mysql
+  DATABASE_PORT: 3306
+  DATABASE_NAME: ${DATABASE_NAME:?DATABASE_NAME is required}
+  DATABASE_USER: ${DATABASE_USER:?DATABASE_USER is required}
+  DATABASE_PASSWORD: ${DATABASE_PASSWORD:?DATABASE_PASSWORD is required}
+
+  # Redis (host/port are fixed to the infrastructure project's service names)
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+  REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+
+  # Auth secrets
+  JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}
+  JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-30m}
+  JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
+  JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-7d}
+  PASSWORD_RESET_TTL: ${PASSWORD_RESET_TTL:-15m}
+  EMAIL_VERIFICATION_TTL: ${EMAIL_VERIFICATION_TTL:-24h}
+  ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
+  INTERNAL_OPS_KEY: ${INTERNAL_OPS_KEY:?INTERNAL_OPS_KEY is required}
+  FRAUD_IP_HASH_SECRET: ${FRAUD_IP_HASH_SECRET:-}
+
+  # CORS / cookies
+  CORS_ORIGINS: ${CORS_ORIGINS:-https://app.partneriq.in,https://affiliates.partneriq.in,https://*.partneriq.in}
+  AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-true}
+  AUTH_COOKIE_SAME_SITE: ${AUTH_COOKIE_SAME_SITE:-lax}
+  TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}
+
+  # Rate limiting
+  RATE_LIMIT_LOGIN: ${RATE_LIMIT_LOGIN:-5}
+  RATE_LIMIT_API: ${RATE_LIMIT_API:-100}
+  RATE_LIMIT_TRACKING: ${RATE_LIMIT_TRACKING:-1000}
+
+  # Transactional email (Brevo)
+  BREVO_API_KEY: ${BREVO_API_KEY:-}
+  BREVO_SENDER_EMAIL: ${BREVO_SENDER_EMAIL:-}
+  BREVO_SENDER_NAME: ${BREVO_SENDER_NAME:-PartnerIQ}
+
+  # Billing (Razorpay)
+  PAYMENT_DEFAULT_PROVIDER: ${PAYMENT_DEFAULT_PROVIDER:-RAZORPAY}
+  RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+  RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+  RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
+  RAZORPAY_STARTER_MONTHLY_PLAN_ID: ${RAZORPAY_STARTER_MONTHLY_PLAN_ID:-}
+  RAZORPAY_STARTER_YEARLY_PLAN_ID: ${RAZORPAY_STARTER_YEARLY_PLAN_ID:-}
+  RAZORPAY_PRO_MONTHLY_PLAN_ID: ${RAZORPAY_PRO_MONTHLY_PLAN_ID:-}
+  RAZORPAY_PRO_YEARLY_PLAN_ID: ${RAZORPAY_PRO_YEARLY_PLAN_ID:-}
+  RAZORPAY_BUSINESS_MONTHLY_PLAN_ID: ${RAZORPAY_BUSINESS_MONTHLY_PLAN_ID:-}
+  RAZORPAY_BUSINESS_YEARLY_PLAN_ID: ${RAZORPAY_BUSINESS_YEARLY_PLAN_ID:-}
+  BILLING_GRACE_PERIOD_DAYS: ${BILLING_GRACE_PERIOD_DAYS:-7}
+
+  # Asset uploads (Cloudinary)
+  CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
+  CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
+  CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
+  CLOUDINARY_UPLOAD_FOLDER: ${CLOUDINARY_UPLOAD_FOLDER:-partneriq}
+
+  # Google OAuth — organization workspace login
+  GOOGLE_OAUTH_ENABLED: ${GOOGLE_OAUTH_ENABLED:-false}
+  GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+  GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+  GOOGLE_OAUTH_REDIRECT_URI: ${GOOGLE_OAUTH_REDIRECT_URI:-https://api.partneriq.in/api/v1/auth/google/callback}
+  GOOGLE_OAUTH_STATE_TTL_SECONDS: ${GOOGLE_OAUTH_STATE_TTL_SECONDS:-600}
+
+  # Google OAuth — affiliate portal login
+  GOOGLE_AFFILIATE_CLIENT_ID: ${GOOGLE_AFFILIATE_CLIENT_ID:-}
+  GOOGLE_AFFILIATE_CLIENT_SECRET: ${GOOGLE_AFFILIATE_CLIENT_SECRET:-}
+  GOOGLE_AFFILIATE_REDIRECT_URI: ${GOOGLE_AFFILIATE_REDIRECT_URI:-https://api.partneriq.in/api/v1/affiliate/auth/google/callback}
+
+  # Google Calendar — demo booking Meet links (OAuth client only; tokens live in the DB)
+  GOOGLE_CALENDAR_CLIENT_ID: ${GOOGLE_CALENDAR_CLIENT_ID:-}
+  GOOGLE_CALENDAR_CLIENT_SECRET: ${GOOGLE_CALENDAR_CLIENT_SECRET:-}
+  GOOGLE_CALENDAR_REDIRECT_URI: ${GOOGLE_CALENDAR_REDIRECT_URI:-https://api.partneriq.in/api/v1/demo-bookings/google-calendar/oauth/callback}
+  GOOGLE_CALENDAR_ID: ${GOOGLE_CALENDAR_ID:-primary}
+  DEMO_BOOKING_ADMIN_EMAIL: ${DEMO_BOOKING_ADMIN_EMAIL:-}
+
+  # Misc
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+  ENABLE_SWAGGER: ${ENABLE_SWAGGER:-false}
+
 services:
   partneriq-api:
     build:
@@ -21,21 +108,8 @@ services:
     ports:
       - "5000:5000"
     environment:
-      - NODE_ENV=production
-      - PORT=5000
-      - APP_URL=${APP_URL:?APP_URL is required}
-      - DATABASE_HOST=mysql
-      - DATABASE_PORT=3306
-      - DATABASE_NAME=${DATABASE_NAME:?DATABASE_NAME is required}
-      - DATABASE_USER=${DATABASE_USER:?DATABASE_USER is required}
-      - DATABASE_PASSWORD=${DATABASE_PASSWORD:?DATABASE_PASSWORD is required}
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD is required}
-      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}
-      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
-      - INTERNAL_OPS_KEY=${INTERNAL_OPS_KEY:?INTERNAL_OPS_KEY is required}
+      <<: *partneriq-env
+      PORT: 5000
     networks:
       - partneriq-internal
     restart: unless-stopped
@@ -84,18 +158,7 @@ services:
     user: "node"
     command: ["node", "dist/src/main.js", "--worker"]
     environment:
-      - NODE_ENV=production
-      - DATABASE_HOST=mysql
-      - DATABASE_PORT=3306
-      - DATABASE_NAME=${DATABASE_NAME:?DATABASE_NAME is required}
-      - DATABASE_USER=${DATABASE_USER:?DATABASE_USER is required}
-      - DATABASE_PASSWORD=${DATABASE_PASSWORD:?DATABASE_PASSWORD is required}
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD is required}
-      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}
-      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
+      <<: *partneriq-env
     networks:
       - partneriq-internal
     restart: unless-stopped

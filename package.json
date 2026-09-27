@@ -6,7 +6,7 @@
     "node": "20.x || 22.x"
   },
   "scripts": {
-    "dev": "tsx watch src/main.ts",
+    "dev": "node --watch --require ts-node/register src/main.ts",
     "build": "npm run clean && tsc --project tsconfig.backend.json",
     "start": "node dist/src/main.js",
     "clean": "rm -rf dist",
@@ -20,9 +20,6 @@
     "test": "tsx src/tests/run-tests.ts",
     "test:unit": "jest --selectProjects unit",
     "test:integration": "jest --selectProjects integration",
-    "build:node": "npm --prefix packages/partneriq-node run build",
-    "build:browser": "npm --prefix packages/partneriq-browser run build",
-    "build:sdks": "npm run build:node && npm run build:browser",
     "test:sdk": "tsx src/tests/sdk-test.ts",
     "test:security": "tsx src/tests/security-audit.test.ts",
     "test:onboarding": "tsx src/tests/onboarding-duplicate-org.test.ts",
