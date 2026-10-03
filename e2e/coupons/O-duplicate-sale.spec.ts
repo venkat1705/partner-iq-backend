@@ -8,6 +8,7 @@ import { newCoupon, usageCount } from '../lib/sales';
 const proof = new Proof('O');
 const f = F();
 const P = `E2E-CPN-${f.run}-O`;
+const RUN = Date.now().toString(36); // idempotency keys live 24 h: never reuse one across runs
 const O = `${f.prefix}-O-`;
 test.afterAll(async () => closeDb());
 
@@ -27,8 +28,8 @@ test('O1 same order twice (sequential), with and without Idempotency-Key', async
   const r2 = await recordSale(f.orgA.apiKey, body);
   proof.http('POST', '/conversions', r1, body);
   proof.http('POST', '/conversions (again)', r2, body);
-  const k1 = await recordSale(f.orgA.apiKey, { ...body, externalId: `${O}idem` }, { 'Idempotency-Key': `${O}key` });
-  const k2 = await recordSale(f.orgA.apiKey, { ...body, externalId: `${O}idem` }, { 'Idempotency-Key': `${O}key` });
+  const k1 = await recordSale(f.orgA.apiKey, { ...body, externalId: `${O}idem` }, { 'Idempotency-Key': `${O}key-${RUN}` });
+  const k2 = await recordSale(f.orgA.apiKey, { ...body, externalId: `${O}idem` }, { 'Idempotency-Key': `${O}key-${RUN}` });
   proof.http('POST', '/conversions Idempotency-Key', k1);
   proof.http('POST', '/conversions Idempotency-Key (replay)', k2);
   await new Promise((r) => setTimeout(r, 400));

@@ -42,12 +42,15 @@ test('U every coupon route', async () => {
   for (const [m, p, body] of routes) {
     const r = await api(m, p, { token: b.token, body });
     const inOrgBPath = p.startsWith(orgPath(f.orgB.id));
-    const s = JSON.stringify(r.body);
+    // the error envelope echoes the requested path (which the caller already knows) — not a leak
+    const { path: _echo, ...rest } = (r.body && typeof r.body === 'object' ? r.body : { body: r.body }) as any;
+    const s = JSON.stringify(rest);
     const leak = s.includes(target.id) || s.includes(A.id) || s.includes(A.affiliates[0].email);
     proof.http(m, p, r, body);
     table.push(`| ${m} | ${p.replace(A.id, '<orgA>').replace(f.orgB.id, '<orgB>').replace(target.id, '<couponA>')} | ${r.status} | ${leak} |`);
     if (!inOrgBPath) {
-      expect([403, 404], `${m} ${p}`).toContain(r.status);
+      // 429 (rate limit on code checks, shared with S in the same run) is also a refusal with no data
+      expect([403, 404, 429], `${m} ${p}`).toContain(r.status);
     } else if (p.endsWith('/coupons') && m === 'POST') {
       // creating the same code in Org B is legal (codes are unique per org) — clean it up below
     } else if (p.includes(target.id)) {

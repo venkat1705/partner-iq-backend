@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { api } from '../lib/api';
 import { F, orgPath } from '../lib/coupons';
-import { closeDb } from '../lib/db';
+import { closeDb, sql } from '../lib/db';
 import { Proof } from '../lib/proof';
 import { newCoupon, sale } from '../lib/sales';
 import { as } from '../lib/session';
@@ -41,15 +41,21 @@ test('J1 use under A1, move to A2, use again; analytics + both portals', async (
   const byAff = await api('GET', orgPath(f.orgA.id, '/analytics/by-affiliate'), { token: owner.token });
   proof.http('GET', orgPath(f.orgA.id, '/analytics/by-affiliate'), byAff);
   const row = (id: string) => byAff.data.find((x: any) => x.affiliateId === id);
-  // own math: A1 one redemption of ₹900 paid (+₹100 discount) → gross ₹1000; A2 ₹450 paid → gross ₹500
-  proof.check('by-affiliate A1 redemptions (history kept)', row(A1.id)?.redemptions, 1);
-  proof.check('by-affiliate A2 redemptions', row(A2.id)?.redemptions, 1);
-  proof.check('by-affiliate A1 commission ₹', row(A1.id)?.commission, 67.5);
-  proof.check('by-affiliate A2 commission ₹', row(A2.id)?.commission, 33.75);
-  expect(row(A1.id)?.redemptions).toBe(1);
-  expect(row(A2.id)?.redemptions).toBe(1);
-  expect(row(A1.id)?.commission).toBe(67.5);
-  expect(row(A2.id)?.commission).toBe(33.75);
+  // this coupon's own history, from SQL: sale 1 credited A1 (7.5 % of ₹900 = ₹67.50), sale 2 credited A2 (₹33.75)
+  const mine = await sql(`SELECT r.affiliateId, COUNT(*) n, SUM(cm.commissionAmount - COALESCE(cm.reversedAmount,0)) earned
+      FROM organization_coupon_redemptions r JOIN commissions cm ON cm.conversionId = r.conversionId WHERE r.couponId=? GROUP BY r.affiliateId ORDER BY r.affiliateId`, [c.id]);
+  proof.sql(`SELECT affiliateId, COUNT(*), SUM(commission) FROM organization_coupon_redemptions JOIN commissions ... WHERE couponId='${c.id}' GROUP BY affiliateId`, mine);
+  const want = Object.fromEntries(mine.map((m: any) => [m.affiliateId, [Number(m.n), Number(m.earned)]]));
+  proof.check('moved coupon: A1 keeps sale 1', want[A1.id], [1, 6750]);
+  proof.check('moved coupon: A2 has sale 2', want[A2.id], [1, 3375]);
+  expect(want[A1.id]).toEqual([1, 6750]);
+  expect(want[A2.id]).toEqual([1, 3375]);
+  // by-affiliate analytics (all coupons) must equal SQL totals per credited affiliate
+  for (const aff of [A1, A2]) {
+    const tot = (await sql(`SELECT COUNT(*) n FROM organization_coupon_redemptions WHERE organizationId=? AND affiliateId=?`, [f.orgA.id, aff.id]))[0];
+    proof.check(`by-affiliate redemptions ${aff.displayName}`, row(aff.id)?.redemptions, Number(tot.n));
+    expect(row(aff.id)?.redemptions).toBe(Number(tot.n));
+  }
 
   for (const [role, expectHas] of [['AFFILIATE_1', false], ['AFFILIATE_2', true]] as const) {
     const s = await as(role);

@@ -13,6 +13,7 @@ import { as } from '../lib/session';
 const proof = new Proof('T');
 const f = F();
 const P = `E2E-CPN-${f.run}-T`;
+const RUN = Date.now().toString(36); // idempotency keys live 24 h: never reuse one across runs
 const O = `${f.prefix}-T-`;
 test.afterAll(async () => closeDb());
 
@@ -48,9 +49,9 @@ test('T1 missing / malformed / revoked / wrong-org keys and cross-org coupon', a
 test('T2 replay of an old request (same externalId, same Idempotency-Key, new key)', async () => {
   const c = await newCoupon(proof, f.orgA.id, { code: `${P}-R`, name: `${f.prefix} T r`, discountType: 'PERCENTAGE', discountValue: 10, affiliateIds: [f.orgA.affiliates[0].id] });
   const body = { externalId: `${O}replay`, customerExternalId: `${O}cr`, amount: 90000, currency: 'INR', metadata: { couponCode: c.code }, occurredAt: '2026-01-01T00:00:00Z' };
-  const first = await recordSale(f.orgA.apiKey, body, { 'Idempotency-Key': `${O}idem` });
-  const replaySameKey = await recordSale(f.orgA.apiKey, body, { 'Idempotency-Key': `${O}idem` });
-  const replayNewKey = await recordSale(f.orgA.apiKey, body, { 'Idempotency-Key': `${O}idem2` });
+  const first = await recordSale(f.orgA.apiKey, body, { 'Idempotency-Key': `${O}idem-${RUN}` });
+  const replaySameKey = await recordSale(f.orgA.apiKey, body, { 'Idempotency-Key': `${O}idem-${RUN}` });
+  const replayNewKey = await recordSale(f.orgA.apiKey, body, { 'Idempotency-Key': `${O}idem2-${RUN}` });
   proof.h('T2 replay');
   proof.http('POST', '/conversions', first, body);
   proof.http('POST', '/conversions (replay same key)', replaySameKey, body);

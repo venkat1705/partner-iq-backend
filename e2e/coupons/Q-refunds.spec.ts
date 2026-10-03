@@ -59,22 +59,28 @@ test('Q1 partial then full refund of a coupon sale', async () => {
 test('Q2 refund after the commission was paid out → negative balance carried', async () => {
   proof.h('Q2 refund after payout');
   const owner = await as('ORG_A_OWNER');
-  const c = await newCoupon(proof, f.orgA.id, { code: `${P}-PAID`, name: `${f.prefix} Q paid`, discountType: 'PERCENTAGE', discountValue: 10, affiliateIds: [A3.id] });
-  const s = await sale(proof, f.orgA.apiKey, f.orgA.id, { externalId: `${O}2`, customerExternalId: `${O}c2`, amount: 90000, currency: 'INR', metadata: { couponCode: c.code } }, c.id);
-  const before = await ledger(A3.id);
-  const batch = await api('POST', `/organizations/${f.orgA.id}/payouts/batches`, { token: owner.token, body: { affiliateIds: [A3.id], gateway: 'DIRECT', notes: `${f.prefix} Q` } });
-  proof.http('POST', `/organizations/${f.orgA.id}/payouts/batches`, batch, { affiliateIds: [A3.id], gateway: 'DIRECT' });
+  // a fresh affiliate per run: a negative balance from an earlier run would (correctly) offset this commission
+  const stamp = Date.now().toString(36);
+  const fresh = await api('POST', `/organizations/${f.orgA.id}/affiliates`, { token: owner.token, body: { displayName: `${f.prefix} Q payee ${stamp}`, email: `${f.prefix}-q-payee-${stamp}@example.test`, programId: f.orgA.programs[1].id } });
+  expect(fresh.status).toBe(201);
+  const Q = { id: (fresh.data.affiliate?.id || fresh.data.id) as string };
+  const c = await newCoupon(proof, f.orgA.id, { code: `${P}-PAID-${stamp}`.toUpperCase(), name: `${f.prefix} Q paid`, discountType: 'PERCENTAGE', discountValue: 10, affiliateIds: [Q.id] });
+  const s = await sale(proof, f.orgA.apiKey, f.orgA.id, { externalId: `${O}2-${stamp}`, customerExternalId: `${O}c2-${stamp}`, amount: 90000, currency: 'INR', metadata: { couponCode: c.code } }, c.id);
+  const before = await ledger(Q.id);
+  proof.check('EARNED balance after the sale (10 % of ₹900 = 9000 paise)', Number(before.find((a: any) => a.type === 'EARNED')?.balance), 9000);
+  const batch = await api('POST', `/organizations/${f.orgA.id}/payouts/batches`, { token: owner.token, body: { affiliateIds: [Q.id], gateway: 'DIRECT', notes: `${f.prefix} Q` } });
+  proof.http('POST', `/organizations/${f.orgA.id}/payouts/batches`, batch, { affiliateIds: [Q.id], gateway: 'DIRECT' });
   const bid = batch.data?.id || batch.data?.batch?.id;
   const proc = await api('POST', `/organizations/${f.orgA.id}/payouts/batches/${bid}/process`, { token: owner.token, body: { gateway: 'DIRECT' } });
   proof.http('POST', `/organizations/${f.orgA.id}/payouts/batches/${bid}/process`, proc);
   await new Promise((r) => setTimeout(r, 400));
-  const paid = await ledger(A3.id);
+  const paid = await ledger(Q.id);
   const earnedPaid = Number(paid.find((a: any) => a.type === 'EARNED')?.balance ?? NaN);
   proof.check('EARNED balance after payout', earnedPaid, 0);
   const rf = await api('POST', `/conversions/${s.conversion.id}/refund`, { apiKey: f.orgA.apiKey, body: { refundExternalId: `${O}rf3`, reason: 'after payout' } });
   proof.http('POST', `/conversions/${s.conversion.id}/refund`, rf);
   await new Promise((r) => setTimeout(r, 400));
-  const after = await ledger(A3.id);
+  const after = await ledger(Q.id);
   const earnedAfter = Number(after.find((a: any) => a.type === 'EARNED')?.balance ?? NaN);
   // own math: commission on ₹900 at 10 % = 9000 paise, fully clawed back after being paid → −9000
   proof.check('EARNED balance after refund (negative carried)', earnedAfter, -9000);
@@ -84,8 +90,8 @@ test('Q2 refund after the commission was paid out → negative balance carried',
   expect(rf.status).toBe(201);
   expect(earnedAfter).toBe(-9000);
   const list = await api('GET', `/organizations/${f.orgA.id}/coupons/analytics/by-affiliate`, { token: owner.token });
-  const row = (list.data as any[]).find((x) => x.affiliateId === A3.id);
-  proof.http('GET', `/organizations/${f.orgA.id}/coupons/analytics/by-affiliate (A3 row)`, { ...list, body: row });
-  proof.check('admin sees negative balance for A3', row?.ledgerBalance, -90);
+  const row = (list.data as any[]).find((x) => x.affiliateId === Q.id);
+  proof.http('GET', `/organizations/${f.orgA.id}/coupons/analytics/by-affiliate (payee row)`, { ...list, body: row });
+  proof.check('admin sees negative balance for the payee', row?.ledgerBalance, -90);
   expect(row?.ledgerBalance).toBe(-90);
 });

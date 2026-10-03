@@ -69,6 +69,8 @@ export async function cleanupSpec(orgIds: string[], codePrefix: string, orderPre
   );
   const cIds = coupons.map((c) => c.id);
   const vIds = convs.map((c) => c.id);
+  // idempotency records keyed by the spec's order prefix would replay stale responses in the next run
+  await conn.query(`DELETE FROM idempotency_keys WHERE organizationId IN (?) AND \`key\` LIKE ?`, [orgIds, `${orderPrefix}%`]).catch(() => undefined);
   if (vIds.length) {
     const comm = await sql<{ id: string }>(`SELECT id FROM commissions WHERE conversionId IN (?)`, [vIds]);
     if (comm.length) {

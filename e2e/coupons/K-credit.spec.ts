@@ -19,8 +19,6 @@ const [A1, A2] = f.orgA.affiliates;
 const pA1 = f.orgA.programs[0];
 
 test.afterAll(async () => {
-  const owner = await as('ORG_A_OWNER');
-  await api('PATCH', `/organizations/${f.orgA.id}/programs/${pA1.id}`, { token: owner.token, body: { couponAttributionPriority: 'PROMO_CODE' } });
   await closeDb();
 });
 
@@ -60,20 +58,30 @@ test('K2 AFFILIATE_1 link clicked, AFFILIATE_2 coupon used → PROMO_CODE (defau
   expect(s.redemption?.affiliateId).toBe(A2.id);
 });
 
-test('K3 program priority AFFILIATE ("Tracking Link Wins") → click affiliate AFFILIATE_1 credited, coupon still counted', async () => {
-  proof.h('K3 click A1 + coupon A2 (priority AFFILIATE)');
+test('K3 program priority AFFILIATE ("Tracking Link Wins") → click affiliate credited, coupon still counted', async () => {
+  proof.h('K3 click K-A + coupon K-B in a program created with priority AFFILIATE');
+  // Attribution settings are locked once affiliates join a program (existing rule), so K3 uses its own program.
   const owner = await as('ORG_A_OWNER');
-  const up = await api('PATCH', `/organizations/${f.orgA.id}/programs/${pA1.id}`, { token: owner.token, body: { couponAttributionPriority: 'AFFILIATE' } });
-  proof.http('PATCH', `/organizations/${f.orgA.id}/programs/${pA1.id}`, up, { couponAttributionPriority: 'AFFILIATE' });
-  expect(up.status).toBe(200);
-  const c = await newCoupon(proof, f.orgA.id, { code: `${P}-A2B`, name: `${f.prefix} K a2b`, discountType: 'PERCENTAGE', discountValue: 10, affiliateIds: [A2.id] });
-  const click = await clickLink(A1.id, f.orgA.id);
-  const s = await sale(proof, f.orgA.apiKey, f.orgA.id, { externalId: `${O}3`, customerExternalId: `${O}cust3`, clickId: click.clickId, amount: 90000, currency: 'INR', metadata: { couponCode: `${P}-A2B` } }, c.id);
-  proof.check('conversion.affiliateId', s.conversion?.affiliateId, A1.id);
-  proof.check('redemption exists', Boolean(s.redemption), true);
-  proof.check('redemption.affiliateId (who got credit)', s.redemption?.affiliateId, A1.id);
-  expect(s.conversion?.affiliateId).toBe(A1.id);
-  expect(s.redemption?.affiliateId).toBe(A1.id);
+  const stamp = Date.now().toString(36);
+  const prog = await api('POST', `/organizations/${f.orgA.id}/programs`, { token: owner.token, body: { name: `${f.prefix}-K-prog-${stamp}`, slug: `${f.prefix}-k-prog-${stamp}`, type: 'AFFILIATE', commissionType: 'PERCENTAGE', defaultCommissionValue: 750, attributionModel: 'LAST_CLICK', status: 'ACTIVE', currency: 'INR', couponAttributionPriority: 'AFFILIATE' } });
+  proof.http('POST', `/organizations/${f.orgA.id}/programs`, prog, { couponAttributionPriority: 'AFFILIATE' });
+  expect(prog.status).toBe(201);
+  expect(prog.data.couponAttributionPriority).toBe('AFFILIATE');
+  const mk = async (who: string) => {
+    const r = await api('POST', `/organizations/${f.orgA.id}/affiliates`, { token: owner.token, body: { displayName: `${f.prefix} K ${who} ${stamp}`, email: `${f.prefix}-k-${who.toLowerCase()}-${stamp}@example.test`, programId: prog.data.id } });
+    expect(r.status).toBe(201);
+    return (r.data.affiliate?.id || r.data.id) as string;
+  };
+  const kA = await mk('A');
+  const kB = await mk('B');
+  const c = await newCoupon(proof, f.orgA.id, { code: `${P}-PRIO-${stamp}`.toUpperCase(), name: `${f.prefix} K prio`, discountType: 'PERCENTAGE', discountValue: 10, affiliateIds: [kB] });
+  const click = await clickLink(kA, f.orgA.id);
+  const s = await sale(proof, f.orgA.apiKey, f.orgA.id, { externalId: `${O}3-${stamp}`, customerExternalId: `${O}cust3-${stamp}`, clickId: click.clickId, amount: 90000, currency: 'INR', metadata: { couponCode: c.code } }, c.id);
+  proof.check('conversion.affiliateId (click affiliate K-A)', s.conversion?.affiliateId, kA);
+  proof.check('redemption exists (coupon use counted)', Boolean(s.redemption), true);
+  proof.check('redemption.affiliateId (who got credit)', s.redemption?.affiliateId, kA);
+  expect(s.conversion?.affiliateId).toBe(kA);
+  expect(s.redemption?.affiliateId).toBe(kA);
 });
 
 test('K4 unassigned coupon, no click → coupon counted, nobody credited (no fallback affiliate)', async () => {
