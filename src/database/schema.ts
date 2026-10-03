@@ -4701,6 +4701,12 @@ export class BillingSubscriptionDiscount {
   modifiedDate!: Date;
 }
 
+/** DECIMAL columns come back from mysql2 as strings; keep them numbers in memory and in API responses. */
+const decimalToNumber = {
+  to: (value?: number | null) => value,
+  from: (value?: string | number | null) => (value === null || value === undefined ? value : Number(value)),
+};
+
 // ─────────────────────────────────────────────────────────
 // Organization product coupons — discount codes an org creates for its OWN
 // product and assigns to specific affiliates to share with their audience.
@@ -4733,7 +4739,9 @@ export class OrganizationCoupon {
   @Column({ type: 'varchar', length: 30, default: 'PERCENTAGE' })
   discountType!: string;
 
-  @Column({ type: 'int' })
+  // Percent (0.01–100) or a fixed amount in major currency units (e.g. 99.50 = ₹99.50).
+  // mysql2 returns DECIMAL as a string, so it is converted back to a number on read.
+  @Column({ type: 'decimal', precision: 12, scale: 2, transformer: decimalToNumber })
   discountValue!: number;
 
   @Column({ type: 'varchar', length: 30, default: 'ACTIVE' })
@@ -4741,6 +4749,9 @@ export class OrganizationCoupon {
 
   @Column({ type: 'int', nullable: true })
   maxRedemptions?: number;
+
+  @Column({ type: 'int', nullable: true })
+  maxRedemptionsPerCustomer?: number;
 
   @Column({ type: 'timestamp', nullable: true })
   validFrom?: Date;
@@ -4783,6 +4794,111 @@ export class OrganizationCouponAssignment {
 
   @CreateDateColumn()
   assignedAt!: Date;
+}
+
+/**
+ * One row per sale on which an organization coupon was accepted (a "use"). Written through a TypeORM
+ * repository inside a transaction that also locks the coupon's usage counter, never through dbStore, so the
+ * usage limit is enforced by MySQL even under concurrent requests or several backend instances.
+ * Amounts are in minor units (paise). The row keeps the affiliate/program that received credit at sale time, so
+ * moving or editing the coupon later never rewrites history.
+ */
+@Entity('organization_coupon_redemptions')
+@Unique('UQ_coupon_redemption_conversion', ['conversionId'])
+@Unique('UQ_coupon_redemption_order', ['organizationId', 'environment', 'orderExternalId'])
+@Index(['organizationId', 'createdAt'])
+@Index(['couponId', 'customerKey'])
+@Index(['couponId', 'customerEmailKey'])
+export class OrganizationCouponRedemption {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationId!: string;
+
+  @Column({ type: 'varchar', length: 10, default: 'LIVE' })
+  environment!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  couponId!: string;
+
+  @Column({ type: 'varchar', length: 60 })
+  couponCode!: string;
+
+  @Column({ type: 'varchar', length: 36 })
+  conversionId!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  orderExternalId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 36, nullable: true })
+  affiliateId?: string | null;
+
+  @Column({ type: 'varchar', length: 36, nullable: true })
+  programId?: string | null;
+
+  @Column({ type: 'varchar', length: 300 })
+  customerKey!: string;
+
+  @Column({ type: 'varchar', length: 300, nullable: true })
+  customerEmailKey?: string | null;
+
+  /** Amount the customer paid after the discount (= commission base). */
+  @Column({ type: 'int' })
+  orderAmount!: number;
+
+  @Column({ type: 'int' })
+  discountAmount!: number;
+
+  /** Price before the discount. */
+  @Column({ type: 'int' })
+  grossAmount!: number;
+
+  @Column({ type: 'varchar', length: 10 })
+  currency!: string;
+
+  /** Discount definition at the time of the sale (history survives later edits). */
+  @Column({ type: 'varchar', length: 30 })
+  discountType!: string;
+
+  @Column({ type: 'decimal', precision: 12, scale: 2, transformer: decimalToNumber })
+  discountValue!: number;
+
+  @Column({ type: 'int', default: 0 })
+  refundedAmount!: number;
+
+  /** ACTIVE | PARTIALLY_REFUNDED | REFUNDED — a refund never gives the use back. */
+  @Column({ type: 'varchar', length: 30, default: 'ACTIVE' })
+  status!: string;
+
+  @Column({ type: 'datetime', precision: 3 })
+  occurredAt!: Date;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+
+/** Per-coupon use counter; its row is locked (SELECT … FOR UPDATE) while a use is being recorded. */
+@Entity('organization_coupon_usage')
+export class OrganizationCouponUsage {
+  @PrimaryColumn({ type: 'varchar', length: 36 })
+  couponId!: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 36 })
+  organizationId!: string;
+
+  @Column({ type: 'int', default: 0 })
+  redemptionCount!: number;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
 }
 
 @Entity('organization_coupon_settings')
