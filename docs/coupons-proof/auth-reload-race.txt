@@ -1,0 +1,11 @@
+# Auth refresh race on page load (outside coupon scope — decision D22, not fixed)
+
+Probe (Playwright, admin preview build, ORG_A_OWNER, 20 reloads of /organizations/<orgA>/coupons), 2026-10-03:
+PROBE refresh calls per reload=[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2] logged-out=3/20
+
+Cause: src/context/auth-context.tsx:166 and src/context/admin-context.tsx:161 (partner-iq-frontend) both call
+authApi.refresh() on boot, outside the single-flight refresh in src/lib/api/client.ts. The backend
+(auth.service.ts refreshToken) deliberately treats reuse of a rotated refresh token as theft and revokes
+the session family, so whichever call loses the race logs the user out.
+
+Events below are appended by e2e/lib/ui.ts whenever a coupon UI test landed on the login form:

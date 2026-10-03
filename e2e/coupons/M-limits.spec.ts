@@ -5,7 +5,7 @@ import { closeDb, sql } from '../lib/db';
 import { Proof } from '../lib/proof';
 import { newCoupon, sale, usageCount } from '../lib/sales';
 import { as } from '../lib/session';
-import { adminLogin, openCoupons } from '../lib/ui';
+import { adminLogin, openCoupons, refreshPage } from '../lib/ui';
 
 /**
  * M — usage limits. Rules (D7): a use is counted when the sale is recorded with an applicable coupon; with
@@ -56,8 +56,10 @@ test('M1 total limit N=3: 3 uses work, 4th refused; remaining matches SQL each s
   await adminLogin(page, 'ORG_A_OWNER');
   // the sidebar entry is a button, not a link: open the page by URL, then refresh
   await openCoupons(page, f.orgA.id, '?tab=coupons');
-  await page.reload();
-  await page.waitForLoadState('networkidle');
+  const authCalls: string[] = [];
+  page.on('response', (r) => { if (/\/auth\//.test(r.url())) authCalls.push(`${r.request().method()} ${new URL(r.url()).pathname} -> ${r.status()}`); });
+  await refreshPage(page);
+  proof.note(`auth calls during refresh: ${JSON.stringify(authCalls)}`);
   await page.getByPlaceholder('Search coupons by code or name...').fill(c.code);
   const row = page.locator('tr', { hasText: c.code });
   await expect(row).toBeVisible();

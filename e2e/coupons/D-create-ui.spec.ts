@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { F } from '../lib/coupons';
 import { closeDb, sql, sqlOne } from '../lib/db';
 import { Proof } from '../lib/proof';
-import { adminLogin, openCoupons } from '../lib/ui';
+import { adminLogin, openCoupons, refreshPage } from '../lib/ui';
 
 /** D — create one coupon of each discount type through the UI; check request, DB row, UI, refresh, audit log. */
 const proof = new Proof('D');
@@ -67,7 +67,7 @@ for (const c of cases) {
     expect(new Date(audit[0].createdAt).getTime()).toBeLessThanOrEqual(new Date(audit[1].createdAt).getTime());
     for (const a of audit) expect(a.actorId).toBe(f.users.ORG_A_OWNER.userId);
     // UI after refresh
-    await page.reload();
+    await refreshPage(page);
     await page.getByRole('tab', { name: /All Coupons/ }).click();
     await page.getByPlaceholder('Search coupons by code or name...').fill(c.code);
     const tr = page.locator('tbody tr', { hasText: c.code });
