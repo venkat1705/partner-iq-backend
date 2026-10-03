@@ -1,0 +1,29 @@
+# Scenario AE — raw proof, run=1791054471247 (started 2026-10-03T19:07:51.538Z)
+
+==== AE direct bulk insert (MySQL, not via API) ====
+inserted 50,000 coupons + 200,000 conversions in 35475 ms (direct SQL)
+mysql> SELECT COUNT(*) coupons, COUNT(*) sales for org-perf
+[{"coupons":50000,"sales":200000}]
+
+==== AE baseline: backend restart after direct insert of 50,000 coupons + 200,000 conversions (uses) ====
+perf_conversions	perf_coupons
+200000	50000
+backend.log (restart):
+12885-        ^
+12886-
+12887:RangeError: Maximum call stack size exceeded
+12888-    at new DBBackedArray [90m(/home/user/partner-iq-backend/[39mdist/src/database/store.js:129:9[90m)[39m
+12889-    at InMemoryDataStore.initialize [90m(/home/user/partner-iq-backend/[39mdist/src/database/store.js:420:28[90m)[39m
+12890-[90m    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+12891-    at async createPartnerIqApp [90m(/home/user/partner-iq-backend/[39mdist/src/bootstrap.js:26:5[90m)[39m
+12892-    at async listen [90m(/home/user/partner-iq-backend/[39mdist/src/bootstrap.js:143:17[90m)[39m
+12893-    at async bootstrap [90m(/home/user/partner-iq-backend/[39mdist/src/main.js:17:5[90m)[39m
+12894-
+12895-Node.js v22.22.0
+dist/src/database/store.js:420 = this.conversions = new DBBackedArray(...find())  (src/database/store.ts DBBackedArray constructor: super(...items.map(...)))
+backend process after the failed restart: none (the crashed boot above exits with 'Node.js v22.22.0'; the next request in the suite failed in ~20 ms with connection refused)
+
+==== AE: spread limit of DBBackedArray constructor (node -e, same super(...items.map()) pattern, Node v22.22.0) ====
+max ok ~ 62187 rows, fails at ~ 62656 rows (RangeError: Maximum call stack size exceeded)
+100,000 perf conversions: restart -> crash again (backend.log 'Maximum call stack size exceeded' count now 3)
+Decision D17: 200,000 uses cannot be loaded by the backend at all (BLOCKED by store.ts); timings are measured with 50,000 coupons + 55,000 uses.

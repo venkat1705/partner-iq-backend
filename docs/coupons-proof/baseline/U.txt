@@ -1,0 +1,4 @@
+# Scenario U — raw proof, run=1791055352845 (started 2026-10-03T19:22:32.988Z)
+> GET /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+< HTTP 403 (5 ms)
+< {"success":false,"statusCode":403,"code":"ORGANIZATION_MEMBERSHIP_REQUIRED","message":"User does not belong to this organization","error":{"code":"ORGANIZATION_MEMBERSHIP_REQUIRED","message":"User does not belong to this organization","requestId":"req_40e277d46510038c16a84344"},"correlationId":"req_40e277d46510038c16a84344","timestamp":"2026-10-03T19:27:56.254Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}

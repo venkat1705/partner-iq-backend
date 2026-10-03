@@ -1,0 +1,33 @@
+# Scenario A — raw proof, run=1791056988099 (started 2026-10-03T19:49:48.171Z)
+
+==== A ORG_A_OWNER: coupon API requests during page load ====
+GET /api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/settings -> 200 (142 bytes)
+GET /api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/settings -> 200 (142 bytes)
+GET /api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/analytics/overview?period=30D -> 200 (627 bytes)
+GET /api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons -> 200 (2151 bytes)
+GET /api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/analytics/performance?period=30D -> 200 (1742 bytes)
+GET /api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/analytics/by-affiliate -> 200 (934 bytes)
+GET /api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/analytics/by-program -> 200 (416 bytes)
+GET /api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/analytics/activity -> 200 (4371 bytes)
+console errors: []
+CHECK PASS non-GET requests: actual=[] expected=[]
+CHECK FAIL duplicate requests: actual=["GET /api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/settings x2"] expected=[]
+CHECK PASS responses containing Org B ids: actual=[] expected=[]
+CHECK PASS console errors: actual=[] expected=[]
+CHECK PASS all coupon requests 2xx: actual=[] expected=[]
+
+==== A ORG_A_VIEWER: coupon API requests during page load ====
+GET /api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/settings -> 200 (142 bytes)
+GET /api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/settings -> 200 (142 bytes)
+GET /api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/analytics/overview?period=30D -> 200 (627 bytes)
+GET /api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons -> 200 (2151 bytes)
+GET /api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/analytics/by-affiliate -> 200 (934 bytes)
+GET /api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/analytics/performance?period=30D -> 200 (1742 bytes)
+GET /api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/analytics/by-program -> 200 (416 bytes)
+GET /api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/analytics/activity -> 200 (4371 bytes)
+console errors: []
+CHECK PASS non-GET requests: actual=[] expected=[]
+CHECK FAIL duplicate requests: actual=["GET /api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/settings x2"] expected=[]
+CHECK PASS responses containing Org B ids: actual=[] expected=[]
+CHECK PASS console errors: actual=[] expected=[]
+CHECK PASS all coupon requests 2xx: actual=[] expected=[]

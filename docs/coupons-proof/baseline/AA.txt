@@ -1,0 +1,2 @@
+# Scenario AA — raw proof, run=1791056988099 (started 2026-10-03T19:49:48.182Z)
+CHECK PASS create: reopened after Cancel → code field empty: actual="" expected=""

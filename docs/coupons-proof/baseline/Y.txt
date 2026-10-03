@@ -1,0 +1,21 @@
+# Scenario Y — raw proof, run=1791056988099 (started 2026-10-03T19:49:48.344Z)
+
+==== Y second session: LOCK TABLES organization_coupons READ ====
+> POST create while locked -> HTTP 201 after 16 ms
+< {"success":true,"data":{"id":"19b14c61-5749-46d9-95a0-600accdbab44","organizationId":"eb2b08d5-22c4-4dd7-a225-37421c48f27e","code":"E2E-CPN-MUSQ2MAX-Y-NEW","name":"e2e-cpn-1791051925353 Y new","discountType":"PERCENTAGE","discountValue":10,"status":"ACTIVE","createdAt":"2026-10-03T19:54:44.411Z","updatedAt":"2026-10-03T19:54:44.411Z","assignedAffiliates":[]}}
+> PUT edit while locked -> HTTP 200 after 10 ms
+< {"success":true,"data":{"id":"7d0fd451-c1a4-439c-b906-e09c57641027","organizationId":"eb2b08d5-22c4-4dd7-a225-37421c48f27e","code":"E2E-CPN-MUSQ2MAX-Y-EDIT","name":"e2e-cpn-1791051925353 Y edited","discountType":"PERCENTAGE","discountValue":10,"status":"ACTIVE","createdAt":"2026-10-03T19:54:43.876Z","updatedAt":"2026-10-03T19:54:44.424Z","assignedAffiliates":[]}}
+GET /coupons while locked: in-memory rows for Y = ["E2E-CPN-MUSQ2MAX-Y-NEW","E2E-CPN-MUSQ2MAX-Y-EDIT"]
+backend log during the window:
+G[39m [38;5;3m[LoggingInterceptor] [39m[32mPUT /api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/7d0fd451-c1a4-439c-b906-e09c57641027 200 - 4ms[39m
+[32m[Nest] 17866  - [39m10/03/2026, 7:54:44 PM [32m    LOG[39m [38;5;3m[LoggingInterceptor] [39m[32mGET /api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons 200 - 4ms[39m
+backend process while locked: running (pid 17866)
+restart: backend restarted, pid 19482
+mysql> SELECT code FROM organization_coupons WHERE normalizedCode='E2E-CPN-MUSQ2MAX-Y-NEW'
+[{"code":"E2E-CPN-MUSQ2MAX-Y-NEW"}]
+mysql> SELECT name FROM organization_coupons WHERE id='7d0fd451-c1a4-439c-b906-e09c57641027'
+[{"name":"e2e-cpn-1791051925353 Y edited"}]
+CHECK PASS backend alive during lock: actual=true expected=true
+CHECK PASS create: success reported ⇔ row exists after restart: actual=true expected=true
+CHECK PASS edit: success reported ⇔ change exists after restart: actual=true expected=true
+CHECK FAIL create while locked did not claim success: actual=true expected=false

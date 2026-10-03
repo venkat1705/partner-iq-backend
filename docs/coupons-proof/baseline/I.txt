@@ -1,0 +1,50 @@
+# Scenario I — raw proof, run=1791054471247 (started 2026-10-03T19:07:51.672Z)
+
+==== I1 PAUSED ====
+> POST /conversions
+> body: {"externalId":"e2e-cpn-1791051925353-I-PAUSED","customerExternalId":"e2e-cpn-1791051925353-I-c-PAUSED","amount":50000,"currency":"INR","metadata":{"couponCode":"E2E-CPN-MUSQ2MAX-PAUSED"}}
+< HTTP 0 (11 ms)
+< request failed: TypeError
+mysql> SELECT id, affiliateId, programId, amount, status, occurredAt FROM conversions WHERE externalId='e2e-cpn-1791051925353-I-PAUSED'
+undefined
+mysql> SELECT affiliateId, commissionAmount, reversedAmount, status FROM commissions WHERE conversionId='undefined'
+[]
+mysql> SELECT * FROM organization_coupon_redemptions WHERE couponId='295f520b-05aa-421c-a49a-c5364e6c3cc8' AND conversionId='undefined'
+"TABLE organization_coupon_redemptions DOES NOT EXIST"
+CHECK FAIL HTTP (sale recorded): actual=0 expected=201
+CHECK FAIL coupon.applied: actual=undefined expected=false
+CHECK PASS redemptions unchanged: actual=-1 expected=-1
+
+==== I1 ARCHIVED ====
+> POST /conversions
+> body: {"externalId":"e2e-cpn-1791051925353-I-ARCHIVED","customerExternalId":"e2e-cpn-1791051925353-I-c-ARCHIVED","amount":50000,"currency":"INR","metadata":{"couponCode":"E2E-CPN-MUSQ2MAX-ARCHIVED"}}
+< HTTP 0 (8 ms)
+< request failed: TypeError
+mysql> SELECT id, affiliateId, programId, amount, status, occurredAt FROM conversions WHERE externalId='e2e-cpn-1791051925353-I-ARCHIVED'
+undefined
+mysql> SELECT affiliateId, commissionAmount, reversedAmount, status FROM commissions WHERE conversionId='undefined'
+[]
+mysql> SELECT * FROM organization_coupon_redemptions WHERE couponId='c330fefb-746f-47f3-94b3-88137648d401' AND conversionId='undefined'
+"TABLE organization_coupon_redemptions DOES NOT EXIST"
+CHECK FAIL HTTP (sale recorded): actual=0 expected=201
+CHECK FAIL coupon.applied: actual=undefined expected=false
+CHECK PASS redemptions unchanged: actual=-1 expected=-1
+
+==== I1 EXPIRED ====
+> POST /conversions
+> body: {"externalId":"e2e-cpn-1791051925353-I-EXPIRED","customerExternalId":"e2e-cpn-1791051925353-I-c-EXPIRED","amount":50000,"currency":"INR","metadata":{"couponCode":"E2E-CPN-MUSQ2MAX-EXPIRED"}}
+< HTTP 0 (8 ms)
+< request failed: TypeError
+mysql> SELECT id, affiliateId, programId, amount, status, occurredAt FROM conversions WHERE externalId='e2e-cpn-1791051925353-I-EXPIRED'
+undefined
+mysql> SELECT affiliateId, commissionAmount, reversedAmount, status FROM commissions WHERE conversionId='undefined'
+[]
+mysql> SELECT * FROM organization_coupon_redemptions WHERE couponId='4513ed1d-c13d-4ef3-b8b8-23641cae7e4b' AND conversionId='undefined'
+"TABLE organization_coupon_redemptions DOES NOT EXIST"
+CHECK FAIL HTTP (sale recorded): actual=0 expected=201
+CHECK FAIL coupon.applied: actual=undefined expected=false
+CHECK PASS redemptions unchanged: actual=-1 expected=-1
+
+==== I2 pause/resume ====
+
+==== I3 delete/archive used coupon ====

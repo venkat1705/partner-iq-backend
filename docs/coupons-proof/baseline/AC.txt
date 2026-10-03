@@ -1,0 +1,4 @@
+# Scenario AC — raw proof, run=1791056988099 (started 2026-10-03T19:49:48.194Z)
+> GET /organizations/<orgC>/coupons/analytics/overview
+< HTTP 401 (23 ms)
+< {"success":false,"statusCode":401,"code":"UNAUTHENTICATED","message":"Session token expired. Please sign in again.","error":{"code":"UNAUTHENTICATED","message":"Session token expired. Please sign in again.","requestId":"req_2a0b7e5601d8d77f1d94096d"},"correlationId":"req_2a0b7e5601d8d77f1d94096d","timestamp":"2026-10-03T19:54:23.013Z","path":"/api/v1/organizations/b0e26aeb-7934-4fd9-8a3b-97faf2c1d3c8/coupons/analytics/overview?period=LIFETIME"}

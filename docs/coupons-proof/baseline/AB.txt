@@ -1,0 +1,29 @@
+# Scenario AB — raw proof, run=1791056988099 (started 2026-10-03T19:49:48.188Z)
+
+==== AB1 500 ====
+Coupon Intelligence & Management Real-Time Attribution Configure promotional discount codes, track affiliate redemption ROI, verify eligibility in real time, and monitor revenue impact across your partner ecosystem. Validate Code Refresh Create Coupon Program: All Affiliate Programs Affiliate: All Affiliates 7D 30D 90D Lifetime Overview All Coupons 0 Performance Affiliate Attribution 0 Program Scope 0 Economics & Impact Audit Trail 0 ACTIVE COUPONS 0 of 0 total coupons configured 0 Live 0 Paused 0 Inactive TOTAL REDEMPTIONS 0 0% coupon share of all conversions Verified claims 100% Attributed ATTRIBUTED CONVERSIONS 0 Sales verified with affiliate coupons Avg Order Value (AOV) ₹0 GROSS ATTRIBUTED REVENUE ₹0 Total transaction value driven by coupons Top of funnel GMV Verified DISCOUNT GIVEN ₹0 Promotional savings delivered to buyers Discount effective rate 0% AFFILIATE COMMISSION ₹0 Earned 
+CHECK FAIL error message shown: actual=false expected=true
+CHECK FAIL fake zeros shown: actual=true expected=false
+CHECK PASS NaN shown: actual=false expected=false
+
+==== AB1 403 ====
+Coupon Intelligence & Management Real-Time Attribution Configure promotional discount codes, track affiliate redemption ROI, verify eligibility in real time, and monitor revenue impact across your partner ecosystem. Validate Code Refresh Create Coupon Program: All Affiliate Programs Affiliate: All Affiliates 7D 30D 90D Lifetime Overview All Coupons 0 Performance Affiliate Attribution 0 Program Scope 0 Economics & Impact Audit Trail 0 ACTIVE COUPONS 0 of 0 total coupons configured 0 Live 0 Paused 0 Inactive TOTAL REDEMPTIONS 0 0% coupon share of all conversions Verified claims 100% Attributed ATTRIBUTED CONVERSIONS 0 Sales verified with affiliate coupons Avg Order Value (AOV) ₹0 GROSS ATTRIBUTED REVENUE ₹0 Total transaction value driven by coupons Top of funnel GMV Verified DISCOUNT GIVEN ₹0 Promotional savings delivered to buyers Discount effective rate 0% AFFILIATE COMMISSION ₹0 Earned 
+CHECK FAIL error message shown: actual=false expected=true
+CHECK FAIL fake zeros shown: actual=true expected=false
+CHECK PASS NaN shown: actual=false expected=false
+
+==== AB1 network ====
+Coupon Intelligence & Management Real-Time Attribution Configure promotional discount codes, track affiliate redemption ROI, verify eligibility in real time, and monitor revenue impact across your partner ecosystem. Validate Code Refresh Create Coupon Program: All Affiliate Programs Affiliate: All Affiliates 7D 30D 90D Lifetime Overview All Coupons 0 Performance Affiliate Attribution 0 Program Scope 0 Economics & Impact Audit Trail 0 ACTIVE COUPONS 0 of 0 total coupons configured 0 Live 0 Paused 0 Inactive TOTAL REDEMPTIONS 0 0% coupon share of all conversions Verified claims 100% Attributed ATTRIBUTED CONVERSIONS 0 Sales verified with affiliate coupons Avg Order Value (AOV) ₹0 GROSS ATTRIBUTED REVENUE ₹0 Total transaction value driven by coupons Top of funnel GMV Verified DISCOUNT GIVEN ₹0 Promotional savings delivered to buyers Discount effective rate 0% AFFILIATE COMMISSION ₹0 Earned 
+CHECK FAIL error message shown: actual=false expected=true
+CHECK FAIL fake zeros shown: actual=true expected=false
+CHECK PASS NaN shown: actual=false expected=false
+
+==== AB1 broken JSON ====
+Coupon Intelligence & Management Real-Time Attribution Configure promotional discount codes, track affiliate redemption ROI, verify eligibility in real time, and monitor revenue impact across your partner ecosystem. Validate Code Refresh Create Coupon Program: All Affiliate Programs Affiliate: All Affiliates 7D 30D 90D Lifetime Overview All Coupons 0 Performance Affiliate Attribution 0 Program Scope 0 Economics & Impact Audit Trail 0 ACTIVE COUPONS 0 of 0 total coupons configured 0 Live 0 Paused 0 Inactive TOTAL REDEMPTIONS 0 0% coupon share of all conversions Verified claims 100% Attributed ATTRIBUTED CONVERSIONS 0 Sales verified with affiliate coupons Avg Order Value (AOV) ₹0 GROSS ATTRIBUTED REVENUE ₹0 Total transaction value driven by coupons Top of funnel GMV Verified DISCOUNT GIVEN ₹0 Promotional savings delivered to buyers Discount effective rate 0% AFFILIATE COMMISSION ₹0 Earned 
+CHECK FAIL error message shown: actual=false expected=true
+CHECK FAIL fake zeros shown: actual=true expected=false
+CHECK PASS NaN shown: actual=false expected=false
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-AB-OLD","name":"e2e-cpn-1791051925353 AB old","discountType":"PERCENTAGE","discountValue":10}
+< HTTP 201 (18 ms)
+< {"success":true,"data":{"id":"ad37f745-eb7a-49ea-912f-bd8a0b7529e9","organizationId":"eb2b08d5-22c4-4dd7-a225-37421c48f27e","code":"E2E-CPN-MUSQ2MAX-AB-OLD","name":"e2e-cpn-1791051925353 AB old","discountType":"PERCENTAGE","discountValue":10,"status":"ACTIVE","createdAt":"2026-10-03T19:54:21.811Z","updatedAt":"2026-10-03T19:54:21.811Z","assignedAffiliates":[]}}

@@ -1,0 +1,23 @@
+# Scenario K — raw proof, run=1791054471247 (started 2026-10-03T19:07:51.713Z)
+
+==== K1 coupon only, no click ====
+
+==== K2 click A1 + coupon A2 (priority PROMO_CODE) ====
+
+==== K3 click A1 + coupon A2 (priority AFFILIATE) ====
+
+==== K4 unassigned coupon ====
+
+==== K5 foreign code ====
+> POST /conversions
+> body: {"externalId":"e2e-cpn-1791051925353-K-5","customerExternalId":"e2e-cpn-1791051925353-K-cust5","amount":50000,"currency":"INR","metadata":{"couponCode":"E2E-CPN-MUSQ2MAX-BONLY"}}
+< HTTP 0 (15 ms)
+< request failed: TypeError
+mysql> SELECT id, affiliateId, programId, amount, status, occurredAt FROM conversions WHERE externalId='e2e-cpn-1791051925353-K-5'
+undefined
+mysql> SELECT affiliateId, commissionAmount, reversedAmount, status FROM commissions WHERE conversionId='undefined'
+[]
+mysql> SELECT * FROM organization_coupon_redemptions WHERE couponId='e8f318ca-08d0-4584-a47a-3bf00894436b' AND conversionId='undefined'
+"TABLE organization_coupon_redemptions DOES NOT EXIST"
+CHECK FAIL response coupon.applied: actual=undefined expected=false
+CHECK PASS Org B redemption created: actual=false expected=false

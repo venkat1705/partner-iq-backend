@@ -1,0 +1,21 @@
+# Scenario L — raw proof, run=1791054471247 (started 2026-10-03T19:07:51.728Z)
+
+==== L PCT10 ====
+hand math: subtotal=100000 paise, discount=10000, paid=90000, commission 7.5%=6750.000 → 6750
+
+==== L FIX200 ====
+hand math: subtotal=100000 paise, discount=20000, paid=80000, commission 7.5%=6000.000 → 6000
+
+==== L ROUND ====
+hand math: subtotal=99999 paise, discount=12500, paid=87499, commission 7.5%=6562.425 → 6562
+
+==== L FIXBIG ====
+hand math: subtotal=100000 paise, discount=100000, paid=0, commission 7.5%=0.000 → 0
+
+==== L FREE ====
+hand math: subtotal=49900 paise, discount=49900, paid=0, commission 7.5%=0.000 → 0
+
+==== L FIXDEC ====
+hand math: subtotal=25000 paise, discount=9950, paid=15050, commission 7.5%=1128.750 → 1129
+
+==== L derived ====

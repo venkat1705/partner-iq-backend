@@ -1,0 +1,7 @@
+# Scenario M — raw proof, run=1791054471247 (started 2026-10-03T19:07:51.752Z)
+
+==== M1 total limit 3 ====
+
+==== M2 per-customer limit ====
+
+==== M3 per-customer by email ====

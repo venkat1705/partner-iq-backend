@@ -1,0 +1,8 @@
+# Scenario N — raw proof, run=1791055352845 (started 2026-10-03T19:22:32.967Z)
+
+==== N setup: maxRedemptions 5, 4 sequential uses ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-N-LAST","name":"e2e-cpn-1791051925353 N last","discountType":"PERCENTAGE","discountValue":10,"maxRedemptions":5,"affiliateIds":["a0aaaad0-411b-49b7-8fbe-f097dec291b8"]}
+< HTTP 201 (21 ms)
+< {"success":true,"data":{"id":"fbdbbe9c-3487-4c40-baf7-5be9962466c1","organizationId":"eb2b08d5-22c4-4dd7-a225-37421c48f27e","code":"E2E-CPN-MUSQ2MAX-N-LAST","name":"e2e-cpn-1791051925353 N last","discountType":"PERCENTAGE","discountValue":10,"status":"ACTIVE","maxRedemptions":5,"createdAt":"2026-10-03T19:27:30.871Z","updatedAt":"2026-10-03T19:27:30.871Z","assignedAffiliates":[{"affiliateId":"a0aaaad0-411b-49b7-8fbe-f097dec291b8","displayName":"e2e-cpn-1791051925353 Affiliate One","email":"e2e-cpn-1791051925353-affiliate_1@example.test","assignedAt":"2026-10-03T19:27:30.878Z"}]}}
+CHECK FAIL uses before race: actual=-1 expected=4
