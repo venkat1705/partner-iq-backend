@@ -1,16 +1,19 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { OrganizationGuard } from '../../common/guards/organization.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { hasPermission } from '../../common/constants/permissions';
 import type { AuthUserPayload } from '../../common/interfaces/request-with-user.interface';
 import { CouponsService } from './coupons.service';
 import {
   AssignCouponDto,
   ChangeCouponStatusDto,
   CreateCouponDto,
+  ListCouponsQueryDto,
   UpdateCouponDto,
   UpdateCouponSettingsDto,
 } from './dto/coupon.dto';
@@ -68,11 +71,13 @@ export class CouponsController {
     @Query('programId') programId?: string,
     @Query('affiliateId') affiliateId?: string,
     @Query('sortBy') sortBy?: string,
+    @Query('period') period?: string,
   ) {
     return this.couponsService.getPerformanceAnalytics(organizationId, {
       programId,
       affiliateId,
       sortBy,
+      period,
     });
   }
 
@@ -105,6 +110,8 @@ export class CouponsController {
 
   @Get('validate/:code')
   @RequirePermissions('coupons.view')
+  // D13: guessing codes is rate limited (stricter than the global 120/min)
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @ApiOperation({ summary: 'Validate coupon code eligibility in real time' })
   validateCoupon(
     @Param('organizationId') organizationId: string,
@@ -115,9 +122,9 @@ export class CouponsController {
 
   @Get()
   @RequirePermissions('coupons.view')
-  @ApiOperation({ summary: 'List coupons for this organization' })
-  list(@Param('organizationId') organizationId: string) {
-    return this.couponsService.list(organizationId);
+  @ApiOperation({ summary: 'List coupons for this organization (pass page/limit for a paged, filterable result)' })
+  list(@Param('organizationId') organizationId: string, @Query() query: ListCouponsQueryDto) {
+    return this.couponsService.list(organizationId, query);
   }
 
   @Post()
@@ -162,13 +169,17 @@ export class CouponsController {
 
   @Post(':couponId/status')
   @RequirePermissions('coupons.edit')
-  @ApiOperation({ summary: 'Activate, pause, or archive a coupon' })
+  @ApiOperation({ summary: 'Activate, pause, or archive a coupon (archive requires coupons.delete)' })
   changeStatus(
     @Param('organizationId') organizationId: string,
     @Param('couponId') couponId: string,
     @CurrentUser() user: AuthUserPayload,
     @Body() dto: ChangeCouponStatusDto,
   ) {
+    // Archiving is the coupon "delete" (soft delete) and needs coupons.delete ("Archive organization product coupons").
+    if (dto.status === 'ARCHIVED' && !hasPermission(user.role as any, 'coupons.delete')) {
+      throw new ForbiddenException({ statusCode: 403, code: 'PERMISSION_DENIED', message: 'Archiving a coupon requires the coupons.delete permission.' });
+    }
     return this.couponsService.changeStatus(organizationId, user.userId, couponId, dto);
   }
 
