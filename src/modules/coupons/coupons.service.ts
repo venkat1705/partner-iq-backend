@@ -71,23 +71,33 @@ export class CouponsService {
     };
   }
 
-  upsertSettings(organizationId: string, userId: string, dto: UpdateCouponSettingsDto) {
+  /** MySQL first (same rule as create/edit, scenario Y2): the switch is only reported as saved once it is in MySQL. */
+  async upsertSettings(organizationId: string, userId: string, dto: UpdateCouponSettingsDto) {
     let settings = dbStore.organizationCouponSettings.find((item) => item.organizationId === organizationId);
     const before = settings ? settings.couponsEnabled : true;
+    const now = new Date();
+    const saved = await this.inTx(async (m) => {
+      await m.query(
+        `INSERT INTO organization_coupon_settings (id, organizationId, couponsEnabled, updatedBy, createdAt, updatedAt)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE couponsEnabled = VALUES(couponsEnabled), updatedBy = VALUES(updatedBy), updatedAt = VALUES(updatedAt)`,
+        [settings?.id || uuidv4(), organizationId, dto.couponsEnabled ? 1 : 0, userId, now, now],
+      );
+      const [row] = await m.query(`SELECT id, createdAt FROM organization_coupon_settings WHERE organizationId = ?`, [organizationId]);
+      return row as { id: string; createdAt: Date };
+    });
     if (!settings) {
       settings = {
-        id: uuidv4(),
+        id: saved.id,
         organizationId,
         couponsEnabled: dto.couponsEnabled,
         updatedBy: userId,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        createdAt: saved.createdAt,
+        updatedAt: now,
       };
       dbStore.organizationCouponSettings.push(settings);
     } else {
-      settings.couponsEnabled = dto.couponsEnabled;
-      settings.updatedBy = userId;
-      settings.updatedAt = new Date();
+      Object.assign(settings, { couponsEnabled: dto.couponsEnabled, updatedBy: userId, updatedAt: now });
     }
 
     dbStore.auditLogs.push({

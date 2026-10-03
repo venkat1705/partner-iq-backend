@@ -75,3 +75,32 @@ test('Y LOCK TABLES organization_coupons READ during create + edit', async () =>
   expect(editOk === (rowEdit[0]?.name === `${f.prefix} Y edited`)).toBe(true);
   expect(createdOk).toBe(false);
 });
+
+test('Y2 LOCK TABLES organization_coupon_settings READ during the coupons on/off switch', async () => {
+  test.setTimeout(240_000);
+  const owner = await as('ORG_A_OWNER');
+  const path = orgPath(f.orgA.id, '/settings');
+  const before = await sql(`SELECT couponsEnabled FROM organization_coupon_settings WHERE organizationId=?`, [f.orgA.id]);
+  proof.sql(`SELECT couponsEnabled FROM organization_coupon_settings WHERE organizationId='${f.orgA.id}' (before)`, before);
+  const locker = await mysql.createConnection({ ...ENV.DB });
+  await locker.query('LOCK TABLES organization_coupon_settings READ');
+  proof.h('Y2 second session: LOCK TABLES organization_coupon_settings READ; PUT couponsEnabled=false');
+  const put = await timed('PUT', path, owner.token, { couponsEnabled: false });
+  proof.note(`> PUT ${path} {"couponsEnabled":false} while locked -> HTTP ${put.status} after ${put.ms} ms\n< ${put.body.slice(0, 600)}`);
+  await locker.query('UNLOCK TABLES');
+  await locker.end();
+  await new Promise((r) => setTimeout(r, 3000));
+  execSync(`${__dirname}/../scripts/restart-backend.sh`, { stdio: 'ignore' });
+  const after = await sql<{ couponsEnabled: number }>(`SELECT couponsEnabled FROM organization_coupon_settings WHERE organizationId=?`, [f.orgA.id]);
+  proof.sql(`SELECT couponsEnabled FROM organization_coupon_settings WHERE organizationId='${f.orgA.id}' (after unlock + restart)`, after);
+  const claimed = put.status === 200;
+  const stored = after.length === 1 && Number(after[0].couponsEnabled) === 0;
+  // put the org back to "enabled" whatever happened, so later scenarios run against an enabled org
+  const restore = await api('PUT', path, { token: owner.token, body: { couponsEnabled: true } });
+  proof.note(`restore couponsEnabled=true -> HTTP ${restore.status}`);
+  proof.check('switch while locked: success reported ⇔ value stored after restart', claimed === stored, true);
+  proof.check('switch while locked did not claim success', claimed, false);
+  expect(restore.status).toBe(200);
+  expect(claimed === stored).toBe(true);
+  expect(claimed).toBe(false);
+});
