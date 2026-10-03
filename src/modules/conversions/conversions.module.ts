@@ -8,9 +8,10 @@ import { GamificationModule } from '../gamification/gamification.module';
 import { AutomationsModule } from '../automations/automations.module';
 import { WebhooksModule } from '../webhooks/webhooks.module';
 import { AuditModule } from '../audit/audit.module';
+import { CouponRedemptionModule } from '../coupons/coupon-redemption.module';
 
 @Module({
-  imports: [FraudModule, CommissionsModule, LedgerModule, GamificationModule, AutomationsModule, WebhooksModule, AuditModule],
+  imports: [FraudModule, CommissionsModule, LedgerModule, GamificationModule, AutomationsModule, WebhooksModule, AuditModule, CouponRedemptionModule],
   controllers: [ConversionsController],
   providers: [ConversionsService],
   exports: [ConversionsService],

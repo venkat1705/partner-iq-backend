@@ -4,6 +4,7 @@
   NotFoundException,
   BadRequestException,
   Logger,
+  Optional,
 } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import * as crypto from 'crypto';
@@ -40,6 +41,7 @@ import { SystemTemplateKey } from '../email-design/constants/email-template-keys
 import { AuditService } from '../audit/audit.service';
 import { PLATFORM_CURRENCY } from '../../common/constants/currency';
 import { netCommissionAmount } from '../../common/utils/commission.utils';
+import { CouponRedemptionService, couponOutcomeView, SaleCouponOutcome } from '../coupons/coupon-redemption.service';
 
 export interface HydratedConversion extends ConversionEntity {
   affiliateName: string;
@@ -73,7 +75,15 @@ export class ConversionsService {
     private readonly performanceAggregationService?: PerformanceAggregationService,
     private readonly automationEngineService?: AutomationEngineService,
     private readonly auditService?: AuditService,
+    @Optional() private readonly couponRedemptions?: CouponRedemptionService,
   ) { }
+
+  /**
+   * Orders currently being recorded by this process. The duplicate-externalId check reads memory and the
+   * coupon step awaits MySQL, so without this claim two concurrent copies of one order could both pass the
+   * check (O). Cross-instance protection for coupon uses comes from the redemption table's unique keys.
+   */
+  private static readonly inFlightOrders = new Set<string>();
 
   private emitWebhook(organizationId: string, event: WebhookEvent, payload: any) {
     this.webhooksService.triggerEvent(organizationId, event, payload).catch((error) => {
@@ -802,7 +812,8 @@ export class ConversionsService {
       }
     }
 
-    // Check duplicate externalId
+    // Check duplicate externalId (memory) + claim it for the duration of this request (see inFlightOrders)
+    const orderKey = `${organizationId}|${environment}|${dto.externalId}`;
     const existingConversion = dbStore.conversions.find(
       (c) =>
         c.organizationId === organizationId &&
@@ -810,10 +821,25 @@ export class ConversionsService {
         (c.environment === environment || (!c.environment && environment === EnvironmentType.LIVE)),
     );
 
-    if (existingConversion) {
+    if (existingConversion || ConversionsService.inFlightOrders.has(orderKey)) {
       throw new ConflictException(`Conversion with externalId '${dto.externalId}' already exists in ${environment} environment.`);
     }
+    ConversionsService.inFlightOrders.add(orderKey);
+    try {
+      return await this.recordNewConversion(organizationId, dto, environment, requestHash, idempotencyKey, context);
+    } finally {
+      ConversionsService.inFlightOrders.delete(orderKey);
+    }
+  }
 
+  private async recordNewConversion(
+    organizationId: string,
+    dto: CreateConversionDto,
+    environment: EnvironmentType,
+    requestHash: string,
+    idempotencyKey?: string,
+    context?: { apiKeyId?: string; environment?: 'test' | 'live' | EnvironmentType },
+  ) {
     const program = dbStore.programs.find(
       (p) =>
         p.organizationId === organizationId &&
@@ -834,7 +860,7 @@ export class ConversionsService {
     }
 
     const attribution = this.resolveAttribution(organizationId, dto.customerExternalId, dto.clickId, dto.attributionId, environment);
-    const programId = attribution?.programId || program?.id;
+    let programId = attribution?.programId || program?.id;
     if (!programId) {
       throw new BadRequestException(`No active program found for conversion in ${environment} environment.`);
     }
@@ -845,136 +871,182 @@ export class ConversionsService {
         `Conversion currency (${dto.currency}) does not match program currency (${resolvedProgram.currency}). Currency conversion is not supported.`,
       );
     }
+    const occurredAt = dto.occurredAt ? new Date(dto.occurredAt) : new Date();
+    if (Number.isNaN(occurredAt.getTime())) {
+      throw new BadRequestException('occurredAt must be a valid ISO date.');
+    }
 
-    let resolvedAffiliateId = attribution?.affiliateId;
-    if (!resolvedAffiliateId && dto.clickId) {
+    let clickAffiliateId = attribution?.affiliateId;
+    if (!clickAffiliateId && dto.clickId) {
       const click = dbStore.clicks.find((c) => c.id === dto.clickId && c.organizationId === organizationId);
-      if (click?.affiliateId) resolvedAffiliateId = click.affiliateId;
-    }
-    if (!resolvedAffiliateId) {
-      resolvedAffiliateId = (dto as any).affiliateId || dto.metadata?.affiliateId || (dto as any).affiliate;
-    }
-    if (!resolvedAffiliateId) {
-      const activeOrgAffiliates = dbStore.affiliates.filter(
-        (a) => a.organizationId === organizationId && a.status === AffiliateStatus.ACTIVE,
-      );
-      if (activeOrgAffiliates.length === 1) {
-        resolvedAffiliateId = activeOrgAffiliates[0].id;
-      }
+      if (click?.affiliateId) clickAffiliateId = click.affiliateId;
     }
 
-    const conversion: ConversionEntity = {
-      id: uuidv4(),
-      organizationId,
-      environment,
-      programId,
-      affiliateId: resolvedAffiliateId,
-      clickId: attribution?.clickId || dto.clickId,
-      resolvedAttributionId: attribution?.id,
-      externalId: dto.externalId,
-      customerExternalId: dto.customerExternalId,
-      amount: dto.amount,
-      refundedAmount: 0,
-      currency: dto.currency || PLATFORM_CURRENCY,
-      type: dto.type || 'PURCHASE',
-      metadata: dto.metadata,
-      productId: dto.productId,
-      status: ConversionStatus.PENDING,
-      source: dto.source || 'SDK',
-      occurredAt: dto.occurredAt ? new Date(dto.occurredAt) : new Date(),
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    dbStore.conversions.push(conversion);
-
-    this.emitWebhook(organizationId, WebhookEvent.CONVERSION_CREATED, {
-      conversionId: conversion.id,
-      externalId: conversion.externalId,
-      customerExternalId: conversion.customerExternalId,
-      amount: conversion.amount,
-      currency: conversion.currency,
-    });
-
-    const fraudResult = await this.fraudService.evaluateConversion(conversion);
-
-    if (fraudResult.decision === FraudDecision.BLOCK) {
-      conversion.status = ConversionStatus.REJECTED;
-      conversion.validationStatus = 'REJECTED';
-      conversion.rejectionReason = 'FRAUD_BLOCK';
-      this.emitWebhook(organizationId, WebhookEvent.CONVERSION_REJECTED, {
-        conversionId: conversion.id,
-        affiliateId: resolvedAffiliateId,
-        reason: 'FRAUD_BLOCK',
-      });
-    } else if (fraudResult.decision === FraudDecision.REVIEW) {
-      conversion.status = ConversionStatus.PENDING;
-      conversion.validationStatus = 'PENDING';
-    } else {
-      conversion.status = ConversionStatus.APPROVED;
-      conversion.validationStatus = 'VALID';
-    }
-
-    const attributedAffiliate = resolvedAffiliateId
-      ? dbStore.affiliates.find((a) => a.id === resolvedAffiliateId)
+    // Organization coupon (D7): decided and, if it applies, recorded atomically before the sale is saved.
+    const conversionId = uuidv4();
+    const coupon: SaleCouponOutcome | undefined = this.couponRedemptions
+      ? await this.couponRedemptions.reserveForSale({
+          organizationId,
+          environment,
+          conversionId,
+          orderExternalId: dto.externalId,
+          customerExternalId: dto.customerExternalId,
+          metadata: dto.metadata,
+          amount: dto.amount,
+          currency: dto.currency || PLATFORM_CURRENCY,
+          occurredAt,
+          programId,
+          clickAffiliateId,
+        })
       : undefined;
-    const affiliateIsActive = !attributedAffiliate || attributedAffiliate.status === AffiliateStatus.ACTIVE;
+    if (dto.amount <= 0 && !coupon?.applied) {
+      // a zero-value order is only meaningful as a 100 %-off coupon use
+      throw new BadRequestException('amount must be greater than 0 unless an applicable coupon reduced the order to zero.');
+    }
 
-    let commission: any = null;
-    if (conversion.status === ConversionStatus.APPROVED && resolvedAffiliateId && affiliateIsActive) {
-      commission = await this.commissionsService.calculateAndRecordCommission(
+    try {
+      let resolvedAffiliateId: string | undefined;
+      if (coupon?.applied) {
+        // the coupon decision already applied the program's "Collision Priority" (K)
+        resolvedAffiliateId = coupon.creditAffiliateId ?? undefined;
+        programId = coupon.creditProgramId || programId;
+        if (!resolvedAffiliateId) resolvedAffiliateId = (dto.metadata?.affiliateId as string | undefined) || undefined;
+      } else {
+        resolvedAffiliateId = clickAffiliateId;
+        if (!resolvedAffiliateId) {
+          resolvedAffiliateId = (dto as any).affiliateId || dto.metadata?.affiliateId || (dto as any).affiliate;
+        }
+        if (!resolvedAffiliateId) {
+          const activeOrgAffiliates = dbStore.affiliates.filter(
+            (a) => a.organizationId === organizationId && a.status === AffiliateStatus.ACTIVE,
+          );
+          if (activeOrgAffiliates.length === 1) {
+            resolvedAffiliateId = activeOrgAffiliates[0].id;
+          }
+        }
+      }
+
+      const conversion: ConversionEntity = {
+        id: conversionId,
         organizationId,
-        conversion,
-        resolvedAffiliateId,
-        fraudResult.score,
-      );
-
-      this.emitWebhook(organizationId, WebhookEvent.CONVERSION_APPROVED, {
-        conversionId: conversion.id,
+        environment,
+        programId,
         affiliateId: resolvedAffiliateId,
+        clickId: attribution?.clickId || dto.clickId,
+        resolvedAttributionId: attribution?.id,
+        externalId: dto.externalId,
+        customerExternalId: dto.customerExternalId,
+        amount: dto.amount,
+        refundedAmount: 0,
+        currency: dto.currency || PLATFORM_CURRENCY,
+        type: dto.type || 'PURCHASE',
+        metadata: dto.metadata,
+        productId: dto.productId,
+        status: ConversionStatus.PENDING,
+        source: dto.source || 'SDK',
+        occurredAt,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      dbStore.conversions.push(conversion);
+
+      this.emitWebhook(organizationId, WebhookEvent.CONVERSION_CREATED, {
+        conversionId: conversion.id,
+        externalId: conversion.externalId,
+        customerExternalId: conversion.customerExternalId,
         amount: conversion.amount,
         currency: conversion.currency,
       });
 
-      try {
-        await this.performanceAggregationService?.recordApprovedConversion(
-          organizationId,
-          conversion.programId,
-          resolvedAffiliateId,
-          conversion,
-          commission?.commissionAmount || 0,
-        );
-      } catch (error: any) {
-        this.logger.error(`Performance aggregation failed: ${error?.message || error}`);
+      const fraudResult = await this.fraudService.evaluateConversion(conversion);
+
+      if (fraudResult.decision === FraudDecision.BLOCK) {
+        conversion.status = ConversionStatus.REJECTED;
+        conversion.validationStatus = 'REJECTED';
+        conversion.rejectionReason = 'FRAUD_BLOCK';
+        this.emitWebhook(organizationId, WebhookEvent.CONVERSION_REJECTED, {
+          conversionId: conversion.id,
+          affiliateId: resolvedAffiliateId,
+          reason: 'FRAUD_BLOCK',
+        });
+      } else if (fraudResult.decision === FraudDecision.REVIEW) {
+        conversion.status = ConversionStatus.PENDING;
+        conversion.validationStatus = 'PENDING';
+      } else {
+        conversion.status = ConversionStatus.APPROVED;
+        conversion.validationStatus = 'VALID';
       }
-    }
 
-    const responsePayload = {
-      conversion,
-      fraudResult,
-      commission,
-    };
+      const attributedAffiliate = resolvedAffiliateId
+        ? dbStore.affiliates.find((a) => a.id === resolvedAffiliateId)
+        : undefined;
+      const affiliateIsActive = !attributedAffiliate || attributedAffiliate.status === AffiliateStatus.ACTIVE;
 
-    const pendingPersist: Promise<unknown>[] = [awaitPersist(conversion)];
-    if (idempotencyKey) {
-      const ikRecord: IdempotencyKeyEntity = {
-        id: uuidv4(),
-        organizationId,
-        environment,
-        apiKeyId: context?.apiKeyId,
-        key: idempotencyKey,
-        requestHash,
-        responseStatus: 201,
-        responseBody: responsePayload,
-        expiresAt: new Date(Date.now() + 24 * 3600 * 1000),
-        createdAt: new Date(),
+      let commission: any = null;
+      // a ₹0 order (100 %-off coupon) earns no commission, not even a fixed per-sale one (never overpay)
+      if (conversion.status === ConversionStatus.APPROVED && resolvedAffiliateId && affiliateIsActive && conversion.amount > 0) {
+        commission = await this.commissionsService.calculateAndRecordCommission(
+          organizationId,
+          conversion,
+          resolvedAffiliateId,
+          fraudResult.score,
+        );
+
+        this.emitWebhook(organizationId, WebhookEvent.CONVERSION_APPROVED, {
+          conversionId: conversion.id,
+          affiliateId: resolvedAffiliateId,
+          amount: conversion.amount,
+          currency: conversion.currency,
+        });
+
+        try {
+          await this.performanceAggregationService?.recordApprovedConversion(
+            organizationId,
+            conversion.programId,
+            resolvedAffiliateId,
+            conversion,
+            commission?.commissionAmount || 0,
+          );
+        } catch (error: any) {
+          this.logger.error(`Performance aggregation failed: ${error?.message || error}`);
+        }
+      }
+
+      const responsePayload = {
+        conversion,
+        fraudResult,
+        commission,
+        coupon: couponOutcomeView(coupon),
       };
-      dbStore.idempotencyKeys.push(ikRecord);
-      pendingPersist.push(awaitPersist(ikRecord));
-    }
 
-    await Promise.all(pendingPersist);
-    return responsePayload;
+      const pendingPersist: Promise<unknown>[] = [awaitPersist(conversion)];
+      if (idempotencyKey) {
+        const ikRecord: IdempotencyKeyEntity = {
+          id: uuidv4(),
+          organizationId,
+          environment,
+          apiKeyId: context?.apiKeyId,
+          key: idempotencyKey,
+          requestHash,
+          responseStatus: 201,
+          responseBody: responsePayload,
+          expiresAt: new Date(Date.now() + 24 * 3600 * 1000),
+          createdAt: new Date(),
+        };
+        dbStore.idempotencyKeys.push(ikRecord);
+        pendingPersist.push(awaitPersist(ikRecord));
+      }
+
+      await Promise.all(pendingPersist);
+      return responsePayload;
+    } catch (err) {
+      // the sale was not recorded: give the coupon use back so the limit is not consumed by a failed request
+      if (coupon?.applied && !dbStore.conversions.some((c) => c.id === conversionId)) {
+        await this.couponRedemptions?.release(coupon).catch((e) => this.logger.error(`Coupon use release failed: ${e?.message || e}`));
+      }
+      throw err;
+    }
   }
 
   async refundConversion(
@@ -1070,6 +1142,9 @@ export class ConversionsService {
         );
       }
     }
+
+    // coupon use stays counted (D7); the redemption row records the refund for coupon revenue KPIs
+    await this.couponRedemptions?.recordRefund(conversion.id, conversion.refundedAmount, isFullyRefunded);
 
     this.audit({
       organizationId,

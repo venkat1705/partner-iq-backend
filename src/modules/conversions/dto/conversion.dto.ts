@@ -13,9 +13,15 @@ export class CreateConversionDto {
   @IsString()
   customerExternalId!: string;
 
-  @ApiProperty({ example: 19900, description: 'Amount in paise / cents' })
-  @IsNumber()
-  @Min(1)
+  @ApiProperty({
+    example: 19900,
+    description:
+      'Amount the customer paid in paise / cents, after any coupon discount and excluding tax/shipping (commission base). ' +
+      '0 is accepted only when an applicable coupon (metadata.couponCode) made the order free. ' +
+      'Optional metadata.orderSubtotal = price before the discount; metadata.customerEmail is used for per-customer coupon limits.',
+  })
+  @IsNumber({ allowNaN: false, allowInfinity: false, maxDecimalPlaces: 0 })
+  @Min(0)
   amount!: number;
 
   @ApiPropertyOptional({ example: PLATFORM_CURRENCY })
