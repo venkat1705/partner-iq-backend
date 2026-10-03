@@ -249,6 +249,7 @@ export class CouponsService {
       description: dto.description?.trim() || undefined,
       discountType: dto.discountType,
       discountValue: dto.discountValue,
+      discountValueLegacy: Math.round(dto.discountValue),
       status: 'ACTIVE',
       maxRedemptions: dto.maxRedemptions ?? undefined,
       maxRedemptionsPerCustomer: dto.maxRedemptionsPerCustomer ?? undefined,
@@ -270,10 +271,10 @@ export class CouponsService {
     // 2. MySQL first: the unique (organizationId, normalizedCode) constraint decides concurrent duplicates (F)
     await this.inTx(async (m) => {
       await m.query(
-        `INSERT INTO organization_coupons (id, organizationId, code, normalizedCode, name, description, discountType, discountValue, status,
+        `INSERT INTO organization_coupons (id, organizationId, code, normalizedCode, name, description, discountType, discountValueExact, discountValue, status,
            maxRedemptions, maxRedemptionsPerCustomer, validFrom, validUntil, createdBy, createdAt, updatedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?, ?, ?, ?, ?, ?)`,
-        [coupon.id, organizationId, code, code, coupon.name, coupon.description ?? null, coupon.discountType, coupon.discountValue,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?, ?, ?, ?, ?, ?)`,
+        [coupon.id, organizationId, code, code, coupon.name, coupon.description ?? null, coupon.discountType, coupon.discountValue, Math.round(coupon.discountValue),
           coupon.maxRedemptions ?? null, coupon.maxRedemptionsPerCustomer ?? null, coupon.validFrom ?? null, coupon.validUntil ?? null, userId, now, now],
       );
       for (const a of assignments) {
@@ -332,14 +333,14 @@ export class CouponsService {
     const now = new Date();
     await this.inTx(async (m) => {
       const res: any = await m.query(
-        `UPDATE organization_coupons SET name = ?, description = ?, discountType = ?, discountValue = ?, maxRedemptions = ?,
+        `UPDATE organization_coupons SET name = ?, description = ?, discountType = ?, discountValueExact = ?, discountValue = ?, maxRedemptions = ?,
            maxRedemptionsPerCustomer = ?, validFrom = ?, validUntil = ?, updatedAt = ? WHERE id = ? AND organizationId = ?`,
-        [next.name, next.description ?? null, next.discountType, next.discountValue, next.maxRedemptions ?? null,
+        [next.name, next.description ?? null, next.discountType, next.discountValue, Math.round(next.discountValue), next.maxRedemptions ?? null,
           next.maxRedemptionsPerCustomer ?? null, next.validFrom ?? null, next.validUntil ?? null, now, coupon.id, organizationId],
       );
       if (Number(res?.affectedRows ?? 0) !== 1) throw new NotFoundException('Coupon not found.');
     });
-    Object.assign(coupon, next, { updatedAt: now });
+    Object.assign(coupon, next, { discountValueLegacy: Math.round(next.discountValue), updatedAt: now });
 
     const after = this.snapshot(coupon);
     const changed = Object.keys(after).filter((k) => JSON.stringify((before as any)[k]) !== JSON.stringify((after as any)[k]));

@@ -7,7 +7,8 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  *   per (organization, environment, order id) so the same order can never use a coupon twice.
  * - `organization_coupon_usage`: per-coupon use counter whose row is locked while a use is recorded, so usage
  *   limits are enforced by MySQL under concurrency.
- * - `organization_coupons.discountValue` int → decimal(12,2) (12.5 % or ₹99.50) — widening, lossless.
+ * - `organization_coupons.discountValueExact` decimal(12,2) NULL (12.5 % or ₹99.50), backfilled from the int
+ *   `discountValue`, which is left untouched (changing its type would make schema sync drop and re-add it).
  * - `organization_coupons.maxRedemptionsPerCustomer` (nullable).
  * - Unique (organizationId, normalizedCode): the entity already declares it, but no migration created it
  *   (the table only ever came from `synchronize`). Added under a known name only when no equivalent unique
@@ -77,9 +78,10 @@ export class CouponRedemptionLedger2026100300000 implements MigrationInterface {
       await q.query(`ALTER TABLE organization_coupons ADD CONSTRAINT UQ_org_coupon_org_normcode UNIQUE (organizationId, normalizedCode)`);
     }
 
-    if ((await this.columnType(q, 'organization_coupons', 'discountValue')) !== 'decimal') {
-      await q.query(`ALTER TABLE organization_coupons MODIFY discountValue decimal(12,2) NOT NULL`);
+    if (!(await this.hasColumn(q, 'organization_coupons', 'discountValueExact'))) {
+      await q.query(`ALTER TABLE organization_coupons ADD COLUMN discountValueExact decimal(12,2) NULL`);
     }
+    await q.query(`UPDATE organization_coupons SET discountValueExact = discountValue WHERE discountValueExact IS NULL`);
     if (!(await this.hasColumn(q, 'organization_coupons', 'maxRedemptionsPerCustomer'))) {
       await q.query(`ALTER TABLE organization_coupons ADD COLUMN maxRedemptionsPerCustomer int NULL`);
     }
@@ -155,13 +157,13 @@ export class CouponRedemptionLedger2026100300000 implements MigrationInterface {
         throw new Error(`${n} coupon(s) use maxRedemptionsPerCustomer; clear them before reverting (would lose limits).`);
       }
     }
-    const isDecimal = (await this.columnType(q, 'organization_coupons', 'discountValue')) === 'decimal';
-    if (isDecimal) {
+    const hasExact = await this.hasColumn(q, 'organization_coupons', 'discountValueExact');
+    if (hasExact) {
       const [{ n }]: Array<{ n: number }> = await q.query(
-        `SELECT COUNT(*) n FROM organization_coupons WHERE discountValue <> FLOOR(discountValue)`,
+        `SELECT COUNT(*) n FROM organization_coupons WHERE discountValueExact IS NOT NULL AND discountValueExact <> discountValue`,
       );
       if (Number(n) > 0) {
-        throw new Error(`${n} coupon(s) have fractional discountValue; converting back to int would lose data.`);
+        throw new Error(`${n} coupon(s) have a fractional discount (discountValueExact ≠ discountValue); reverting would lose data.`);
       }
     }
 
@@ -174,8 +176,8 @@ export class CouponRedemptionLedger2026100300000 implements MigrationInterface {
     if (hasPerCustomer) {
       await q.query(`ALTER TABLE organization_coupons DROP COLUMN maxRedemptionsPerCustomer`);
     }
-    if (isDecimal) {
-      await q.query(`ALTER TABLE organization_coupons MODIFY discountValue int NOT NULL`);
+    if (hasExact) {
+      await q.query(`ALTER TABLE organization_coupons DROP COLUMN discountValueExact`);
     }
     if ((await this.uniqueCodeIndex(q)) === 'UQ_org_coupon_org_normcode') {
       await q.query(`ALTER TABLE organization_coupons DROP INDEX UQ_org_coupon_org_normcode`);

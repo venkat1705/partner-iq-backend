@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, PrimaryColumn, Column, CreateDateColumn, UpdateDateColumn, Index, Unique } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, PrimaryColumn, Column, CreateDateColumn, UpdateDateColumn, Index, Unique, AfterLoad } from 'typeorm';
 import {
   EnvironmentType,
   SubscriptionStatus,
@@ -4739,10 +4739,17 @@ export class OrganizationCoupon {
   @Column({ type: 'varchar', length: 30, default: 'PERCENTAGE' })
   discountType!: string;
 
-  // Percent (0.01–100) or a fixed amount in major currency units (e.g. 99.50 = ₹99.50).
-  // mysql2 returns DECIMAL as a string, so it is converted back to a number on read.
-  @Column({ type: 'decimal', precision: 12, scale: 2, transformer: decimalToNumber })
+  /**
+   * Percent (0.01–100) or a fixed amount in major currency units (e.g. 99.50 = ₹99.50), stored exactly in
+   * `discountValueExact`. The original integer column `discountValue` is kept unchanged (written rounded) because
+   * the app boots with `synchronize: true`: changing that column's type in the entity makes TypeORM drop and
+   * re-add it, which wiped every existing value in testing (docs/coupons-proof/incident-discountValue-sync.txt).
+   */
+  @Column({ name: 'discountValueExact', type: 'decimal', precision: 12, scale: 2, nullable: true, transformer: decimalToNumber })
   discountValue!: number;
+
+  @Column({ name: 'discountValue', type: 'int' })
+  discountValueLegacy!: number;
 
   @Column({ type: 'varchar', length: 30, default: 'ACTIVE' })
   status!: string;
@@ -4752,6 +4759,14 @@ export class OrganizationCoupon {
 
   @Column({ type: 'int', nullable: true })
   maxRedemptionsPerCustomer?: number;
+
+  /** Rows written before discountValueExact existed (or before the migration backfilled it) fall back to the int. */
+  @AfterLoad()
+  fillExactDiscount() {
+    if (this.discountValue === null || this.discountValue === undefined) {
+      this.discountValue = Number(this.discountValueLegacy);
+    }
+  }
 
   @Column({ type: 'timestamp', nullable: true })
   validFrom?: Date;

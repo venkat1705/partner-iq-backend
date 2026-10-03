@@ -1,0 +1,32 @@
+# Data-loss incident (introduced and caught during this audit, test DB only)
+
+Cause: commit 618d431 changed OrganizationCoupon.discountValue int -> decimal in the entity. The app runs TypeORM synchronize:true at boot (before migrations); TypeORM applied the type change by dropping and re-adding the column, so every existing coupon's discountValue became 0.
+
+mysql> SELECT COUNT(*) zero_values, total FROM organization_coupons WHERE discountValue=0
+zero_values=50005 total=50012   (5 fixture coupons + 50,000 AE perf coupons)
+
+Restore (values known from e2e/scripts/seed-fixtures.ts and the AE generator (n % 50) + 1):
+ALTER TABLE organization_coupons MODIFY discountValue int NOT NULL;
+UPDATE organization_coupons SET discountValue=30 WHERE organizationId='f93f90d6-f027-465d-9fca-c2f0bae66ce1' AND normalizedCode='E2E-CPN-MUSQ2MAX-SHARED';
+UPDATE organization_coupons SET discountValue=12 WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' AND normalizedCode='E2E-CPN-MUSQ2MAX-SHARED';
+UPDATE organization_coupons SET discountValue=10 WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' AND normalizedCode='E2E-CPN-MUSQ2MAX-USED';
+UPDATE organization_coupons SET discountValue=15 WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' AND normalizedCode='E2E-CPN-MUSQ2MAX-STARTS';
+UPDATE organization_coupons SET discountValue=100 WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' AND normalizedCode='E2E-CPN-MUSQ2MAX-ARCHIVED';
+UPDATE organization_coupons SET discountValue=(CAST(SUBSTRING(code,5) AS UNSIGNED) % 50)+1 WHERE code LIKE 'PERF%' AND discountValue=0;
+DELETE FROM migrations WHERE name='CouponRedemptionLedger2026100300000';
+zero_values
+0
+Field	Type	Null	Key	Default	Extra
+discountValue	int	NO		NULL	
+
+Upgrade path after the fix (build → boot with synchronize → migration:run):
+checksum of (id, discountValue) before boot: c05e30b29f68a60d2d4af601f720a783
+after boot (schema sync):                     c05e30b29f68a60d2d4af601f720a783
+Field	Type	Null	Key	Default	Extra
+discountValue	int	NO		NULL	
+discountValueExact	decimal(12,2)	YES		NULL	
+$ npm run migration:run
+Migration CouponRedemptionLedger2026100300000 has been executed successfully.
+after migration:                              c05e30b29f68a60d2d4af601f720a783
+total	exact_null	mismatched	zero
+50023	0	2	0
