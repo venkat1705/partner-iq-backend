@@ -23,6 +23,11 @@ export class LedgerService {
         updatedAt: new Date(),
       };
       dbStore.ledgerAccounts.push(account);
+      // push() stores a persistence proxy; keep using that proxy, not the raw object, or later
+      // `account.balance += …` bypasses the proxy and the new balance is never written to MySQL
+      account = dbStore.ledgerAccounts.find(
+        (a) => a.organizationId === organizationId && a.affiliateId === affiliateId && a.type === type,
+      )!;
     }
 
     return account;
