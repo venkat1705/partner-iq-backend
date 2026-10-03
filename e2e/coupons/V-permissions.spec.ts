@@ -45,6 +45,10 @@ const grants: Record<string, string[]> = {
 };
 
 test('V1 role × API matrix', async () => {
+  test.setTimeout(150_000);
+  // the code-check endpoint allows 30 requests/min per client; scenario U (run just before) spends that budget,
+  // so start this matrix in a fresh 60 s window — a 429 here would hide the permission result
+  await new Promise((r) => setTimeout(r, 61_000));
   const owner = await as('ORG_A_OWNER');
   const table = ['| role | API | expected | actual |', '|---|---|---|---|'];
   const mismatches: string[] = [];

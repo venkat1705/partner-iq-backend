@@ -60,10 +60,12 @@ for (const c of cases) {
     const assigned = await sql(`SELECT affiliateId FROM organization_coupon_assignments WHERE couponId=?`, [row!.id]);
     proof.sql(`SELECT affiliateId FROM organization_coupon_assignments WHERE couponId='${row!.id}'`, assigned);
     expect(assigned.map((a: any) => a.affiliateId)).toEqual([f.orgA.affiliates[0].id]);
-    const audit = await sql(`SELECT action, actorId, organizationId, resourceId, metadata FROM audit_logs WHERE resourceId=? ORDER BY createdAt`, [row!.id]);
-    proof.sql(`SELECT action, actorId, organizationId, resourceId, metadata FROM audit_logs WHERE resourceId='${row!.id}'`, audit);
+    // both rows are written in the same request, usually in the same millisecond, so order by time then action
+    const audit = await sql(`SELECT action, actorId, organizationId, resourceId, metadata, createdAt FROM audit_logs WHERE resourceId=? ORDER BY createdAt, action DESC`, [row!.id]);
+    proof.sql(`SELECT action, actorId, organizationId, resourceId, metadata, createdAt FROM audit_logs WHERE resourceId='${row!.id}' ORDER BY createdAt, action DESC`, audit);
     expect(audit.map((a: any) => a.action)).toEqual(['COUPON_CREATED', 'COUPON_ASSIGNED']);
-    expect(audit[0].actorId).toBe(f.users.ORG_A_OWNER.userId);
+    expect(new Date(audit[0].createdAt).getTime()).toBeLessThanOrEqual(new Date(audit[1].createdAt).getTime());
+    for (const a of audit) expect(a.actorId).toBe(f.users.ORG_A_OWNER.userId);
     // UI after refresh
     await page.reload();
     await page.getByRole('tab', { name: /All Coupons/ }).click();

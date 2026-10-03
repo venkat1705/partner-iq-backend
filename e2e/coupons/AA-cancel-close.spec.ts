@@ -70,7 +70,7 @@ test('AA2 detail drawer, assign dialog, validate dialog', async ({ page }) => {
     // drawer
     await page.locator('tbody tr').first().getByRole('button', { name: /Intel/ }).click();
     await expect(page.getByText('Performance & Financial Yield')).toBeVisible();
-    if (label === 'X') await page.getByRole('button', { name: /Close/ }).last().click(); else await close(page);
+    if (label === 'X') await page.getByRole('button', { name: 'Close', exact: true }).click(); else await close(page);
     await expect(page.getByText('Performance & Financial Yield')).toHaveCount(0);
     // validate dialog: type, close, reopen → empty and no stale result
     await page.getByRole('button', { name: 'Validate Code' }).click();

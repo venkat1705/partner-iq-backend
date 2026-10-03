@@ -25,6 +25,10 @@ for (const key of ['PAUSED', 'ARCHIVED', 'EXPIRED'] as const) {
     const s = await sale(proof, f.orgA.apiKey, f.orgA.id, { externalId: `${O}${key}`, customerExternalId: `${O}c-${key}`, amount: 50000, currency: 'INR', metadata: { couponCode: c.code } }, c.id);
     proof.check('HTTP (sale recorded)', s.status, 201);
     proof.check('coupon.applied', s.body?.data?.coupon?.applied, false);
+    // the refusal must be for the coupon's state, not because the code was not found
+    const reason = { PAUSED: 'INACTIVE', ARCHIVED: 'INACTIVE', EXPIRED: 'EXPIRED' }[key];
+    proof.check('refusal reason', s.body?.data?.coupon?.reason, reason);
+    expect(s.body?.data?.coupon?.reason).toBe(reason);
     proof.check('redemptions unchanged', await usageCount(c.id), before);
     expect(s.status).toBe(201);
     expect(s.body?.data?.coupon?.applied).toBe(false);
@@ -43,6 +47,7 @@ test('I2 pause → refused, reactivate → works again', async () => {
   proof.http('POST', orgPath(f.orgA.id, `/${c.id}/status`), a, { status: 'ACTIVE' });
   const s2 = await sale(proof, f.orgA.apiKey, f.orgA.id, { externalId: `${O}T2`, customerExternalId: `${O}t2`, amount: 90000, currency: 'INR', metadata: { couponCode: c.code } }, c.id);
   expect(s1.body?.data?.coupon?.applied).toBe(false);
+  expect(s1.body?.data?.coupon?.reason).toBe('INACTIVE');
   expect(s2.body?.data?.coupon?.applied).toBe(true);
   expect(await usageCount(c.id)).toBe(1);
 });

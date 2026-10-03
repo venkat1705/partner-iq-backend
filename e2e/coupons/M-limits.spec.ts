@@ -5,7 +5,7 @@ import { closeDb, sql } from '../lib/db';
 import { Proof } from '../lib/proof';
 import { newCoupon, sale, usageCount } from '../lib/sales';
 import { as } from '../lib/session';
-import { adminLogin } from '../lib/ui';
+import { adminLogin, openCoupons } from '../lib/ui';
 
 /**
  * M — usage limits. Rules (D7): a use is counted when the sale is recorded with an applicable coupon; with
@@ -54,9 +54,11 @@ test('M1 total limit N=3: 3 uses work, 4th refused; remaining matches SQL each s
   }
   // UI: detail drawer quota after a full page refresh
   await adminLogin(page, 'ORG_A_OWNER');
-  await page.getByRole('link', { name: 'Coupons' }).first().click();
+  // the sidebar entry is a button, not a link: open the page by URL, then refresh
+  await openCoupons(page, f.orgA.id, '?tab=coupons');
   await page.reload();
-  await page.getByRole('tab', { name: /All Coupons/ }).click();
+  await page.waitForLoadState('networkidle');
+  await page.getByPlaceholder('Search coupons by code or name...').fill(c.code);
   const row = page.locator('tr', { hasText: c.code });
   await expect(row).toBeVisible();
   const usageText = (await row.innerText()).replace(/\s+/g, ' ');

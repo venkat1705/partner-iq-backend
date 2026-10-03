@@ -47,6 +47,8 @@ export async function openCoupons(page: Page, orgId: string, query = '') {
   await dismissPricing(page);
   await acceptCookies(page);
   await page.getByText('Coupon Intelligence & Management').first().waitFor({ timeout: 20_000 });
+  // the page fills the table only after all coupon requests settle; read it after the network is idle
+  await page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => undefined);
 }
 
 export async function dismissPricing(page: Page) {

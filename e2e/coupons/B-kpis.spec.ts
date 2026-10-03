@@ -103,7 +103,7 @@ test('B UI cards equal SQL for 30D and Lifetime (after refresh)', async ({ page 
     const text = (await page.locator('main').innerText()).replace(/\s+/g, ' ');
     proof.h(`B UI ${btn}`);
     proof.note(text.slice(0, 1200));
-    const fmt = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+    const fmt = (n: number) => `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; // money is shown exact to the paisa
     for (const [lbl, want] of [
       ['ACTIVE COUPONS', `ACTIVE COUPONS ${exp.activeCoupons} of ${exp.totalCoupons} total`],
       ['TOTAL REDEMPTIONS', `TOTAL REDEMPTIONS ${exp.totalRedemptions}`],
