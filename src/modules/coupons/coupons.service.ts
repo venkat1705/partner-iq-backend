@@ -455,7 +455,8 @@ export class CouponsService {
           },
           { organizationId },
         )
-        .catch(() => undefined);
+        // the assignment itself is saved; a failed notification must still be visible to operators
+        .catch((err: any) => this.logger.warn(`Coupon ${coupon.code}: assignment email to affiliate failed: ${err?.message || err}`));
     }
   }
 
