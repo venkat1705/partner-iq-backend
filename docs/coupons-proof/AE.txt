@@ -1,0 +1,14 @@
+# Scenario AE — raw proof, run=1791062315582 (started 2026-10-03T21:18:35.659Z)
+mysql> SELECT COUNT(*) coupons, COUNT(*) sales for org-perf
+[{"coupons":50000,"sales":55020}]
+backend restart (dbStore loads everything into memory): 6126 ms; RSS before 502 MB → after 568 MB. Reads are served from memory (dbStore), not from MySQL.
+| request | p50 ms | p95 ms | limit p95 ms | HTTP |
+|---|---|---|---|---|
+| list first page (page=1&limit=20) (20 runs) | 118 | 140 | 1000 | 200 |
+| list late page (page=2400&limit=20) (20 runs) | 126 | 176 | 1000 | 200 |
+| code search (search=PERF0499) (20 runs) | 28 | 34 | 1000 | 200 |
+| filter status=PAUSED&discountType=FIXED_AMOUNT (20 runs) | 31 | 37 | 1000 | 200 |
+| code check GET /validate/:code (20 runs) | 6 | 9 | 300 | 200 |
+| checkout sale with coupon POST /conversions (20 runs) | 85 | 140 | 1000 | 201 |
+| analytics overview LIFETIME (20 runs) | 700 | 761 | 2000 | 200 |
+CHECK PASS all within limits and 2xx: actual=[] expected=[]

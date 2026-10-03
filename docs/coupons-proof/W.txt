@@ -1,0 +1,379 @@
+# Scenario W — raw proof, run=1791062315582 (started 2026-10-03T21:18:35.731Z)
+
+==== W1 discountValue negative ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-W-100","name":"e2e-cpn-1791051925353 W 100","discountType":"PERCENTAGE","discountValue":-5}
+< HTTP 400 (9 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"discountValue must not be less than 0.01","error":{"code":"VALIDATION_ERROR","message":"discountValue must not be less than 0.01","requestId":"req_c253d00ce716d1c8786fc800"},"correlationId":"req_c253d00ce716d1c8786fc800","timestamp":"2026-10-03T21:24:05.166Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+CHECK PASS status: actual=400 expected=400
+mysql> SELECT id, code FROM organization_coupons WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' AND (name='e2e-cpn-1791051925353 W 100' OR normalizedCode LIKE 'E2E-CPN-MUSQ2MAX-W-100%')
+[]
+CHECK PASS SQL rows: actual=0 expected=0
+CHECK PASS GET list rows: actual=0 expected=0
+
+==== W2 discountValue zero ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-W-101","name":"e2e-cpn-1791051925353 W 101","discountType":"PERCENTAGE","discountValue":0}
+< HTTP 400 (6 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"discountValue must not be less than 0.01","error":{"code":"VALIDATION_ERROR","message":"discountValue must not be less than 0.01","requestId":"req_b186b73ddf46b353950305f1"},"correlationId":"req_b186b73ddf46b353950305f1","timestamp":"2026-10-03T21:24:05.211Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+CHECK PASS status: actual=400 expected=400
+mysql> SELECT id, code FROM organization_coupons WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' AND (name='e2e-cpn-1791051925353 W 101' OR normalizedCode LIKE 'E2E-CPN-MUSQ2MAX-W-101%')
+[]
+CHECK PASS SQL rows: actual=0 expected=0
+CHECK PASS GET list rows: actual=0 expected=0
+
+==== W3 percentage over 100 ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-W-102","name":"e2e-cpn-1791051925353 W 102","discountType":"PERCENTAGE","discountValue":101}
+< HTTP 400 (6 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"Percentage discount must be between 0.01 and 100.","error":{"code":"VALIDATION_ERROR","message":"Percentage discount must be between 0.01 and 100.","requestId":"req_4c4aaaf274532d74665b0004"},"correlationId":"req_4c4aaaf274532d74665b0004","timestamp":"2026-10-03T21:24:05.256Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+CHECK PASS status: actual=400 expected=400
+mysql> SELECT id, code FROM organization_coupons WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' AND (name='e2e-cpn-1791051925353 W 102' OR normalizedCode LIKE 'E2E-CPN-MUSQ2MAX-W-102%')
+[]
+CHECK PASS SQL rows: actual=0 expected=0
+CHECK PASS GET list rows: actual=0 expected=0
+
+==== W4 percentage huge ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-W-103","name":"e2e-cpn-1791051925353 W 103","discountType":"PERCENTAGE","discountValue":1000000000000}
+< HTTP 400 (5 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"Percentage discount must be between 0.01 and 100.","error":{"code":"VALIDATION_ERROR","message":"Percentage discount must be between 0.01 and 100.","requestId":"req_d7965dfdd803a1d047e94220"},"correlationId":"req_d7965dfdd803a1d047e94220","timestamp":"2026-10-03T21:24:05.292Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+CHECK PASS status: actual=400 expected=400
+mysql> SELECT id, code FROM organization_coupons WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' AND (name='e2e-cpn-1791051925353 W 103' OR normalizedCode LIKE 'E2E-CPN-MUSQ2MAX-W-103%')
+[]
+CHECK PASS SQL rows: actual=0 expected=0
+CHECK PASS GET list rows: actual=0 expected=0
+
+==== W5 fixed amount huge (> ₹1,00,00,000) ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-W-104","name":"e2e-cpn-1791051925353 W 104","discountType":"FIXED_AMOUNT","discountValue":1000000000}
+< HTTP 400 (5 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"Fixed amount discount must be between 0.01 and 10000000.","error":{"code":"VALIDATION_ERROR","message":"Fixed amount discount must be between 0.01 and 10000000.","requestId":"req_60cd888e561f109c031c5788"},"correlationId":"req_60cd888e561f109c031c5788","timestamp":"2026-10-03T21:24:05.326Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+CHECK PASS status: actual=400 expected=400
+mysql> SELECT id, code FROM organization_coupons WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' AND (name='e2e-cpn-1791051925353 W 104' OR normalizedCode LIKE 'E2E-CPN-MUSQ2MAX-W-104%')
+[]
+CHECK PASS SQL rows: actual=0 expected=0
+CHECK PASS GET list rows: actual=0 expected=0
+
+==== W6 discountValue string ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-W-105","name":"e2e-cpn-1791051925353 W 105","discountType":"PERCENTAGE","discountValue":"ten"}
+< HTTP 400 (5 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"discountValue must not be less than 0.01; discountValue must be a number conforming to the specified constraints","error":{"code":"VALIDATION_ERROR","message":"discountValue must not be less than 0.01; discountValue must be a number conforming to the specified constraints","requestId":"req_26f2cb5cec2b8b9c50d97ce5"},"correlationId":"req_26f2cb5cec2b8b9c50d97ce5","timestamp":"2026-10-03T21:24:05.361Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+CHECK PASS status: actual=400 expected=400
+mysql> SELECT id, code FROM organization_coupons WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' AND (name='e2e-cpn-1791051925353 W 105' OR normalizedCode LIKE 'E2E-CPN-MUSQ2MAX-W-105%')
+[]
+CHECK PASS SQL rows: actual=0 expected=0
+CHECK PASS GET list rows: actual=0 expected=0
+
+==== W7 discountValue NaN-ish ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-W-106","name":"e2e-cpn-1791051925353 W 106","discountType":"PERCENTAGE","discountValue":"NaN"}
+< HTTP 400 (5 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"discountValue must not be less than 0.01; discountValue must be a number conforming to the specified constraints","error":{"code":"VALIDATION_ERROR","message":"discountValue must not be less than 0.01; discountValue must be a number conforming to the specified constraints","requestId":"req_89490aa02b3d462b86cc9ed4"},"correlationId":"req_89490aa02b3d462b86cc9ed4","timestamp":"2026-10-03T21:24:05.396Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+CHECK PASS status: actual=400 expected=400
+mysql> SELECT id, code FROM organization_coupons WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' AND (name='e2e-cpn-1791051925353 W 106' OR normalizedCode LIKE 'E2E-CPN-MUSQ2MAX-W-106%')
+[]
+CHECK PASS SQL rows: actual=0 expected=0
+CHECK PASS GET list rows: actual=0 expected=0
+
+==== W8 discountType unknown ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-W-107","name":"e2e-cpn-1791051925353 W 107","discountType":"BOGO","discountValue":10}
+< HTTP 400 (5 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"discountType must be one of the following values: PERCENTAGE, FIXED_AMOUNT","error":{"code":"VALIDATION_ERROR","message":"discountType must be one of the following values: PERCENTAGE, FIXED_AMOUNT","requestId":"req_88e0db643f7735517f4bd6be"},"correlationId":"req_88e0db643f7735517f4bd6be","timestamp":"2026-10-03T21:24:05.429Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+CHECK PASS status: actual=400 expected=400
+mysql> SELECT id, code FROM organization_coupons WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' AND (name='e2e-cpn-1791051925353 W 107' OR normalizedCode LIKE 'E2E-CPN-MUSQ2MAX-W-107%')
+[]
+CHECK PASS SQL rows: actual=0 expected=0
+CHECK PASS GET list rows: actual=0 expected=0
+
+==== W9 maxRedemptions negative ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-W-108","name":"e2e-cpn-1791051925353 W 108","discountType":"PERCENTAGE","discountValue":10,"maxRedemptions":-1}
+< HTTP 400 (5 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"maxRedemptions must not be less than 1","error":{"code":"VALIDATION_ERROR","message":"maxRedemptions must not be less than 1","requestId":"req_c7b17a5e2aad1b100f611f7d"},"correlationId":"req_c7b17a5e2aad1b100f611f7d","timestamp":"2026-10-03T21:24:05.462Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+CHECK PASS status: actual=400 expected=400
+mysql> SELECT id, code FROM organization_coupons WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' AND (name='e2e-cpn-1791051925353 W 108' OR normalizedCode LIKE 'E2E-CPN-MUSQ2MAX-W-108%')
+[]
+CHECK PASS SQL rows: actual=0 expected=0
+CHECK PASS GET list rows: actual=0 expected=0
+
+==== W10 maxRedemptions zero ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-W-109","name":"e2e-cpn-1791051925353 W 109","discountType":"PERCENTAGE","discountValue":10,"maxRedemptions":0}
+< HTTP 400 (6 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"maxRedemptions must not be less than 1","error":{"code":"VALIDATION_ERROR","message":"maxRedemptions must not be less than 1","requestId":"req_812a22071b08933d0d945a89"},"correlationId":"req_812a22071b08933d0d945a89","timestamp":"2026-10-03T21:24:05.493Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+CHECK PASS status: actual=400 expected=400
+mysql> SELECT id, code FROM organization_coupons WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' AND (name='e2e-cpn-1791051925353 W 109' OR normalizedCode LIKE 'E2E-CPN-MUSQ2MAX-W-109%')
+[]
+CHECK PASS SQL rows: actual=0 expected=0
+CHECK PASS GET list rows: actual=0 expected=0
+
+==== W11 maxRedemptions fractional ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-W-110","name":"e2e-cpn-1791051925353 W 110","discountType":"PERCENTAGE","discountValue":10,"maxRedemptions":1.5}
+< HTTP 400 (5 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"maxRedemptions must be an integer number","error":{"code":"VALIDATION_ERROR","message":"maxRedemptions must be an integer number","requestId":"req_b470efef184aaf0ff9bcd679"},"correlationId":"req_b470efef184aaf0ff9bcd679","timestamp":"2026-10-03T21:24:05.526Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+CHECK PASS status: actual=400 expected=400
+mysql> SELECT id, code FROM organization_coupons WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' AND (name='e2e-cpn-1791051925353 W 110' OR normalizedCode LIKE 'E2E-CPN-MUSQ2MAX-W-110%')
+[]
+CHECK PASS SQL rows: actual=0 expected=0
+CHECK PASS GET list rows: actual=0 expected=0
+
+==== W12 validFrom invalid date ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-W-111","name":"e2e-cpn-1791051925353 W 111","discountType":"PERCENTAGE","discountValue":10,"validFrom":"2026-13-45"}
+< HTTP 400 (5 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"validFrom must be a valid ISO 8601 date string","error":{"code":"VALIDATION_ERROR","message":"validFrom must be a valid ISO 8601 date string","requestId":"req_58c7c8b3693bcc394f573525"},"correlationId":"req_58c7c8b3693bcc394f573525","timestamp":"2026-10-03T21:24:05.555Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+CHECK PASS status: actual=400 expected=400
+mysql> SELECT id, code FROM organization_coupons WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' AND (name='e2e-cpn-1791051925353 W 111' OR normalizedCode LIKE 'E2E-CPN-MUSQ2MAX-W-111%')
+[]
+CHECK PASS SQL rows: actual=0 expected=0
+CHECK PASS GET list rows: actual=0 expected=0
+
+==== W13 validUntil not a date ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-W-112","name":"e2e-cpn-1791051925353 W 112","discountType":"PERCENTAGE","discountValue":10,"validUntil":"tomorrow"}
+< HTTP 400 (5 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"validUntil must be a valid ISO 8601 date string","error":{"code":"VALIDATION_ERROR","message":"validUntil must be a valid ISO 8601 date string","requestId":"req_515acf9062d79e0de67e80c7"},"correlationId":"req_515acf9062d79e0de67e80c7","timestamp":"2026-10-03T21:24:05.593Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+CHECK PASS status: actual=400 expected=400
+mysql> SELECT id, code FROM organization_coupons WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' AND (name='e2e-cpn-1791051925353 W 112' OR normalizedCode LIKE 'E2E-CPN-MUSQ2MAX-W-112%')
+[]
+CHECK PASS SQL rows: actual=0 expected=0
+CHECK PASS GET list rows: actual=0 expected=0
+
+==== W14 end before start ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-W-113","name":"e2e-cpn-1791051925353 W 113","discountType":"PERCENTAGE","discountValue":10,"validFrom":"2026-11-10","validUntil":"2026-11-01"}
+< HTTP 400 (10 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"validUntil must be after validFrom.","error":{"code":"VALIDATION_ERROR","message":"validUntil must be after validFrom.","requestId":"req_3c15792dad934c7fa6d54f7d"},"correlationId":"req_3c15792dad934c7fa6d54f7d","timestamp":"2026-10-03T21:24:05.627Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+CHECK PASS status: actual=400 expected=400
+mysql> SELECT id, code FROM organization_coupons WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' AND (name='e2e-cpn-1791051925353 W 113' OR normalizedCode LIKE 'E2E-CPN-MUSQ2MAX-W-113%')
+[]
+CHECK PASS SQL rows: actual=0 expected=0
+CHECK PASS GET list rows: actual=0 expected=0
+
+==== W15 affiliateIds not uuid ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-W-114","name":"e2e-cpn-1791051925353 W 114","discountType":"PERCENTAGE","discountValue":10,"affiliateIds":["abc"]}
+< HTTP 400 (5 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"each value in affiliateIds must be a UUID","error":{"code":"VALIDATION_ERROR","message":"each value in affiliateIds must be a UUID","requestId":"req_c4670ba345e53a0924b1c5a7"},"correlationId":"req_c4670ba345e53a0924b1c5a7","timestamp":"2026-10-03T21:24:05.660Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+CHECK PASS status: actual=400 expected=400
+mysql> SELECT id, code FROM organization_coupons WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' AND (name='e2e-cpn-1791051925353 W 114' OR normalizedCode LIKE 'E2E-CPN-MUSQ2MAX-W-114%')
+[]
+CHECK PASS SQL rows: actual=0 expected=0
+CHECK PASS GET list rows: actual=0 expected=0
+
+==== W16 affiliateIds unknown uuid (X: coupon must not be left behind) ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-W-115","name":"e2e-cpn-1791051925353 W 115","discountType":"PERCENTAGE","discountValue":10,"affiliateIds":["00000000-0000-4000-8000-000000000000"]}
+< HTTP 404 (6 ms)
+< {"success":false,"statusCode":404,"code":"Not Found","message":"Affiliate 00000000-0000-4000-8000-000000000000 was not found in this organization.","error":{"code":"Not Found","message":"Affiliate 00000000-0000-4000-8000-000000000000 was not found in this organization.","requestId":"req_454bf687ba9bd9ba94093430"},"correlationId":"req_454bf687ba9bd9ba94093430","timestamp":"2026-10-03T21:24:05.695Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+CHECK PASS status: actual=404 expected=404
+mysql> SELECT id, code FROM organization_coupons WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' AND (name='e2e-cpn-1791051925353 W 115' OR normalizedCode LIKE 'E2E-CPN-MUSQ2MAX-W-115%')
+[]
+CHECK PASS SQL rows: actual=0 expected=0
+CHECK PASS GET list rows: actual=0 expected=0
+
+==== W17 affiliateIds Org B affiliate (X) ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-W-116","name":"e2e-cpn-1791051925353 W 116","discountType":"PERCENTAGE","discountValue":10,"affiliateIds":["57035742-19ad-470f-8195-b41e7fa9feb5"]}
+< HTTP 404 (5 ms)
+< {"success":false,"statusCode":404,"code":"Not Found","message":"Affiliate 57035742-19ad-470f-8195-b41e7fa9feb5 was not found in this organization.","error":{"code":"Not Found","message":"Affiliate 57035742-19ad-470f-8195-b41e7fa9feb5 was not found in this organization.","requestId":"req_1212048d476610d421b68194"},"correlationId":"req_1212048d476610d421b68194","timestamp":"2026-10-03T21:24:05.732Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+CHECK PASS status: actual=404 expected=404
+mysql> SELECT id, code FROM organization_coupons WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' AND (name='e2e-cpn-1791051925353 W 116' OR normalizedCode LIKE 'E2E-CPN-MUSQ2MAX-W-116%')
+[]
+CHECK PASS SQL rows: actual=0 expected=0
+CHECK PASS GET list rows: actual=0 expected=0
+
+==== W18 name too long (> 160, DB column) ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-W-117","name":"e2e-cpn-1791051925353 W 117 nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn","discountType":"PERCENTAGE","discountValue":10}
+< HTTP 400 (5 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"name must be shorter than or equal to 160 characters","error":{"code":"VALIDATION_ERROR","message":"name must be shorter than or equal to 160 characters","requestId":"req_507caf8a99cea5be4afdc283"},"correlationId":"req_507caf8a99cea5be4afdc283","timestamp":"2026-10-03T21:24:05.770Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+CHECK PASS status: actual=400 expected=400
+mysql> SELECT id, code FROM organization_coupons WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' AND (name='e2e-cpn-1791051925353 W 117 nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn' OR normalizedCode LIKE 'E2E-CPN-MUSQ2MAX-W-117%')
+[]
+CHECK PASS SQL rows: actual=0 expected=0
+CHECK PASS GET list rows: actual=0 expected=0
+
+==== W19 description too long (> 2000) ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-W-118","name":"e2e-cpn-1791051925353 W 118","discountType":"PERCENTAGE","discountValue":10,"description":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+< HTTP 400 (5 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"description must be shorter than or equal to 2000 characters","error":{"code":"VALIDATION_ERROR","message":"description must be shorter than or equal to 2000 characters","requestId":"req_94751765c974cd241b39b2ce"},"correlationId":"req_94751765c974cd241b39b2ce","timestamp":"2026-10-03T21:24:05.812Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+CHECK PASS status: actual=400 expected=400
+mysql> SELECT id, code FROM organization_coupons WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' AND (name='e2e-cpn-1791051925353 W 118' OR normalizedCode LIKE 'E2E-CPN-MUSQ2MAX-W-118%')
+[]
+CHECK PASS SQL rows: actual=0 expected=0
+CHECK PASS GET list rows: actual=0 expected=0
+
+==== W20 extra field organizationId ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-W-119","name":"e2e-cpn-1791051925353 W 119","discountType":"PERCENTAGE","discountValue":10,"organizationId":"f93f90d6-f027-465d-9fca-c2f0bae66ce1"}
+< HTTP 400 (11 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"property organizationId should not exist","error":{"code":"VALIDATION_ERROR","message":"property organizationId should not exist","requestId":"req_bc20bee56ac1cdb0ce654279"},"correlationId":"req_bc20bee56ac1cdb0ce654279","timestamp":"2026-10-03T21:24:05.859Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+CHECK PASS status: actual=400 expected=400
+mysql> SELECT id, code FROM organization_coupons WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' AND (name='e2e-cpn-1791051925353 W 119' OR normalizedCode LIKE 'E2E-CPN-MUSQ2MAX-W-119%')
+[]
+CHECK PASS SQL rows: actual=0 expected=0
+CHECK PASS GET list rows: actual=0 expected=0
+
+==== W21 extra field affiliateId ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-W-120","name":"e2e-cpn-1791051925353 W 120","discountType":"PERCENTAGE","discountValue":10,"affiliateId":"a0aaaad0-411b-49b7-8fbe-f097dec291b8"}
+< HTTP 400 (5 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"property affiliateId should not exist","error":{"code":"VALIDATION_ERROR","message":"property affiliateId should not exist","requestId":"req_499356c16309d3f18c0a0541"},"correlationId":"req_499356c16309d3f18c0a0541","timestamp":"2026-10-03T21:24:05.895Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+CHECK PASS status: actual=400 expected=400
+mysql> SELECT id, code FROM organization_coupons WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' AND (name='e2e-cpn-1791051925353 W 120' OR normalizedCode LIKE 'E2E-CPN-MUSQ2MAX-W-120%')
+[]
+CHECK PASS SQL rows: actual=0 expected=0
+CHECK PASS GET list rows: actual=0 expected=0
+
+==== W22 extra field usageCount ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-W-121","name":"e2e-cpn-1791051925353 W 121","discountType":"PERCENTAGE","discountValue":10,"usageCount":99}
+< HTTP 400 (5 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"property usageCount should not exist","error":{"code":"VALIDATION_ERROR","message":"property usageCount should not exist","requestId":"req_46ff38d88e1762cd75db8206"},"correlationId":"req_46ff38d88e1762cd75db8206","timestamp":"2026-10-03T21:24:05.928Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+CHECK PASS status: actual=400 expected=400
+mysql> SELECT id, code FROM organization_coupons WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' AND (name='e2e-cpn-1791051925353 W 121' OR normalizedCode LIKE 'E2E-CPN-MUSQ2MAX-W-121%')
+[]
+CHECK PASS SQL rows: actual=0 expected=0
+CHECK PASS GET list rows: actual=0 expected=0
+
+==== W23 extra field redemptionCount ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-W-122","name":"e2e-cpn-1791051925353 W 122","discountType":"PERCENTAGE","discountValue":10,"redemptionCount":99}
+< HTTP 400 (5 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"property redemptionCount should not exist","error":{"code":"VALIDATION_ERROR","message":"property redemptionCount should not exist","requestId":"req_3b891adecba32ba7197c7f9e"},"correlationId":"req_3b891adecba32ba7197c7f9e","timestamp":"2026-10-03T21:24:05.968Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+CHECK PASS status: actual=400 expected=400
+mysql> SELECT id, code FROM organization_coupons WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' AND (name='e2e-cpn-1791051925353 W 122' OR normalizedCode LIKE 'E2E-CPN-MUSQ2MAX-W-122%')
+[]
+CHECK PASS SQL rows: actual=0 expected=0
+CHECK PASS GET list rows: actual=0 expected=0
+
+==== W24 extra field status ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-W-123","name":"e2e-cpn-1791051925353 W 123","discountType":"PERCENTAGE","discountValue":10,"status":"ARCHIVED"}
+< HTTP 400 (5 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"property status should not exist","error":{"code":"VALIDATION_ERROR","message":"property status should not exist","requestId":"req_3e23358b088dc0718ad3d50d"},"correlationId":"req_3e23358b088dc0718ad3d50d","timestamp":"2026-10-03T21:24:06.000Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+CHECK PASS status: actual=400 expected=400
+mysql> SELECT id, code FROM organization_coupons WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' AND (name='e2e-cpn-1791051925353 W 123' OR normalizedCode LIKE 'E2E-CPN-MUSQ2MAX-W-123%')
+[]
+CHECK PASS SQL rows: actual=0 expected=0
+CHECK PASS GET list rows: actual=0 expected=0
+
+==== W25 extra field createdAt ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-W-124","name":"e2e-cpn-1791051925353 W 124","discountType":"PERCENTAGE","discountValue":10,"createdAt":"2020-01-01T00:00:00Z"}
+< HTTP 400 (5 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"property createdAt should not exist","error":{"code":"VALIDATION_ERROR","message":"property createdAt should not exist","requestId":"req_9ea4666bf8d6198ea3111cf9"},"correlationId":"req_9ea4666bf8d6198ea3111cf9","timestamp":"2026-10-03T21:24:06.034Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+CHECK PASS status: actual=400 expected=400
+mysql> SELECT id, code FROM organization_coupons WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' AND (name='e2e-cpn-1791051925353 W 124' OR normalizedCode LIKE 'E2E-CPN-MUSQ2MAX-W-124%')
+[]
+CHECK PASS SQL rows: actual=0 expected=0
+CHECK PASS GET list rows: actual=0 expected=0
+
+==== W26 extra field id ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-W-125","name":"e2e-cpn-1791051925353 W 125","discountType":"PERCENTAGE","discountValue":10,"id":"11111111-1111-4111-8111-111111111111"}
+< HTTP 400 (5 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"property id should not exist","error":{"code":"VALIDATION_ERROR","message":"property id should not exist","requestId":"req_b9fe384edddd0a809b3510ed"},"correlationId":"req_b9fe384edddd0a809b3510ed","timestamp":"2026-10-03T21:24:06.064Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+CHECK PASS status: actual=400 expected=400
+mysql> SELECT id, code FROM organization_coupons WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' AND (name='e2e-cpn-1791051925353 W 125' OR normalizedCode LIKE 'E2E-CPN-MUSQ2MAX-W-125%')
+[]
+CHECK PASS SQL rows: actual=0 expected=0
+CHECK PASS GET list rows: actual=0 expected=0
+
+==== W27 SQL injection in code ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-W-126'; DROP TABLE organization_coupons;--","name":"e2e-cpn-1791051925353 W 126","discountType":"PERCENTAGE","discountValue":10}
+< HTTP 400 (5 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"Coupon code must be 2–40 characters: letters A–Z, digits 0–9, \"-\" or \"_\", starting with a letter or digit (no spaces or accented/non-Latin letters).","error":{"code":"VALIDATION_ERROR","message":"Coupon code must be 2–40 characters: letters A–Z, digits 0–9, \"-\" or \"_\", starting with a letter or digit (no spaces or accented/non-Latin letters).","requestId":"req_e46cc51008cd2f0d98c6d008"},"correlationId":"req_e46cc51008cd2f0d98c6d008","timestamp":"2026-10-03T21:24:06.094Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+CHECK PASS status: actual=400 expected=400
+mysql> SELECT id, code FROM organization_coupons WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' AND (name='e2e-cpn-1791051925353 W 126' OR normalizedCode LIKE 'E2E-CPN-MUSQ2MAX-W-126%')
+[]
+CHECK PASS SQL rows: actual=0 expected=0
+CHECK PASS GET list rows: actual=0 expected=0
+
+==== W malformed JSON ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-W-JSON","name":"e2e-cpn-1791051925353 W json",
+< HTTP 400 (7 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"Expected double-quoted property name in JSON at position 72 (line 1 column 73)","error":{"code":"VALIDATION_ERROR","message":"Expected double-quoted property name in JSON at position 72 (line 1 column 73)","requestId":"req_58d9c7032bd54d5b0dbea3ef"},"correlationId":"req_58d9c7032bd54d5b0dbea3ef","timestamp":"2026-10-03T21:24:06.126Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+CHECK PASS status: actual=400 expected=400
+mysql> SELECT id, code FROM organization_coupons WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' AND (name='e2e-cpn-1791051925353 W json' OR normalizedCode LIKE 'E2E-CPN-MUSQ2MAX-W-JSON%')
+[]
+CHECK PASS SQL rows: actual=0 expected=0
+CHECK PASS GET list rows: actual=0 expected=0
+
+==== W SQL injection text in name/description ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-W-INJ","name":"e2e-cpn-1791051925353 W x' OR '1'='1","description":"\"); DELETE FROM organization_coupons; --","discountType":"PERCENTAGE","discountValue":5}
+< HTTP 201 (16 ms)
+< {"success":true,"data":{"id":"67a9884a-79ad-47b0-be78-d68612e418f3","organizationId":"eb2b08d5-22c4-4dd7-a225-37421c48f27e","code":"E2E-CPN-MUSQ2MAX-W-INJ","name":"e2e-cpn-1791051925353 W x' OR '1'='1","description":"\"); DELETE FROM organization_coupons; --","discountType":"PERCENTAGE","discountValue":5,"status":"ACTIVE","effectiveStatus":"ACTIVE","maxRedemptionsPerCustomer":null,"redemptionsCount":0,"remainingRedemptions":null,"validFromDate":null,"validUntilDate":null,"createdAt":"2026-10-03T21:24:06.164Z","updatedAt":"2026-10-03T21:24:06.164Z","assignedAffiliates":[]}}
+mysql> SELECT name, description FROM organization_coupons WHERE normalizedCode='E2E-CPN-MUSQ2MAX-W-INJ'
+{"name":"e2e-cpn-1791051925353 W x' OR '1'='1","description":"\"); DELETE FROM organization_coupons; --"}
+mysql> SELECT COUNT(*) FROM organization_coupons WHERE normalizedCode LIKE 'E2E-CPN-MUSQ2MAX-%'
+81
+
+==== W invalid id GET not-a-uuid ====
+> GET /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/not-a-uuid
+< HTTP 404 (7 ms)
+< {"success":false,"statusCode":404,"code":"Not Found","message":"Coupon not found.","error":{"code":"Not Found","message":"Coupon not found.","requestId":"req_c967da7b4a37e0a56026008a"},"correlationId":"req_c967da7b4a37e0a56026008a","timestamp":"2026-10-03T21:24:06.196Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/not-a-uuid"}
+CHECK PASS status: actual=404 expected=404
+
+==== W invalid id PUT not-a-uuid ====
+> PUT /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/not-a-uuid
+> body: {"name":"x-renamed"}
+< HTTP 404 (10 ms)
+< {"success":false,"statusCode":404,"code":"Not Found","message":"Coupon not found.","error":{"code":"Not Found","message":"Coupon not found.","requestId":"req_2a76411fce6961ae8af9516f"},"correlationId":"req_2a76411fce6961ae8af9516f","timestamp":"2026-10-03T21:24:06.206Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/not-a-uuid"}
+CHECK PASS status: actual=404 expected=404
+
+==== W invalid id POST not-a-uuid ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/not-a-uuid/status
+> body: {"status":"PAUSED"}
+< HTTP 404 (8 ms)
+< {"success":false,"statusCode":404,"code":"Not Found","message":"Coupon not found.","error":{"code":"Not Found","message":"Coupon not found.","requestId":"req_ec7d571e8d24040a667b8800"},"correlationId":"req_ec7d571e8d24040a667b8800","timestamp":"2026-10-03T21:24:06.215Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/not-a-uuid/status"}
+CHECK PASS status: actual=404 expected=404
+
+==== W invalid id GET 00000000-0000-4000-8000-000000000000 ====
+> GET /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/00000000-0000-4000-8000-000000000000
+< HTTP 404 (8 ms)
+< {"success":false,"statusCode":404,"code":"Not Found","message":"Coupon not found.","error":{"code":"Not Found","message":"Coupon not found.","requestId":"req_56873273f5dec8ac9cc50ff8"},"correlationId":"req_56873273f5dec8ac9cc50ff8","timestamp":"2026-10-03T21:24:06.224Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/00000000-0000-4000-8000-000000000000"}
+CHECK PASS status: actual=404 expected=404
+
+==== W invalid id PUT 00000000-0000-4000-8000-000000000000 ====
+> PUT /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/00000000-0000-4000-8000-000000000000
+> body: {"name":"x-renamed"}
+< HTTP 404 (9 ms)
+< {"success":false,"statusCode":404,"code":"Not Found","message":"Coupon not found.","error":{"code":"Not Found","message":"Coupon not found.","requestId":"req_487131a68834b6897066bffe"},"correlationId":"req_487131a68834b6897066bffe","timestamp":"2026-10-03T21:24:06.234Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/00000000-0000-4000-8000-000000000000"}
+CHECK PASS status: actual=404 expected=404
+
+==== W invalid id POST 00000000-0000-4000-8000-000000000000 ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/00000000-0000-4000-8000-000000000000/status
+> body: {"status":"PAUSED"}
+< HTTP 404 (9 ms)
+< {"success":false,"statusCode":404,"code":"Not Found","message":"Coupon not found.","error":{"code":"Not Found","message":"Coupon not found.","requestId":"req_590223538118d34ac97d17cc"},"correlationId":"req_590223538118d34ac97d17cc","timestamp":"2026-10-03T21:24:06.244Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/00000000-0000-4000-8000-000000000000/status"}
+CHECK PASS status: actual=404 expected=404
+
+==== W invalid id GET 1' OR '1'='1 ====
+> GET /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/1'%20OR%20'1'%3D'1
+< HTTP 404 (9 ms)
+< {"success":false,"statusCode":404,"code":"Not Found","message":"Coupon not found.","error":{"code":"Not Found","message":"Coupon not found.","requestId":"req_e4f97123f339f2394443a259"},"correlationId":"req_e4f97123f339f2394443a259","timestamp":"2026-10-03T21:24:06.254Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/1'%20OR%20'1'%3D'1"}
+CHECK PASS status: actual=404 expected=404
+
+==== W invalid id PUT 1' OR '1'='1 ====
+> PUT /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/1'%20OR%20'1'%3D'1
+> body: {"name":"x-renamed"}
+< HTTP 404 (8 ms)
+< {"success":false,"statusCode":404,"code":"Not Found","message":"Coupon not found.","error":{"code":"Not Found","message":"Coupon not found.","requestId":"req_a208d9eed12685969157680d"},"correlationId":"req_a208d9eed12685969157680d","timestamp":"2026-10-03T21:24:06.263Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/1'%20OR%20'1'%3D'1"}
+CHECK PASS status: actual=404 expected=404
+
+==== W invalid id POST 1' OR '1'='1 ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/1'%20OR%20'1'%3D'1/status
+> body: {"status":"PAUSED"}
+< HTTP 404 (8 ms)
+< {"success":false,"statusCode":404,"code":"Not Found","message":"Coupon not found.","error":{"code":"Not Found","message":"Coupon not found.","requestId":"req_ffbb824e3adaa32ffdb9c3e3"},"correlationId":"req_ffbb824e3adaa32ffdb9c3e3","timestamp":"2026-10-03T21:24:06.272Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/1'%20OR%20'1'%3D'1/status"}
+CHECK PASS status: actual=404 expected=404

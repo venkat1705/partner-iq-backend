@@ -1,0 +1,30 @@
+# Scenario N — raw proof, run=1791062315582 (started 2026-10-03T21:18:35.703Z)
+
+==== N setup: maxRedemptions 5, 4 sequential uses ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-N-LAST","name":"e2e-cpn-1791051925353 N last","discountType":"PERCENTAGE","discountValue":10,"maxRedemptions":5,"affiliateIds":["a0aaaad0-411b-49b7-8fbe-f097dec291b8"]}
+< HTTP 201 (15 ms)
+< {"success":true,"data":{"id":"0990a41b-a020-4f66-afc6-f5909ad39791","organizationId":"eb2b08d5-22c4-4dd7-a225-37421c48f27e","code":"E2E-CPN-MUSQ2MAX-N-LAST","name":"e2e-cpn-1791051925353 N last","discountType":"PERCENTAGE","discountValue":10,"status":"ACTIVE","effectiveStatus":"ACTIVE","maxRedemptions":5,"maxRedemptionsPerCustomer":null,"redemptionsCount":0,"remainingRedemptions":5,"validFromDate":null,"validUntilDate":null,"createdAt":"2026-10-03T21:22:27.725Z","updatedAt":"2026-10-03T21:22:27.725Z","assignedAffiliates":[{"affiliateId":"a0aaaad0-411b-49b7-8fbe-f097dec291b8","displayName":"e2e-cpn-1791051925353 Affiliate One","email":"e2e-cpn-1791051925353-affiliate_1@example.test","assignedAt":"2026-10-03T21:22:27.725Z"}]}}
+CHECK PASS uses before race: actual=4 expected=4
+
+==== N race: 10 parallel POST /conversions ====
+race-0: HTTP 201 coupon={"code":"E2E-CPN-MUSQ2MAX-N-LAST","applied":true,"couponId":"0990a41b-a020-4f66-afc6-f5909ad39791","discountAmount":10000,"grossAmount":100000,"affiliateId":"a0aaaad0-411b-49b7-8fbe-f097dec291b8"}
+race-1: HTTP 201 coupon={"code":"E2E-CPN-MUSQ2MAX-N-LAST","applied":false,"reason":"LIMIT_REACHED"}
+race-2: HTTP 201 coupon={"code":"E2E-CPN-MUSQ2MAX-N-LAST","applied":false,"reason":"LIMIT_REACHED"}
+race-3: HTTP 201 coupon={"code":"E2E-CPN-MUSQ2MAX-N-LAST","applied":false,"reason":"LIMIT_REACHED"}
+race-4: HTTP 201 coupon={"code":"E2E-CPN-MUSQ2MAX-N-LAST","applied":false,"reason":"LIMIT_REACHED"}
+race-5: HTTP 201 coupon={"code":"E2E-CPN-MUSQ2MAX-N-LAST","applied":false,"reason":"LIMIT_REACHED"}
+race-6: HTTP 201 coupon={"code":"E2E-CPN-MUSQ2MAX-N-LAST","applied":false,"reason":"LIMIT_REACHED"}
+race-7: HTTP 201 coupon={"code":"E2E-CPN-MUSQ2MAX-N-LAST","applied":false,"reason":"LIMIT_REACHED"}
+race-8: HTTP 201 coupon={"code":"E2E-CPN-MUSQ2MAX-N-LAST","applied":false,"reason":"LIMIT_REACHED"}
+race-9: HTTP 201 coupon={"code":"E2E-CPN-MUSQ2MAX-N-LAST","applied":false,"reason":"LIMIT_REACHED"}
+mysql> SELECT r.conversionId, v.externalId FROM organization_coupon_redemptions r JOIN conversions v ... WHERE r.couponId='0990a41b-a020-4f66-afc6-f5909ad39791'
+[{"conversionId":"ab00d4c1-09b1-4fbe-b63f-7e5fc1ba41d9","externalId":"e2e-cpn-1791051925353-N-seq-1"},{"conversionId":"9595f8fe-895b-4fe9-b2ba-7577baa061de","externalId":"e2e-cpn-1791051925353-N-seq-2"},{"conversionId":"7a8117d4-e668-40fc-8694-c86a7608f1e4","externalId":"e2e-cpn-1791051925353-N-seq-3"},{"conversionId":"fefd2aff-b33c-41bd-9d3c-7bbe0739b965","externalId":"e2e-cpn-1791051925353-N-seq-4"},{"conversionId":"fd08c532-b7f1-4b0d-b8da-cb1c90a32c64","externalId":"e2e-cpn-1791051925353-N-race-0"}]
+mysql> SELECT COUNT(*) FROM conversions WHERE externalId LIKE 'e2e-cpn-1791051925353-N-race-%'
+[{"n":10}]
+CHECK PASS all 10 sales recorded (HTTP 201): actual=[201,201,201,201,201,201,201,201,201,201] expected=[201,201,201,201,201,201,201,201,201,201]
+CHECK PASS exactly one applied: actual=1 expected=1
+CHECK PASS uses after race (never above 5): actual=5 expected=5
+mysql> SELECT redemptionCount FROM organization_coupon_usage WHERE couponId='0990a41b-a020-4f66-afc6-f5909ad39791'
+[{"redemptionCount":5}]
+Protection: see docs/coupons-audit.md §N — row lock (SELECT … FOR UPDATE) on organization_coupon_usage inside a MySQL transaction.

@@ -1,0 +1,35 @@
+# Scenario AB — raw proof, run=1791062315582 (started 2026-10-03T21:18:35.649Z)
+
+==== AB1 500 ====
+Could not load coupon data Some figures are unavailable (overview, coupons, performance, affiliates, programs, activity). Numbers below are not shown rather than shown as zero. Please try again. Try again Coupon Intelligence & Management Real-Time Attribution Configure promotional discount codes, track affiliate redemption ROI, verify eligibility in real time, and monitor revenue impact across your partner ecosystem. Validate Code Refresh Create Coupon Program: All Affiliate Programs Affiliate: All Affiliates 7D 30D 90D Lifetime Overview All Coupons 0 Performance Affiliate Attribution 0 Program Scope 0 Economics & Impact Audit Trail 0 Coupon KPIs could not be loaded. They are hidden instead of being shown as zero — use “Try again” above. Coupon Trajectory & Performance Over Time Daily time-series of redemptions, gross revenue, and promotional concessions. Revenue Redemptions Discount Com
+CHECK PASS error message shown: actual=true expected=true
+CHECK PASS fake zeros shown: actual=false expected=false
+CHECK PASS NaN shown: actual=false expected=false
+
+==== AB1 403 ====
+Could not load coupon data Some figures are unavailable (overview, coupons, performance, affiliates, programs, activity). Numbers below are not shown rather than shown as zero. Please try again. Try again Coupon Intelligence & Management Real-Time Attribution Configure promotional discount codes, track affiliate redemption ROI, verify eligibility in real time, and monitor revenue impact across your partner ecosystem. Validate Code Refresh Create Coupon Program: All Affiliate Programs Affiliate: All Affiliates 7D 30D 90D Lifetime Overview All Coupons 0 Performance Affiliate Attribution 0 Program Scope 0 Economics & Impact Audit Trail 0 Coupon KPIs could not be loaded. They are hidden instead of being shown as zero — use “Try again” above. Coupon Trajectory & Performance Over Time Daily time-series of redemptions, gross revenue, and promotional concessions. Revenue Redemptions Discount Com
+CHECK PASS error message shown: actual=true expected=true
+CHECK PASS fake zeros shown: actual=false expected=false
+CHECK PASS NaN shown: actual=false expected=false
+
+==== AB1 network ====
+Could not load coupon data Some figures are unavailable (overview, coupons, performance, affiliates, programs, activity). Numbers below are not shown rather than shown as zero. Please try again. Try again Coupon Intelligence & Management Real-Time Attribution Configure promotional discount codes, track affiliate redemption ROI, verify eligibility in real time, and monitor revenue impact across your partner ecosystem. Validate Code Refresh Create Coupon Program: All Affiliate Programs Affiliate: All Affiliates 7D 30D 90D Lifetime Overview All Coupons 0 Performance Affiliate Attribution 0 Program Scope 0 Economics & Impact Audit Trail 0 Coupon KPIs could not be loaded. They are hidden instead of being shown as zero — use “Try again” above. Coupon Trajectory & Performance Over Time Daily time-series of redemptions, gross revenue, and promotional concessions. Revenue Redemptions Discount Com
+CHECK PASS error message shown: actual=true expected=true
+CHECK PASS fake zeros shown: actual=false expected=false
+CHECK PASS NaN shown: actual=false expected=false
+
+==== AB1 broken JSON ====
+Could not load coupon data Some figures are unavailable (overview, coupons, performance, affiliates, programs, activity). Numbers below are not shown rather than shown as zero. Please try again. Try again Coupon Intelligence & Management Real-Time Attribution Configure promotional discount codes, track affiliate redemption ROI, verify eligibility in real time, and monitor revenue impact across your partner ecosystem. Validate Code Refresh Create Coupon Program: All Affiliate Programs Affiliate: All Affiliates 7D 30D 90D Lifetime Overview All Coupons 0 Performance Affiliate Attribution 0 Program Scope 0 Economics & Impact Audit Trail 0 Coupon KPIs could not be loaded. They are hidden instead of being shown as zero — use “Try again” above. Coupon Trajectory & Performance Over Time Daily time-series of redemptions, gross revenue, and promotional concessions. Revenue Redemptions Discount Com
+CHECK PASS error message shown: actual=true expected=true
+CHECK PASS fake zeros shown: actual=false expected=false
+CHECK PASS NaN shown: actual=false expected=false
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-AB-OLD","name":"e2e-cpn-1791051925353 AB old","discountType":"PERCENTAGE","discountValue":10}
+< HTTP 201 (21 ms)
+< {"success":true,"data":{"id":"c57f81e4-79e6-41f0-86cf-a19f2f652805","organizationId":"eb2b08d5-22c4-4dd7-a225-37421c48f27e","code":"E2E-CPN-MUSQ2MAX-AB-OLD","name":"e2e-cpn-1791051925353 AB old","discountType":"PERCENTAGE","discountValue":10,"status":"ACTIVE","effectiveStatus":"ACTIVE","maxRedemptionsPerCustomer":null,"redemptionsCount":0,"remainingRedemptions":null,"validFromDate":null,"validUntilDate":null,"createdAt":"2026-10-03T21:19:48.977Z","updatedAt":"2026-10-03T21:19:48.977Z","assignedAffiliates":[]}}
+mysql> SELECT COUNT(*) redemptions lifetime / 7D (Org A)
+{"lifetime":1,"sevenDays":0}
+
+==== AB2 race ====
+served order (slowest first request finishes last): period=LIFETIME | period=90D | period=7D
+CHECK PASS TOTAL REDEMPTIONS shown equals Lifetime SQL (last filter): actual=1 expected=1

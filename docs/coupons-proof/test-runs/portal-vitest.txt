@@ -1,0 +1,208 @@
+
+ RUN  v3.2.7 /home/user/partner-iq-affiliate-portal
+
+stderr | src/tests/AnalyticsView.test.tsx > AnalyticsView Component > renders existing core metrics and header filters
+The width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+An update to AnalyticsView inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AnalyticsView inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AnalyticsView inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/tests/AnalyticsView.test.tsx > AnalyticsView Component > renders existing core metrics and header filters
+An update to AnalyticsView inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AnalyticsView inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ✓ src/tests/AffiliateAuditLogsView.test.tsx (10 tests) 1354ms
+stderr | src/tests/AnalyticsView.test.tsx > AnalyticsView Component > renders new financial & volume KPI cards with actual data
+The width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+stderr | src/tests/AnalyticsView.test.tsx > AnalyticsView Component > renders new financial & volume KPI cards with actual data
+The width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+stderr | src/tests/AnalyticsView.test.tsx > AnalyticsView Component > renders conversion funnel section with stages and transition rates
+The width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+stderr | src/tests/AnalyticsView.test.tsx > AnalyticsView Component > renders conversion funnel section with stages and transition rates
+The width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+stderr | src/tests/AnalyticsView.test.tsx > AnalyticsView Component > renders Program Performance table with program rows
+The width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+ ✓ src/tests/Blog.test.tsx (15 tests) 1628ms
+   ✓ BlogLandingView Component > renders hero heading, search bar, category navigation, and featured article  376ms
+   ✓ BlogLandingView Component > shows empty state when no articles match search query  392ms
+   ✓ BlogPostView Component > renders article headline, breadcrumbs, metadata, content sections, and related articles  400ms
+stderr | src/tests/AnalyticsView.test.tsx > AnalyticsView Component > renders Program Performance table with program rows
+The width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+stderr | src/tests/AnalyticsView.test.tsx > AnalyticsView Component > renders Referral Link Performance table with link shortCodes
+The width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+stderr | src/tests/AnalyticsView.test.tsx > AnalyticsView Component > renders Referral Link Performance table with link shortCodes
+The width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+stderr | src/tests/AnalyticsView.test.tsx > AnalyticsView Component > renders Campaign & UTM analytics section
+The width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+stderr | src/tests/AnalyticsView.test.tsx > AnalyticsView Component > renders Campaign & UTM analytics section
+The width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+stderr | src/tests/AnalyticsView.test.tsx > AnalyticsView Component > renders algorithmic performance insights
+The width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+stderr | src/tests/AnalyticsView.test.tsx > AnalyticsView Component > renders algorithmic performance insights
+The width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+stderr | src/tests/AnalyticsView.test.tsx > AnalyticsView Component > renders tier status when available
+The width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+stderr | src/tests/AnalyticsView.test.tsx > AnalyticsView Component > renders tier status when available
+The width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+stderr | src/tests/AnalyticsView.test.tsx > AnalyticsView Component > renders basic tier-wise status and does not show highest tier message for basic tier
+The width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+stderr | src/tests/AnalyticsView.test.tsx > AnalyticsView Component > renders basic tier-wise status and does not show highest tier message for basic tier
+The width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+ ✓ src/tests/AnalyticsView.test.tsx (9 tests) 2910ms
+   ✓ AnalyticsView Component > renders existing core metrics and header filters  494ms
+   ✓ AnalyticsView Component > renders new financial & volume KPI cards with actual data  503ms
+   ✓ AnalyticsView Component > renders Program Performance table with program rows  455ms
+   ✓ AnalyticsView Component > renders Referral Link Performance table with link shortCodes  321ms
+ ✓ src/tests/ProgramLinksSheet.test.tsx (4 tests) 303ms
+ ✓ src/lib/validation/use-zod-form.test.tsx (9 tests) 1020ms
+ ✓ src/tests/ReferralLinksView.test.tsx (3 tests) 298ms
+stderr | src/tests/ProgramsView.test.tsx > ProgramsView > shows a 'View Links' action per program and never renders a raw tracking URL in the initial list
+An update to ProgramsView inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to ProgramsView inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ✓ src/components/common/TrafficSourcesChart.test.tsx (9 tests) 218ms
+ ✓ src/tests/ProgramsView.test.tsx (2 tests) 243ms
+ ✓ src/tests/MarketingAssetsView.test.tsx (1 test) 332ms
+   ✓ MarketingAssetsView XSS Protection (SA-01) > safely renders organization name containing XSS payload without executing or injecting HTML  323ms
+ ✓ src/tests/JoinApplicationRouteGuard.test.tsx (7 tests) 208ms
+ ✓ src/tests/OnboardingRouteGuard.test.tsx (2 tests) 261ms
+ ✓ src/components/common/MetricCard.test.tsx (7 tests) 174ms
+ ✓ src/lib/validation/schemas.test.ts (49 tests) 57ms
+ ✓ src/lib/utils/payout-schedule.test.ts (16 tests) 5ms
+
+ Test Files  14 passed (14)
+      Tests  143 passed (143)
+   Start at  20:29:33
+   Duration  10.21s (transform 2.29s, setup 981ms, collect 8.71s, tests 9.01s, environment 6.10s, prepare 1.41s)
+
+exit 0

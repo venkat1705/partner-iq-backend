@@ -1,0 +1,28 @@
+◇ injected env (20) from .env.test // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+PASS: empty org: totalRevenue is 0
+PASS: empty org: revenueMoMPercent is null, not NaN
+PASS: empty org: conversionRate is null (no clicks), not 0/NaN
+PASS: empty org: mrr is null (no subscription)
+PASS: empty org: revenue.hasData is false
+PASS: revenue.totalRevenue is 10000 (got 10000)
+PASS: revenue.attributedRevenue excludes the PENDING conversion
+PASS: only the APPROVED conversion counts as eligible
+PASS: commissions.totalEligibleCommissions is 1500 (got 1500)
+PASS: commissions.paidCommissions reflects the completed payout item
+PASS: commissions.outstandingCommissions = eligible - paid
+PASS: conversions.totalConversions counts all statuses
+PASS: conversions.uniqueClicks dedupes by anonymousId
+PASS: conversionRate = 2 conversions / 2 unique clicks * 100 = 100 (got 100)
+PASS: affiliates.activeAffiliates counts the ACTIVE affiliate
+PASS: topAffiliates ranks by real revenue
+PASS: program-scoped revenue matches org revenue for single-program org
+PASS: affiliate-scoped revenue is correct
+PASS: affiliate-scoped paid-out total is correct
+PASS: time series returns exactly the requested number of months
+PASS: the current month bucket carries the real conversion revenue
+PASS: a month with no activity is a real zero, not omitted or interpolated
+PASS: time series hasData is true when any bucket has activity
+PASS: top programs ranks the real program by revenue
+PASS: top programs revenue matches real conversion total
+
+All analytics sanity checks passed.

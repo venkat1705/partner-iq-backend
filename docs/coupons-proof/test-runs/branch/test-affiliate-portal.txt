@@ -1,0 +1,57 @@
+◇ injected env (20) from .env.test // tip: ⌁ auth for agents [www.vestauth.com]
+
+🧪 PartnerIQ Affiliate Portal Data Suite
+
+Profile completion
+  ✅ [PASS] A fully supplied profile reports 100%
+  ✅ [PASS] A fully supplied profile is complete
+  ✅ [PASS] A fully supplied profile has nothing outstanding
+  ✅ [PASS] An entirely empty profile reports 0%
+  ✅ [PASS] An entirely empty profile is not complete
+  ✅ [PASS] Every requirement is listed as missing on an empty profile
+  ✅ [PASS] Every missing requirement explains why it is needed
+  ✅ [PASS] No payout destination leaves the profile incomplete
+  ✅ [PASS] The missing payout destination is named
+  ✅ [PASS] The outstanding item points at the payouts tab
+  ✅ [PASS] A whitespace-only phone number counts as missing
+  ✅ [PASS] A bio under the minimum length counts as missing
+  ✅ [PASS] A partially complete profile reports a partial percentage
+
+Payout schedule
+  ✅ [PASS] An ordinal day token parses
+  ✅ [PASS] A first-of-month token parses
+  ✅ [PASS] A bare numeric day parses
+  ✅ [PASS] A last-day token parses
+  ✅ [PASS] An empty day is unconfigured, not a date
+  ✅ [PASS] An unparseable day is unconfigured
+  ✅ [PASS] A day outside 1-31 is rejected
+  ✅ [PASS] A monthly run later this month resolves to this month
+  ✅ [PASS] A monthly run already past this month rolls to next month
+  ✅ [PASS] Today is not offered as the next payout date
+  ✅ [PASS] A last-day monthly run lands on the real last day
+  ✅ [PASS] A 31st schedule skips months that have no 31st
+  ✅ [PASS] A weekly run resolves to the next matching weekday
+  ✅ [PASS] A daily run resolves to tomorrow
+  ✅ [PASS] A pay-on-request program has no scheduled date
+  ✅ [PASS] A monthly program with no configured day has no scheduled date
+  ✅ [PASS] An unconfigured schedule has no scheduled date
+  ✅ [PASS] An unparseable weekday has no scheduled date rather than a guess
+
+Traffic sources
+  ✅ [PASS] A UTM source is used and normalized
+  ✅ [PASS] A UTM source wins over the referrer
+  ✅ [PASS] A referrer falls back to its host, without the www prefix
+  ✅ [PASS] A click with neither is a real Unknown bucket
+  ✅ [PASS] Whitespace-only values are not treated as a source
+  ✅ [PASS] An unparseable referrer is kept as recorded rather than discarded
+  ✅ [PASS] Source percentages add up to 100
+  ✅ [PASS] An empty window yields zero rather than dividing by zero
+
+Tax certificates
+Suite crashed: TypeError: Cannot read properties of undefined (reading 'startsWith')
+    at inferJurisdiction (/home/user/partner-iq-backend/src/modules/tax-certificates/tax-certificates.service.ts:34:16)
+    at TaxCertificatesService.present (/home/user/partner-iq-backend/src/modules/tax-certificates/tax-certificates.service.ts:101:26)
+    at <anonymous> (/home/user/partner-iq-backend/src/modules/tax-certificates/tax-certificates.service.ts:162:35)
+    at Array.map (<anonymous>)
+    at TaxCertificatesService.listForAffiliate (/home/user/partner-iq-backend/src/modules/tax-certificates/tax-certificates.service.ts:162:17)
+    at async main (/home/user/partner-iq-backend/src/tests/affiliate-portal-data.test.ts:255:19)

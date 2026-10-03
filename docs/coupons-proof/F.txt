@@ -1,0 +1,97 @@
+# Scenario F — raw proof, run=1791062315582 (started 2026-10-03T21:18:35.679Z)
+
+==== F identical code: 10 parallel POST ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-F-RACE"}
+< HTTP 201 (43 ms)
+< {"success":true,"data":{"id":"7a6a48c0-edee-4293-bdac-786abc8c9774","organizationId":"eb2b08d5-22c4-4dd7-a225-37421c48f27e","code":"E2E-CPN-MUSQ2MAX-F-RACE","name":"e2e-cpn-1791051925353 F identical code 0","discountType":"PERCENTAGE","discountValue":10,"status":"ACTIVE","effectiveStatus":"ACTIVE","maxRedemptionsPerCustomer":null,"redemptionsCount":0,"remainingRedemptions":null,"validFromDate":null,"validUntilDate":null,"createdAt":"2026-10-03T21:21:39.898Z","updatedAt":"2026-10-03T21:21:39.898Z","assignedAffiliates":[]}}
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-F-RACE"}
+< HTTP 409 (53 ms)
+< {"success":false,"statusCode":409,"code":"CONFLICT","message":"A coupon with this code already exists for this organization.","error":{"code":"CONFLICT","message":"A coupon with this code already exists for this organization.","requestId":"req_9c273f5dba8fa9eb74f3d0d6"},"correlationId":"req_9c273f5dba8fa9eb74f3d0d6","timestamp":"2026-10-03T21:21:39.939Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-F-RACE"}
+< HTTP 409 (51 ms)
+< {"success":false,"statusCode":409,"code":"CONFLICT","message":"A coupon with this code already exists for this organization.","error":{"code":"CONFLICT","message":"A coupon with this code already exists for this organization.","requestId":"req_efe1b07018bb40adffa7e6c0"},"correlationId":"req_efe1b07018bb40adffa7e6c0","timestamp":"2026-10-03T21:21:39.938Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-F-RACE"}
+< HTTP 409 (66 ms)
+< {"success":false,"statusCode":409,"code":"CONFLICT","message":"A coupon with this code already exists for this organization.","error":{"code":"CONFLICT","message":"A coupon with this code already exists for this organization.","requestId":"req_fceb8b1af0b2ed24536a0241"},"correlationId":"req_fceb8b1af0b2ed24536a0241","timestamp":"2026-10-03T21:21:39.954Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-F-RACE"}
+< HTTP 409 (59 ms)
+< {"success":false,"statusCode":409,"code":"CONFLICT","message":"A coupon with this code already exists for this organization.","error":{"code":"CONFLICT","message":"A coupon with this code already exists for this organization.","requestId":"req_f95037211327a560a92da1f5"},"correlationId":"req_f95037211327a560a92da1f5","timestamp":"2026-10-03T21:21:39.947Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-F-RACE"}
+< HTTP 409 (67 ms)
+< {"success":false,"statusCode":409,"code":"CONFLICT","message":"A coupon with this code already exists for this organization.","error":{"code":"CONFLICT","message":"A coupon with this code already exists for this organization.","requestId":"req_ea81d328a8cfb5193af763b6"},"correlationId":"req_ea81d328a8cfb5193af763b6","timestamp":"2026-10-03T21:21:39.956Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-F-RACE"}
+< HTTP 409 (47 ms)
+< {"success":false,"statusCode":409,"code":"CONFLICT","message":"A coupon with code \"E2E-CPN-MUSQ2MAX-F-RACE\" already exists for this organization (archived codes cannot be reused).","error":{"code":"CONFLICT","message":"A coupon with code \"E2E-CPN-MUSQ2MAX-F-RACE\" already exists for this organization (archived codes cannot be reused).","requestId":"req_efb8110625ea7f68e2086ce0"},"correlationId":"req_efb8110625ea7f68e2086ce0","timestamp":"2026-10-03T21:21:39.935Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-F-RACE"}
+< HTTP 409 (55 ms)
+< {"success":false,"statusCode":409,"code":"CONFLICT","message":"A coupon with code \"E2E-CPN-MUSQ2MAX-F-RACE\" already exists for this organization (archived codes cannot be reused).","error":{"code":"CONFLICT","message":"A coupon with code \"E2E-CPN-MUSQ2MAX-F-RACE\" already exists for this organization (archived codes cannot be reused).","requestId":"req_33c5cb4ba6137d5538ee0511"},"correlationId":"req_33c5cb4ba6137d5538ee0511","timestamp":"2026-10-03T21:21:39.944Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-F-RACE"}
+< HTTP 409 (63 ms)
+< {"success":false,"statusCode":409,"code":"CONFLICT","message":"A coupon with code \"E2E-CPN-MUSQ2MAX-F-RACE\" already exists for this organization (archived codes cannot be reused).","error":{"code":"CONFLICT","message":"A coupon with code \"E2E-CPN-MUSQ2MAX-F-RACE\" already exists for this organization (archived codes cannot be reused).","requestId":"req_0cab5b9f672993cbd018a4c9"},"correlationId":"req_0cab5b9f672993cbd018a4c9","timestamp":"2026-10-03T21:21:39.952Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-F-RACE"}
+< HTTP 409 (73 ms)
+< {"success":false,"statusCode":409,"code":"CONFLICT","message":"A coupon with code \"E2E-CPN-MUSQ2MAX-F-RACE\" already exists for this organization (archived codes cannot be reused).","error":{"code":"CONFLICT","message":"A coupon with code \"E2E-CPN-MUSQ2MAX-F-RACE\" already exists for this organization (archived codes cannot be reused).","requestId":"req_73a22eae31a6f9c196383829"},"correlationId":"req_73a22eae31a6f9c196383829","timestamp":"2026-10-03T21:21:39.962Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+mysql> SELECT id, code FROM organization_coupons WHERE normalizedCode='E2E-CPN-MUSQ2MAX-F-RACE'
+[{"id":"7a6a48c0-edee-4293-bdac-786abc8c9774","code":"E2E-CPN-MUSQ2MAX-F-RACE"}]
+CHECK PASS 201 count: actual=1 expected=1
+CHECK PASS 409 count: actual=9 expected=9
+CHECK PASS SQL rows: actual=1 expected=1
+CHECK PASS GET list rows: actual=1 expected=1
+
+==== F case/space variants: 10 parallel POST ====
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":" E2E-CPN-MUSQ2MAX-F-RACE2 "}
+< HTTP 201 (55 ms)
+< {"success":true,"data":{"id":"b5539a59-9cfa-4fd8-9248-f94bece1192f","organizationId":"eb2b08d5-22c4-4dd7-a225-37421c48f27e","code":"E2E-CPN-MUSQ2MAX-F-RACE2","name":"e2e-cpn-1791051925353 F case/space variants 0","discountType":"PERCENTAGE","discountValue":10,"status":"ACTIVE","effectiveStatus":"ACTIVE","maxRedemptionsPerCustomer":null,"redemptionsCount":0,"remainingRedemptions":null,"validFromDate":null,"validUntilDate":null,"createdAt":"2026-10-03T21:21:40.010Z","updatedAt":"2026-10-03T21:21:40.010Z","assignedAffiliates":[]}}
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-F-race2"}
+< HTTP 409 (59 ms)
+< {"success":false,"statusCode":409,"code":"CONFLICT","message":"A coupon with this code already exists for this organization.","error":{"code":"CONFLICT","message":"A coupon with this code already exists for this organization.","requestId":"req_20cab20635f5521c5868ad92"},"correlationId":"req_20cab20635f5521c5868ad92","timestamp":"2026-10-03T21:21:40.052Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":" E2E-CPN-MUSQ2MAX-F-RACE2 "}
+< HTTP 409 (71 ms)
+< {"success":false,"statusCode":409,"code":"CONFLICT","message":"A coupon with this code already exists for this organization.","error":{"code":"CONFLICT","message":"A coupon with this code already exists for this organization.","requestId":"req_1365701e65b291bfaed5b2d4"},"correlationId":"req_1365701e65b291bfaed5b2d4","timestamp":"2026-10-03T21:21:40.064Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-F-race2"}
+< HTTP 409 (63 ms)
+< {"success":false,"statusCode":409,"code":"CONFLICT","message":"A coupon with this code already exists for this organization.","error":{"code":"CONFLICT","message":"A coupon with this code already exists for this organization.","requestId":"req_c0eeaeac1f340bfa237eb03a"},"correlationId":"req_c0eeaeac1f340bfa237eb03a","timestamp":"2026-10-03T21:21:40.056Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":" E2E-CPN-MUSQ2MAX-F-RACE2 "}
+< HTTP 409 (60 ms)
+< {"success":false,"statusCode":409,"code":"CONFLICT","message":"A coupon with this code already exists for this organization.","error":{"code":"CONFLICT","message":"A coupon with this code already exists for this organization.","requestId":"req_cd341d53edd5a1a3b9389a12"},"correlationId":"req_cd341d53edd5a1a3b9389a12","timestamp":"2026-10-03T21:21:40.053Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-F-race2"}
+< HTTP 409 (60 ms)
+< {"success":false,"statusCode":409,"code":"CONFLICT","message":"A coupon with this code already exists for this organization.","error":{"code":"CONFLICT","message":"A coupon with this code already exists for this organization.","requestId":"req_1e150ee52b2cdb3630b03462"},"correlationId":"req_1e150ee52b2cdb3630b03462","timestamp":"2026-10-03T21:21:40.054Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":" E2E-CPN-MUSQ2MAX-F-RACE2 "}
+< HTTP 409 (68 ms)
+< {"success":false,"statusCode":409,"code":"CONFLICT","message":"A coupon with this code already exists for this organization.","error":{"code":"CONFLICT","message":"A coupon with this code already exists for this organization.","requestId":"req_04ecccf4cf7dec4c2eaa9b80"},"correlationId":"req_04ecccf4cf7dec4c2eaa9b80","timestamp":"2026-10-03T21:21:40.062Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-F-race2"}
+< HTTP 409 (61 ms)
+< {"success":false,"statusCode":409,"code":"CONFLICT","message":"A coupon with this code already exists for this organization.","error":{"code":"CONFLICT","message":"A coupon with this code already exists for this organization.","requestId":"req_296412d6779054584d37c5f8"},"correlationId":"req_296412d6779054584d37c5f8","timestamp":"2026-10-03T21:21:40.055Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":" E2E-CPN-MUSQ2MAX-F-RACE2 "}
+< HTTP 409 (67 ms)
+< {"success":false,"statusCode":409,"code":"CONFLICT","message":"A coupon with this code already exists for this organization.","error":{"code":"CONFLICT","message":"A coupon with this code already exists for this organization.","requestId":"req_40c5a5c18a0a4b5300a32412"},"correlationId":"req_40c5a5c18a0a4b5300a32412","timestamp":"2026-10-03T21:21:40.061Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+> POST /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-F-race2"}
+< HTTP 409 (65 ms)
+< {"success":false,"statusCode":409,"code":"CONFLICT","message":"A coupon with this code already exists for this organization.","error":{"code":"CONFLICT","message":"A coupon with this code already exists for this organization.","requestId":"req_cad2f05c5ae8c9df183f6b24"},"correlationId":"req_cad2f05c5ae8c9df183f6b24","timestamp":"2026-10-03T21:21:40.058Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+mysql> SELECT id, code FROM organization_coupons WHERE normalizedCode='E2E-CPN-MUSQ2MAX-F-RACE2'
+[{"id":"b5539a59-9cfa-4fd8-9248-f94bece1192f","code":"E2E-CPN-MUSQ2MAX-F-RACE2"}]
+CHECK PASS 201 count: actual=1 expected=1
+CHECK PASS 409 count: actual=9 expected=9
+CHECK PASS SQL rows: actual=1 expected=1
+CHECK PASS GET list rows: actual=1 expected=1

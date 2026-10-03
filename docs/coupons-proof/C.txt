@@ -1,0 +1,166 @@
+# Scenario C — raw proof, run=1791062315582 (started 2026-10-03T21:18:35.666Z)
+
+==== C1 E2E-CPN-MUSQ2MAX-C-01 ====
+mysql> SELECT code, name, discountType, discountValue, status, maxRedemptions, validUntil, assigned FROM organization_coupons WHERE id='bcd97a94-7464-4028-b7e7-b07f525f003a'
+{"code":"E2E-CPN-MUSQ2MAX-C-01","name":"e2e-cpn-1791051925353 C row 1","discountType":"PERCENTAGE","discountValue":1,"status":"ACTIVE","maxRedemptions":null,"validUntil":null,"assigned":1}
+CHECK PASS API code: actual="E2E-CPN-MUSQ2MAX-C-01" expected="E2E-CPN-MUSQ2MAX-C-01"
+CHECK PASS API discount: actual=["PERCENTAGE",1] expected=["PERCENTAGE",1]
+CHECK PASS API status: actual="ACTIVE" expected="ACTIVE"
+CHECK PASS API maxRedemptions: actual=null expected=null
+CHECK PASS API assigned: actual=1 expected=1
+UI row: E2E-CPN-MUSQ2MAX-C-01 e2e-cpn-1791051925353 C row 1 1% OFF ACTIVE 0 used Unlimited 1 partner Perpetual Intel
+CHECK PASS UI code: actual=true expected=true
+CHECK PASS UI name: actual=true expected=true
+CHECK PASS UI discount: actual=true expected=true
+CHECK PASS UI status: actual=true expected=true
+CHECK PASS UI quota: actual=true expected=true
+CHECK PASS UI assigned: actual=true expected=true
+CHECK PASS UI validity: actual=true expected=true
+
+==== C1 E2E-CPN-MUSQ2MAX-C-04 ====
+mysql> SELECT code, name, discountType, discountValue, status, maxRedemptions, validUntil, assigned FROM organization_coupons WHERE id='33a5ea78-0a9d-4abc-9610-587ea0180342'
+{"code":"E2E-CPN-MUSQ2MAX-C-04","name":"e2e-cpn-1791051925353 C row 4","discountType":"FIXED_AMOUNT","discountValue":4,"status":"ACTIVE","maxRedemptions":null,"validUntil":"2027-01-15T18:29:59.000Z","assigned":1}
+CHECK PASS API code: actual="E2E-CPN-MUSQ2MAX-C-04" expected="E2E-CPN-MUSQ2MAX-C-04"
+CHECK PASS API discount: actual=["FIXED_AMOUNT",4] expected=["FIXED_AMOUNT",4]
+CHECK PASS API status: actual="ACTIVE" expected="ACTIVE"
+CHECK PASS API maxRedemptions: actual=null expected=null
+CHECK PASS API assigned: actual=1 expected=1
+UI row: E2E-CPN-MUSQ2MAX-C-04 e2e-cpn-1791051925353 C row 4 ₹4 OFF ACTIVE 0 used Unlimited 1 partner Active now until 1/15/2027 Intel
+CHECK PASS UI code: actual=true expected=true
+CHECK PASS UI name: actual=true expected=true
+CHECK PASS UI discount: actual=true expected=true
+CHECK PASS UI status: actual=true expected=true
+CHECK PASS UI quota: actual=true expected=true
+CHECK PASS UI assigned: actual=true expected=true
+CHECK PASS UI validity: actual=true expected=true
+
+==== C1 E2E-CPN-MUSQ2MAX-C-05 ====
+mysql> SELECT code, name, discountType, discountValue, status, maxRedemptions, validUntil, assigned FROM organization_coupons WHERE id='a771c3f7-edc0-4a40-913b-b6b5512ff56f'
+{"code":"E2E-CPN-MUSQ2MAX-C-05","name":"e2e-cpn-1791051925353 C row 5","discountType":"PERCENTAGE","discountValue":5,"status":"PAUSED","maxRedemptions":null,"validUntil":null,"assigned":1}
+CHECK PASS API code: actual="E2E-CPN-MUSQ2MAX-C-05" expected="E2E-CPN-MUSQ2MAX-C-05"
+CHECK PASS API discount: actual=["PERCENTAGE",5] expected=["PERCENTAGE",5]
+CHECK PASS API status: actual="PAUSED" expected="PAUSED"
+CHECK PASS API maxRedemptions: actual=null expected=null
+CHECK PASS API assigned: actual=1 expected=1
+UI row: E2E-CPN-MUSQ2MAX-C-05 e2e-cpn-1791051925353 C row 5 5% OFF PAUSED 0 used Unlimited 1 partner Perpetual Intel
+CHECK PASS UI code: actual=true expected=true
+CHECK PASS UI name: actual=true expected=true
+CHECK PASS UI discount: actual=true expected=true
+CHECK PASS UI status: actual=true expected=true
+CHECK PASS UI quota: actual=true expected=true
+CHECK PASS UI assigned: actual=true expected=true
+CHECK PASS UI validity: actual=true expected=true
+
+==== C1 E2E-CPN-MUSQ2MAX-C-12 ====
+mysql> SELECT code, name, discountType, discountValue, status, maxRedemptions, validUntil, assigned FROM organization_coupons WHERE id='259b70d5-d25f-453c-bfc4-ed82edf4c5de'
+{"code":"E2E-CPN-MUSQ2MAX-C-12","name":"e2e-cpn-1791051925353 C row 12","discountType":"FIXED_AMOUNT","discountValue":12,"status":"ACTIVE","maxRedemptions":120,"validUntil":"2027-01-15T18:29:59.000Z","assigned":1}
+CHECK PASS API code: actual="E2E-CPN-MUSQ2MAX-C-12" expected="E2E-CPN-MUSQ2MAX-C-12"
+CHECK PASS API discount: actual=["FIXED_AMOUNT",12] expected=["FIXED_AMOUNT",12]
+CHECK PASS API status: actual="ACTIVE" expected="ACTIVE"
+CHECK PASS API maxRedemptions: actual=120 expected=120
+CHECK PASS API assigned: actual=1 expected=1
+UI row: E2E-CPN-MUSQ2MAX-C-12 e2e-cpn-1791051925353 C row 12 ₹12 OFF ACTIVE 0 used / 120 1 partner Active now until 1/15/2027 Intel
+CHECK PASS UI code: actual=true expected=true
+CHECK PASS UI name: actual=true expected=true
+CHECK PASS UI discount: actual=true expected=true
+CHECK PASS UI status: actual=true expected=true
+CHECK PASS UI quota: actual=true expected=true
+CHECK PASS UI assigned: actual=true expected=true
+CHECK PASS UI validity: actual=true expected=true
+
+==== C1 E2E-CPN-MUSQ2MAX-C-23 ====
+mysql> SELECT code, name, discountType, discountValue, status, maxRedemptions, validUntil, assigned FROM organization_coupons WHERE id='7b936bc6-af84-4ddb-b6c0-62bdf9682552'
+{"code":"E2E-CPN-MUSQ2MAX-C-23","name":"e2e-cpn-1791051925353 C row 23","discountType":"PERCENTAGE","discountValue":23,"status":"ACTIVE","maxRedemptions":null,"validUntil":null,"assigned":1}
+CHECK PASS API code: actual="E2E-CPN-MUSQ2MAX-C-23" expected="E2E-CPN-MUSQ2MAX-C-23"
+CHECK PASS API discount: actual=["PERCENTAGE",23] expected=["PERCENTAGE",23]
+CHECK PASS API status: actual="ACTIVE" expected="ACTIVE"
+CHECK PASS API maxRedemptions: actual=null expected=null
+CHECK PASS API assigned: actual=1 expected=1
+UI row: E2E-CPN-MUSQ2MAX-C-23 e2e-cpn-1791051925353 C row 23 23% OFF ACTIVE 0 used Unlimited 1 partner Perpetual Intel
+CHECK PASS UI code: actual=true expected=true
+CHECK PASS UI name: actual=true expected=true
+CHECK PASS UI discount: actual=true expected=true
+CHECK PASS UI status: actual=true expected=true
+CHECK PASS UI quota: actual=true expected=true
+CHECK PASS UI assigned: actual=true expected=true
+CHECK PASS UI validity: actual=true expected=true
+
+==== C2 search exact: "E2E-CPN-MUSQ2MAX-C-07" ====
+UI rows: ["E2E-CPN-MUSQ2MAX-C-07"]
+CHECK PASS matching rows (page 1, ≤10): actual=1 expected=1
+
+==== C2 search partial: "E2E-CPN-MUSQ2MAX-C-1" ====
+UI rows: ["E2E-CPN-MUSQ2MAX-C-19","E2E-CPN-MUSQ2MAX-C-18","E2E-CPN-MUSQ2MAX-C-17","E2E-CPN-MUSQ2MAX-C-16","E2E-CPN-MUSQ2MAX-C-15","E2E-CPN-MUSQ2MAX-C-14","E2E-CPN-MUSQ2MAX-C-13","E2E-CPN-MUSQ2MAX-C-12","E2E-CPN-MUSQ2MAX-C-11","E2E-CPN-MUSQ2MAX-C-10"]
+CHECK PASS matching rows (page 1, ≤10): actual=10 expected=10
+
+==== C2 search different case: "e2e-cpn-musq2max-c-07" ====
+UI rows: ["E2E-CPN-MUSQ2MAX-C-07"]
+CHECK PASS matching rows (page 1, ≤10): actual=1 expected=1
+
+==== C2 search name partial: "e2e-cpn-1791051925353 C row 2" ====
+UI rows: ["E2E-CPN-MUSQ2MAX-C-23","E2E-CPN-MUSQ2MAX-C-22","E2E-CPN-MUSQ2MAX-C-21","E2E-CPN-MUSQ2MAX-C-20","E2E-CPN-MUSQ2MAX-C-02"]
+CHECK PASS matching rows (page 1, ≤10): actual=5 expected=5
+
+==== C2 search percent sign (no wildcard): "E2E-CPN-MUSQ2MAX-C%" ====
+UI rows: []
+CHECK PASS matching rows (page 1, ≤10): actual=0 expected=0
+
+==== C2 search underscore (no wildcard): "E2E-CPN-MUSQ2MAX-C_0" ====
+UI rows: []
+CHECK PASS matching rows (page 1, ≤10): actual=0 expected=0
+
+==== C2 search apostrophe: "E2E-CPN-MUSQ2MAX-C'" ====
+UI rows: []
+CHECK PASS matching rows (page 1, ≤10): actual=0 expected=0
+
+==== C2 affiliate filter A2 ====
+UI: Showing 14 coupons
+mysql> SELECT COUNT(*) FROM organization_coupon_assignments a JOIN organization_coupons c ... WHERE a.affiliateId='04acce79-3906-4ea2-8993-e70177c9b50e'
+14
+CHECK PASS Showing N (affiliate A2): actual="Showing 14 coupons" expected="Showing 14 coupons"
+Program filter on the table: N/A — organization coupons are not linked to programs (inventory R12).
+
+==== C3 status=ACTIVE type=ALL ====
+CHECK PASS Showing N: actual="Showing 27 coupons" expected="Showing 27 coupons"
+
+==== C3 status=PAUSED type=ALL ====
+CHECK PASS Showing N: actual="Showing 5 coupons" expected="Showing 5 coupons"
+
+==== C3 status=EXPIRED type=ALL ====
+CHECK PASS Showing N: actual="Showing 1 coupons" expected="Showing 1 coupons"
+
+==== C3 status=ARCHIVED type=ALL ====
+CHECK PASS Showing N: actual="Showing 2 coupons" expected="Showing 2 coupons"
+
+==== C3 status=ALL type=PERCENTAGE ====
+CHECK PASS Showing N: actual="Showing 21 coupons" expected="Showing 21 coupons"
+
+==== C3 status=ALL type=FIXED_AMOUNT ====
+CHECK PASS Showing N: actual="Showing 14 coupons" expected="Showing 14 coupons"
+
+==== C3 status=ACTIVE type=PERCENTAGE ====
+CHECK PASS Showing N: actual="Showing 17 coupons" expected="Showing 17 coupons"
+
+==== C3 status=PAUSED type=FIXED_AMOUNT ====
+CHECK PASS Showing N: actual="Showing 2 coupons" expected="Showing 2 coupons"
+
+==== C3 status=ARCHIVED type=FIXED_AMOUNT ====
+CHECK PASS Showing N: actual="Showing 1 coupons" expected="Showing 1 coupons"
+
+==== C4 sort Coupon Code & Name asc ====
+CHECK PASS page 1 order: actual=["E2E-CPN-MUSQ2MAX-C-01","E2E-CPN-MUSQ2MAX-C-02","E2E-CPN-MUSQ2MAX-C-03","E2E-CPN-MUSQ2MAX-C-04","E2E-CPN-MUSQ2MAX-C-05","E2E-CPN-MUSQ2MAX-C-06","E2E-CPN-MUSQ2MAX-C-07","E2E-CPN-MUSQ2MAX-C-08","E2E-CPN-MUSQ2MAX-C-09","E2E-CPN-MUSQ2MAX-C-10"] expected=["E2E-CPN-MUSQ2MAX-C-01","E2E-CPN-MUSQ2MAX-C-02","E2E-CPN-MUSQ2MAX-C-03","E2E-CPN-MUSQ2MAX-C-04","E2E-CPN-MUSQ2MAX-C-05","E2E-CPN-MUSQ2MAX-C-06","E2E-CPN-MUSQ2MAX-C-07","E2E-CPN-MUSQ2MAX-C-08","E2E-CPN-MUSQ2MAX-C-09","E2E-CPN-MUSQ2MAX-C-10"]
+
+==== C4 sort Coupon Code & Name desc ====
+CHECK PASS page 1 order: actual=["E2E-CPN-MUSQ2MAX-C-23","E2E-CPN-MUSQ2MAX-C-22","E2E-CPN-MUSQ2MAX-C-21","E2E-CPN-MUSQ2MAX-C-20","E2E-CPN-MUSQ2MAX-C-19","E2E-CPN-MUSQ2MAX-C-18","E2E-CPN-MUSQ2MAX-C-17","E2E-CPN-MUSQ2MAX-C-16","E2E-CPN-MUSQ2MAX-C-15","E2E-CPN-MUSQ2MAX-C-14"] expected=["E2E-CPN-MUSQ2MAX-C-23","E2E-CPN-MUSQ2MAX-C-22","E2E-CPN-MUSQ2MAX-C-21","E2E-CPN-MUSQ2MAX-C-20","E2E-CPN-MUSQ2MAX-C-19","E2E-CPN-MUSQ2MAX-C-18","E2E-CPN-MUSQ2MAX-C-17","E2E-CPN-MUSQ2MAX-C-16","E2E-CPN-MUSQ2MAX-C-15","E2E-CPN-MUSQ2MAX-C-14"]
+
+==== C4 sort Discount Concession asc ====
+CHECK PASS page 1 order: actual=["E2E-CPN-MUSQ2MAX-C-01","E2E-CPN-MUSQ2MAX-C-02","E2E-CPN-MUSQ2MAX-C-03","E2E-CPN-MUSQ2MAX-C-04","E2E-CPN-MUSQ2MAX-C-05","E2E-CPN-MUSQ2MAX-C-06","E2E-CPN-MUSQ2MAX-C-07","E2E-CPN-MUSQ2MAX-C-08","E2E-CPN-MUSQ2MAX-C-09","E2E-CPN-MUSQ2MAX-C-10"] expected=["E2E-CPN-MUSQ2MAX-C-01","E2E-CPN-MUSQ2MAX-C-02","E2E-CPN-MUSQ2MAX-C-03","E2E-CPN-MUSQ2MAX-C-04","E2E-CPN-MUSQ2MAX-C-05","E2E-CPN-MUSQ2MAX-C-06","E2E-CPN-MUSQ2MAX-C-07","E2E-CPN-MUSQ2MAX-C-08","E2E-CPN-MUSQ2MAX-C-09","E2E-CPN-MUSQ2MAX-C-10"]
+
+==== C4 sort Discount Concession desc ====
+CHECK PASS page 1 order: actual=["E2E-CPN-MUSQ2MAX-C-23","E2E-CPN-MUSQ2MAX-C-22","E2E-CPN-MUSQ2MAX-C-21","E2E-CPN-MUSQ2MAX-C-20","E2E-CPN-MUSQ2MAX-C-19","E2E-CPN-MUSQ2MAX-C-18","E2E-CPN-MUSQ2MAX-C-17","E2E-CPN-MUSQ2MAX-C-16","E2E-CPN-MUSQ2MAX-C-15","E2E-CPN-MUSQ2MAX-C-14"] expected=["E2E-CPN-MUSQ2MAX-C-23","E2E-CPN-MUSQ2MAX-C-22","E2E-CPN-MUSQ2MAX-C-21","E2E-CPN-MUSQ2MAX-C-20","E2E-CPN-MUSQ2MAX-C-19","E2E-CPN-MUSQ2MAX-C-18","E2E-CPN-MUSQ2MAX-C-17","E2E-CPN-MUSQ2MAX-C-16","E2E-CPN-MUSQ2MAX-C-15","E2E-CPN-MUSQ2MAX-C-14"]
+
+==== C4 pagination (23 rows, 10 per page) ====
+CHECK PASS first page rows: actual=10 expected=10
+CHECK PASS page info: actual="Page 1 of 3" expected="Page 1 of 3"
+CHECK PASS last page rows: actual=3 expected=3
+CHECK PASS middle page rows: actual=10 expected=10

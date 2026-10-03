@@ -1,0 +1,18 @@
+◇ injected env (20) from .env.test // tip: ⌘ override existing { override: true }
+🧪 Running PartnerIQ Enterprise-Grade Google OAuth Test Suite...
+
+⚙️ Initializing essential PartnerIQ system defaults (RBAC & Templates)...
+Seeded 36 email design default templates
+✅ Essential PartnerIQ system defaults initialized (0 dummy orgs/users created).
+--- 1. New User Google Signup Flow ---
+OAuth test suite error: BadRequestException: You must accept the Master Services Agreement, Privacy Policy, and Anti-Fraud Guidelines to create an account.
+    at OAuthService.initiateGoogleAuth (/home/user/piq-main-check/src/modules/auth/oauth/oauth.service.ts:95:13)
+    at runOAuthTests (/home/user/piq-main-check/src/tests/oauth.test.ts:94:38)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5) {
+  response: {
+    code: 'LEGAL_ACCEPTANCE_REQUIRED',
+    message: 'You must accept the Master Services Agreement, Privacy Policy, and Anti-Fraud Guidelines to create an account.'
+  },
+  status: 400,
+  options: {}
+}

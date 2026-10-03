@@ -1,0 +1,106 @@
+Running one project: unit
+[Nest] 6900  - 10/03/2026, 9:46:09 PM     LOG [IntegrationsService] [OAuth Callback] Processing callback for slug=razorpay, state=razorpay_fcaee9a6ff548964dd00deb08c3e0659668ab1ed, code=***, error=undefined, merchantId=undefined
+[Nest] 6900  - 10/03/2026, 9:46:09 PM     LOG [IntegrationsService] [OAuth Callback] Exchanging code with provider: RAZORPAY
+[Nest] 6900  - 10/03/2026, 9:46:09 PM     LOG [IntegrationsService] [OAuth Callback] Successfully exchanged token with razorpay. Account: Razorpay acc_LlBaP5xwCvNLUN
+[Nest] 6900  - 10/03/2026, 9:46:09 PM     LOG [RazorpayTokenService] [Razorpay] Refreshed access token for connection dfccdd34-abd3-4303-9fa5-acc7e5d0faf9
+[Nest] 6900  - 10/03/2026, 9:46:09 PM   ERROR [RazorpayTokenService] [Razorpay] Token refresh failed for connection dfccdd34-abd3-4303-9fa5-acc7e5d0faf9: refresh token is invalid
+[Nest] 6900  - 10/03/2026, 9:46:09 PM     LOG [RazorpayTokenService] [Razorpay] Revoked refresh_token for connection dfccdd34-abd3-4303-9fa5-acc7e5d0faf9
+[Nest] 6900  - 10/03/2026, 9:46:09 PM     LOG [RazorpayTokenService] [Razorpay] Revoked access_token for connection dfccdd34-abd3-4303-9fa5-acc7e5d0faf9
+[Nest] 6900  - 10/03/2026, 9:46:09 PM     LOG [IntegrationsService] [OAuth Callback] Processing callback for slug=razorpay, state=razorpay_fcaee9a6ff548964dd00deb08c3e0659668ab1ed, code=***, error=undefined, merchantId=undefined
+[Nest] 6900  - 10/03/2026, 9:46:09 PM    WARN [IntegrationsService] [OAuth Callback] Invalid or expired OAuth state for razorpay. State exists: true, consumed: true, expired: false
+[Nest] 6900  - 10/03/2026, 9:46:15 PM     LOG [AdminJobsService] Seeding enterprise BullMQ Queue & Worker operational infrastructure...
+[Nest] 6900  - 10/03/2026, 9:46:15 PM     LOG [AdminJobsService] Queue infrastructure seeded: 6 queues, 6 workers, 5 schedulers.
+[Nest] 6900  - 10/03/2026, 9:46:15 PM     LOG [AdminJobsService] Seeding enterprise BullMQ Queue & Worker operational infrastructure...
+[Nest] 6900  - 10/03/2026, 9:46:15 PM     LOG [AdminJobsService] Queue infrastructure seeded: 6 queues, 6 workers, 5 schedulers.
+[Nest] 6900  - 10/03/2026, 9:46:15 PM     LOG [AdminJobsService] Seeding enterprise BullMQ Queue & Worker operational infrastructure...
+[Nest] 6900  - 10/03/2026, 9:46:15 PM     LOG [AdminJobsService] Queue infrastructure seeded: 6 queues, 6 workers, 5 schedulers.
+[Nest] 6900  - 10/03/2026, 9:46:15 PM     LOG [AdminJobsService] Seeding enterprise BullMQ Queue & Worker operational infrastructure...
+[Nest] 6900  - 10/03/2026, 9:46:15 PM     LOG [AdminJobsService] Queue infrastructure seeded: 6 queues, 6 workers, 5 schedulers.
+[Nest] 6900  - 10/03/2026, 9:46:15 PM     LOG [AdminJobsService] Seeding enterprise BullMQ Queue & Worker operational infrastructure...
+[Nest] 6900  - 10/03/2026, 9:46:15 PM     LOG [AdminJobsService] Queue infrastructure seeded: 6 queues, 6 workers, 5 schedulers.
+[Nest] 6900  - 10/03/2026, 9:46:15 PM     LOG [AdminJobsService] Job job-wh-failed-1092 manually re-queued for execution (Attempt 6)
+[Nest] 6900  - 10/03/2026, 9:46:15 PM     LOG [AdminJobsService] Job job-wh-98214 manually re-queued for execution (Attempt 2)
+[Nest] 6900  - 10/03/2026, 9:46:15 PM     LOG [AdminJobsService] Job job-fraud-55102 manually re-queued for execution (Attempt 2)
+[Nest] 6900  - 10/03/2026, 9:46:15 PM     LOG [AdminJobsService] Seeding enterprise BullMQ Queue & Worker operational infrastructure...
+[Nest] 6900  - 10/03/2026, 9:46:15 PM     LOG [AdminJobsService] Queue infrastructure seeded: 6 queues, 6 workers, 5 schedulers.
+[Nest] 6900  - 10/03/2026, 9:46:15 PM     LOG [AdminJobsService] Queue webhook-dispatch-queue paused by administrator
+[Nest] 6900  - 10/03/2026, 9:46:15 PM     LOG [AdminJobsService] Queue webhook-dispatch-queue resumed by administrator
+[Nest] 6900  - 10/03/2026, 9:46:15 PM     LOG [AdminJobsService] Drained 0 jobs from queue webhook-dispatch-queue with state WAITING
+[Nest] 6900  - 10/03/2026, 9:46:15 PM     LOG [AdminJobsService] Seeding enterprise BullMQ Queue & Worker operational infrastructure...
+[Nest] 6900  - 10/03/2026, 9:46:15 PM     LOG [AdminJobsService] Queue infrastructure seeded: 6 queues, 6 workers, 5 schedulers.
+[Nest] 6900  - 10/03/2026, 9:46:15 PM     LOG [AdminJobsService] Worker WebhookDeliveryDaemon (worker-webhook-01) restarted.
+[Nest] 6900  - 10/03/2026, 9:46:15 PM     LOG [AdminJobsService] Seeding enterprise BullMQ Queue & Worker operational infrastructure...
+[Nest] 6900  - 10/03/2026, 9:46:15 PM     LOG [AdminJobsService] Queue infrastructure seeded: 6 queues, 6 workers, 5 schedulers.
+[Nest] 6900  - 10/03/2026, 9:46:15 PM     LOG [AdminJobsService] Manual trigger executed for scheduler Affiliate Tier & Milestone Calculation -> Enqueued job-cron-musx8w2o
+[Nest] 6900  - 10/03/2026, 9:46:15 PM     LOG [AdminJobsService] DLQ Record 1cc8b100-7b50-41d4-964b-389291751f1c replayed to queue webhook-dispatch-queue as job-replay-musx8w2o
+[Nest] 6900  - 10/03/2026, 9:46:15 PM     LOG [AdminJobsService] Seeding enterprise BullMQ Queue & Worker operational infrastructure...
+[Nest] 6900  - 10/03/2026, 9:46:15 PM     LOG [AdminJobsService] Queue infrastructure seeded: 6 queues, 6 workers, 5 schedulers.
+[Nest] 6900  - 10/03/2026, 9:46:18 PM     LOG [AdminSystemHealthService] Seeding enterprise System Health service registry & topology...
+[Nest] 6900  - 10/03/2026, 9:46:18 PM     LOG [AdminSystemHealthService] System Health baseline populated: 15 services registered.
+[Nest] 6900  - 10/03/2026, 9:46:18 PM     LOG [AdminSystemHealthService] Seeding enterprise System Health service registry & topology...
+[Nest] 6900  - 10/03/2026, 9:46:18 PM     LOG [AdminSystemHealthService] System Health baseline populated: 15 services registered.
+[Nest] 6900  - 10/03/2026, 9:46:18 PM     LOG [AdminSystemHealthService] Seeding enterprise System Health service registry & topology...
+[Nest] 6900  - 10/03/2026, 9:46:18 PM     LOG [AdminSystemHealthService] System Health baseline populated: 15 services registered.
+[Nest] 6900  - 10/03/2026, 9:46:18 PM     LOG [AdminSystemHealthService] Seeding enterprise System Health service registry & topology...
+[Nest] 6900  - 10/03/2026, 9:46:18 PM     LOG [AdminSystemHealthService] System Health baseline populated: 15 services registered.
+[Nest] 6900  - 10/03/2026, 9:46:18 PM     LOG [AdminSystemHealthService] Seeding enterprise System Health service registry & topology...
+[Nest] 6900  - 10/03/2026, 9:46:18 PM     LOG [AdminSystemHealthService] System Health baseline populated: 15 services registered.
+[Nest] 6900  - 10/03/2026, 9:46:18 PM     LOG [AdminSystemHealthService] Seeding enterprise System Health service registry & topology...
+[Nest] 6900  - 10/03/2026, 9:46:18 PM     LOG [AdminSystemHealthService] System Health baseline populated: 15 services registered.
+[Nest] 6900  - 10/03/2026, 9:46:18 PM     LOG [AdminApiActivityService] Seeding real baseline API activity telemetry...
+[Nest] 6900  - 10/03/2026, 9:46:18 PM     LOG [AdminApiActivityService] Baseline telemetry seeded: 120 requests, 3 external calls, 3 error groups
+[Nest] 6900  - 10/03/2026, 9:46:18 PM     LOG [AdminApiActivityService] Seeding real baseline API activity telemetry...
+[Nest] 6900  - 10/03/2026, 9:46:18 PM     LOG [AdminApiActivityService] Baseline telemetry seeded: 120 requests, 3 external calls, 3 error groups
+[Nest] 6900  - 10/03/2026, 9:46:18 PM     LOG [AdminApiActivityService] Seeding real baseline API activity telemetry...
+[Nest] 6900  - 10/03/2026, 9:46:18 PM     LOG [AdminApiActivityService] Baseline telemetry seeded: 120 requests, 3 external calls, 3 error groups
+[Nest] 6900  - 10/03/2026, 9:46:20 PM     LOG [AdminWebhooksService] Webhook event-type catalog registered.
+[Nest] 6900  - 10/03/2026, 9:46:20 PM     LOG [AdminWebhooksService] Webhook dev fixture telemetry seeded (local dev/test only).
+[Nest] 6900  - 10/03/2026, 9:46:20 PM     LOG [AdminWebhooksService] Webhook event-type catalog registered.
+[Nest] 6900  - 10/03/2026, 9:46:20 PM     LOG [AdminWebhooksService] Webhook dev fixture telemetry seeded (local dev/test only).
+[Nest] 6900  - 10/03/2026, 9:46:20 PM     LOG [AdminWebhooksService] Webhook event-type catalog registered.
+[Nest] 6900  - 10/03/2026, 9:46:20 PM     LOG [AdminWebhooksService] Webhook dev fixture telemetry seeded (local dev/test only).
+[Nest] 6900  - 10/03/2026, 9:46:20 PM     LOG [AdminWebhooksService] Webhook event-type catalog registered.
+[Nest] 6900  - 10/03/2026, 9:46:21 PM     LOG [AdminWebhooksService] Webhook dev fixture telemetry seeded (local dev/test only).
+[Nest] 6900  - 10/03/2026, 9:46:21 PM     LOG [AdminWebhooksService] Webhook event-type catalog registered.
+[Nest] 6900  - 10/03/2026, 9:46:21 PM     LOG [AdminWebhooksService] Webhook dev fixture telemetry seeded (local dev/test only).
+[Nest] 6900  - 10/03/2026, 9:46:21 PM     LOG [AdminWebhooksService] Webhook event-type catalog registered.
+[Nest] 6900  - 10/03/2026, 9:46:21 PM     LOG [AdminWebhooksService] Webhook dev fixture telemetry seeded (local dev/test only).
+[Nest] 6900  - 10/03/2026, 9:46:21 PM     LOG [AdminWebhooksService] Webhook event-type catalog registered.
+[Nest] 6900  - 10/03/2026, 9:46:22 PM     LOG [AdminWebhooksService] Webhook dev fixture telemetry seeded (local dev/test only).
+[Nest] 6900  - 10/03/2026, 9:46:22 PM     LOG [AdminWebhooksService] Webhook event-type catalog registered.
+[Nest] 6900  - 10/03/2026, 9:46:22 PM     LOG [AdminWebhooksService] Webhook dev fixture telemetry seeded (local dev/test only).
+FAIL unit test/unit/demo-bookings.spec.ts
+  ● Test suite failed to run
+
+    test/unit/demo-bookings.spec.ts:6:21 - error TS2554: Expected 2 arguments, but got 0.
+
+    6     const service = new DemoBookingsService();
+                          ~~~~~~~~~~~~~~~~~~~~~~~~~
+
+      src/modules/demo-bookings/demo-bookings.service.ts:26:5
+        26     private readonly googleCalendar: GoogleCalendarService,
+               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        An argument for 'googleCalendar' was not provided.
+
+
+Summary of all failing tests
+FAIL test/unit/demo-bookings.spec.ts
+  ● Test suite failed to run
+
+    test/unit/demo-bookings.spec.ts:6:21 - error TS2554: Expected 2 arguments, but got 0.
+
+    6     const service = new DemoBookingsService();
+                          ~~~~~~~~~~~~~~~~~~~~~~~~~
+
+      src/modules/demo-bookings/demo-bookings.service.ts:26:5
+        26     private readonly googleCalendar: GoogleCalendarService,
+               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        An argument for 'googleCalendar' was not provided.
+
+
+Test Suites: 1 failed, 24 passed, 25 total
+Tests:       154 passed, 154 total
+Snapshots:   0 total
+Time:        27.829 s
+Ran all test suites.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?

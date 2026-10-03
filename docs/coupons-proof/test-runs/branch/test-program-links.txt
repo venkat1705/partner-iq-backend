@@ -1,0 +1,32 @@
+◇ injected env (20) from .env.test // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+
+🔗 Program Default Tracking Links Suite
+
+⚙️ Initializing essential PartnerIQ system defaults (RBAC & Templates)...
+Seeded 36 email design default templates
+✅ Essential PartnerIQ system defaults initialized (0 dummy orgs/users created).
+  ✅ [PASS] POST generates a link on first call
+  ✅ [PASS] Response includes a resolvable /r/:shortCode tracking URL
+  ✅ [PASS] No email address leaked into the link
+  ✅ [PASS] Short code is not a bare sequential/numeric id
+  ✅ [PASS] Repeated POST (no Idempotency-Key) returns the same link, not a new one
+  ✅ [PASS] Exactly one PROGRAM_DEFAULT row exists for this affiliate+program
+  ✅ [PASS] GET retrieves the same link without generating another
+  ✅ [PASS] Three concurrent POSTs for the same affiliate+program all resolve to one link id
+  ✅ [PASS] Concurrent requests never produce a second row (DB unique-index race path)
+  ✅ [PASS] Same Idempotency-Key + same request returns the cached response
+  ✅ [PASS] A replayed Idempotency-Key never creates a second idempotency record or link
+  ✅ [PASS] Same Idempotency-Key reused for a materially different request (different program) is rejected as a conflict
+  ✅ [PASS] A malformed (too-short) Idempotency-Key is rejected
+  ✅ [PASS] Affiliate B's GET never surfaces affiliate A's link, even for the same program
+  ✅ [PASS] Affiliate B generates their own distinct link, not A's
+  ✅ [PASS] Affiliate A still only ever sees their own link, not B's
+  ✅ [PASS] A program that exists but belongs to an organization the affiliate has no relationship with is denied, not returned
+  ✅ [PASS] A nonexistent programId is rejected as not found
+  ✅ [PASS] A pending (not yet approved) affiliate cannot generate a program link
+  ✅ [PASS] A paused (inactive) program rejects link generation
+
+============================================================
+  Passed: 20
+  Failed: 0
+============================================================

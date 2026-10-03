@@ -1,0 +1,37 @@
+# Scenario D — raw proof, run=1791062315582 (started 2026-10-03T21:18:35.669Z)
+
+==== D PERCENTAGE ====
+> POST http://localhost:4173/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-D-PCT","name":"e2e-cpn-1791051925353 D PERCENTAGE","description":"created by D","discountType":"PERCENTAGE","discountValue":15,"maxRedemptions":25,"validFrom":"2026-11-01","validUntil":"2026-11-30","affiliateIds":["a0aaaad0-411b-49b7-8fbe-f097dec291b8"]}
+< HTTP 201
+< {"success":true,"data":{"id":"05b5e638-f26d-4d2d-9085-c9691c78bee3","organizationId":"eb2b08d5-22c4-4dd7-a225-37421c48f27e","code":"E2E-CPN-MUSQ2MAX-D-PCT","name":"e2e-cpn-1791051925353 D PERCENTAGE","description":"created by D","discountType":"PERCENTAGE","discountValue":15,"status":"ACTIVE","effectiveStatus":"ACTIVE","maxRedemptions":25,"maxRedemptionsPerCustomer":null,"redemptionsCount":0,"remainingRedemptions":25,"validFrom":"2026-10-31T18:30:00.000Z","validUntil":"2026-11-30T18:29:59.000Z","validFromDate":"2026-11-01","validUntilDate":"2026-11-30","createdAt":"2026-10-03T21:21:24.641Z","updatedAt":"2026-10-03T21:21:24.641Z","assignedAffiliates":[{"affiliateId":"a0aaaad0-411b-49b7-8fbe-f097dec291b8","displayName":"e2e-cpn-1791051925353 Affiliate One","email":"e2e-cpn-1791051925353-affiliate_1@example.test","assignedAt":"2026-10-03T21:21:24.641Z"}]}}
+CHECK PASS request code: actual="E2E-CPN-MUSQ2MAX-D-PCT" expected="E2E-CPN-MUSQ2MAX-D-PCT"
+CHECK PASS request validFrom (date-only, org tz applied server-side): actual="2026-11-01" expected="2026-11-01"
+CHECK PASS request validUntil: actual="2026-11-30" expected="2026-11-30"
+mysql> SELECT ... FROM organization_coupons WHERE normalizedCode='E2E-CPN-MUSQ2MAX-D-PCT'
+{"id":"05b5e638-f26d-4d2d-9085-c9691c78bee3","code":"E2E-CPN-MUSQ2MAX-D-PCT","discountType":"PERCENTAGE","discountValue":15,"maxRedemptions":25,"validFrom":"2026-10-31T18:30:00.000Z","validUntil":"2026-11-30T18:29:59.000Z","status":"ACTIVE","createdBy":"034315a7-2142-429b-97c6-e3e687a1f5da"}
+CHECK PASS validFrom UTC (IST 2026-11-01 00:00): actual="2026-10-31T18:30:00.000Z" expected="2026-10-31T18:30:00.000Z"
+CHECK PASS validUntil UTC second (IST 2026-11-30 23:59:59): actual="2026-11-30T18:29:59" expected="2026-11-30T18:29:59"
+mysql> SELECT affiliateId FROM organization_coupon_assignments WHERE couponId='05b5e638-f26d-4d2d-9085-c9691c78bee3'
+[{"affiliateId":"a0aaaad0-411b-49b7-8fbe-f097dec291b8"}]
+mysql> SELECT action, actorId, organizationId, resourceId, metadata, createdAt FROM audit_logs WHERE resourceId='05b5e638-f26d-4d2d-9085-c9691c78bee3' ORDER BY createdAt, action DESC
+[{"action":"COUPON_CREATED","actorId":"034315a7-2142-429b-97c6-e3e687a1f5da","organizationId":"eb2b08d5-22c4-4dd7-a225-37421c48f27e","resourceId":"05b5e638-f26d-4d2d-9085-c9691c78bee3","metadata":"{\"code\":\"E2E-CPN-MUSQ2MAX-D-PCT\",\"after\":{\"code\":\"E2E-CPN-MUSQ2MAX-D-PCT\",\"name\":\"e2e-cpn-1791051925353 D PERCENTAGE\",\"description\":\"created by D\",\"discountType\":\"PERCENTAGE\",\"discountValue\":15,\"status\":\"ACTIVE\",\"maxRedemptions\":25,\"maxRedemptionsPerCustomer\":null,\"validFrom\":\"2026-10-31T18:30:00.000Z\",\"validUntil\":\"2026-11-30T18:29:59.000Z\"}}","createdAt":"2026-10-03T21:21:24.645Z"},{"action":"COUPON_ASSIGNED","actorId":"034315a7-2142-429b-97c6-e3e687a1f5da","organizationId":"eb2b08d5-22c4-4dd7-a225-37421c48f27e","resourceId":"05b5e638-f26d-4d2d-9085-c9691c78bee3","metadata":"{\"affiliateIds\":[\"a0aaaad0-411b-49b7-8fbe-f097dec291b8\"]}","createdAt":"2026-10-03T21:21:24.645Z"}]
+UI row after refresh:  E2E-CPN-MUSQ2MAX-D-PCT e2e-cpn-1791051925353 D PERCENTAGE 15% OFF ACTIVE 0 used / 25 1 partner 11/1/2026 until 11/30/2026 Intel
+
+==== D FIXED_AMOUNT ====
+> POST http://localhost:4173/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons
+> body: {"code":"E2E-CPN-MUSQ2MAX-D-FIX","name":"e2e-cpn-1791051925353 D FIXED_AMOUNT","description":"created by D","discountType":"FIXED_AMOUNT","discountValue":250,"maxRedemptions":25,"validFrom":"2026-11-01","validUntil":"2026-11-30","affiliateIds":["a0aaaad0-411b-49b7-8fbe-f097dec291b8"]}
+< HTTP 201
+< {"success":true,"data":{"id":"076acfd9-eda1-469f-a0c2-047ab9cf425f","organizationId":"eb2b08d5-22c4-4dd7-a225-37421c48f27e","code":"E2E-CPN-MUSQ2MAX-D-FIX","name":"e2e-cpn-1791051925353 D FIXED_AMOUNT","description":"created by D","discountType":"FIXED_AMOUNT","discountValue":250,"status":"ACTIVE","effectiveStatus":"ACTIVE","maxRedemptions":25,"maxRedemptionsPerCustomer":null,"redemptionsCount":0,"remainingRedemptions":25,"validFrom":"2026-10-31T18:30:00.000Z","validUntil":"2026-11-30T18:29:59.000Z","validFromDate":"2026-11-01","validUntilDate":"2026-11-30","createdAt":"2026-10-03T21:21:35.141Z","updatedAt":"2026-10-03T21:21:35.141Z","assignedAffiliates":[{"affiliateId":"a0aaaad0-411b-49b7-8fbe-f097dec291b8","displayName":"e2e-cpn-1791051925353 Affiliate One","email":"e2e-cpn-1791051925353-affiliate_1@example.test","assignedAt":"2026-10-03T21:21:35.141Z"}]}}
+CHECK PASS request code: actual="E2E-CPN-MUSQ2MAX-D-FIX" expected="E2E-CPN-MUSQ2MAX-D-FIX"
+CHECK PASS request validFrom (date-only, org tz applied server-side): actual="2026-11-01" expected="2026-11-01"
+CHECK PASS request validUntil: actual="2026-11-30" expected="2026-11-30"
+mysql> SELECT ... FROM organization_coupons WHERE normalizedCode='E2E-CPN-MUSQ2MAX-D-FIX'
+{"id":"076acfd9-eda1-469f-a0c2-047ab9cf425f","code":"E2E-CPN-MUSQ2MAX-D-FIX","discountType":"FIXED_AMOUNT","discountValue":250,"maxRedemptions":25,"validFrom":"2026-10-31T18:30:00.000Z","validUntil":"2026-11-30T18:29:59.000Z","status":"ACTIVE","createdBy":"034315a7-2142-429b-97c6-e3e687a1f5da"}
+CHECK PASS validFrom UTC (IST 2026-11-01 00:00): actual="2026-10-31T18:30:00.000Z" expected="2026-10-31T18:30:00.000Z"
+CHECK PASS validUntil UTC second (IST 2026-11-30 23:59:59): actual="2026-11-30T18:29:59" expected="2026-11-30T18:29:59"
+mysql> SELECT affiliateId FROM organization_coupon_assignments WHERE couponId='076acfd9-eda1-469f-a0c2-047ab9cf425f'
+[{"affiliateId":"a0aaaad0-411b-49b7-8fbe-f097dec291b8"}]
+mysql> SELECT action, actorId, organizationId, resourceId, metadata, createdAt FROM audit_logs WHERE resourceId='076acfd9-eda1-469f-a0c2-047ab9cf425f' ORDER BY createdAt, action DESC
+[{"action":"COUPON_CREATED","actorId":"034315a7-2142-429b-97c6-e3e687a1f5da","organizationId":"eb2b08d5-22c4-4dd7-a225-37421c48f27e","resourceId":"076acfd9-eda1-469f-a0c2-047ab9cf425f","metadata":"{\"code\":\"E2E-CPN-MUSQ2MAX-D-FIX\",\"after\":{\"code\":\"E2E-CPN-MUSQ2MAX-D-FIX\",\"name\":\"e2e-cpn-1791051925353 D FIXED_AMOUNT\",\"description\":\"created by D\",\"discountType\":\"FIXED_AMOUNT\",\"discountValue\":250,\"status\":\"ACTIVE\",\"maxRedemptions\":25,\"maxRedemptionsPerCustomer\":null,\"validFrom\":\"2026-10-31T18:30:00.000Z\",\"validUntil\":\"2026-11-30T18:29:59.000Z\"}}","createdAt":"2026-10-03T21:21:35.148Z"},{"action":"COUPON_ASSIGNED","actorId":"034315a7-2142-429b-97c6-e3e687a1f5da","organizationId":"eb2b08d5-22c4-4dd7-a225-37421c48f27e","resourceId":"076acfd9-eda1-469f-a0c2-047ab9cf425f","metadata":"{\"affiliateIds\":[\"a0aaaad0-411b-49b7-8fbe-f097dec291b8\"]}","createdAt":"2026-10-03T21:21:35.148Z"}]
+UI row after refresh:  E2E-CPN-MUSQ2MAX-D-FIX e2e-cpn-1791051925353 D FIXED_AMOUNT ₹250 OFF ACTIVE 0 used / 25 1 partner 11/1/2026 until 11/30/2026 Intel

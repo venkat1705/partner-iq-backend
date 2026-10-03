@@ -1,0 +1,61 @@
+◇ injected env (20) from .env.test // tip: ⌘ suppress logs { quiet: true }
+
+💰 Click ≠ Commission — Compensation Invariant Suite
+
+⚙️ Initializing essential PartnerIQ system defaults (RBAC & Templates)...
+Seeded 36 email design default templates
+✅ Essential PartnerIQ system defaults initialized (0 dummy orgs/users created).
+
+── Clicks are tracked but never compensated ──
+  ✅ [PASS] Click tracking still works — all 25 clicks recorded
+  ✅ [PASS] Every click returns a durable Click ID for attribution
+  ✅ [PASS] Commission = 0 after 25 clicks
+  ✅ [PASS] Payable balance = 0 after 25 clicks
+  ✅ [PASS] Payout = 0 after 25 clicks — no payout item exists
+  ✅ [PASS] A click does not create a conversion record
+
+── A qualified conversion creates commission ──
+  ✅ [PASS] Conversion attributed to the affiliate that owned the click
+  ✅ [PASS] Exactly one commission created for the conversion
+  ✅ [PASS] Commission is linked to the conversion it came from, not to a click
+  ✅ [PASS] Commission is calculated from the conversion value, not from click volume
+  ✅ [PASS] Percentage commission = conversion value × the program’s configured rate (10% of ₹1,000 = ₹100)
+  ✅ [PASS] Commission records the rule it was calculated under — the amount is derived, never hard-coded
+
+── Duplicate conversion creates no duplicate commission ──
+  ✅ [PASS] Replaying the event returns the original conversion
+  ✅ [PASS] One conversion event -> one conversion record
+  ✅ [PASS] One conversion event -> one commission record
+
+── Refund reverses commission from the conversion, not from clicks ──
+  ✅ [PASS] A fully refunded conversion fully reverses its commission
+  ✅ [PASS] Reversing commission leaves the click records intact — analytics history is not rewritten
+
+── Commission belongs to the right org, program, affiliate and conversion ──
+  ✅ [PASS] Every commission carries the correct organization, program and affiliate
+  ✅ [PASS] Every commission resolves to a real conversion — no orphaned financial records
+
+── Configuration cannot turn clicks into money ──
+  ✅ [PASS] A milestone paying a cash bonus for click volume is rejected
+  ✅ [PASS] A cash bonus nested inside a MULTI_REWARD is caught too
+  ✅ [PASS] A click milestone with a NON-monetary reward is still allowed (recognition is fine)
+  ✅ [PASS] Adding a cash bonus to an existing click milestone is rejected
+  ✅ [PASS] A cash bonus gated on APPROVED_CONVERSIONS is allowed
+  ✅ [PASS] Switching an existing bonus milestone over to a click metric is rejected
+  ✅ [PASS] A tier paying a cash bonus for click volume is rejected
+  ✅ [PASS] A click-gated tier with a non-monetary reward is still allowed
+
+── Runtime guard blocks click-sourced ledger credits ──
+[Nest] 5754  - 10/03/2026, 9:25:34 PM    WARN [RewardExecutorService] Blocked a 75000-cent bonus for affiliate 66559d9a-2f7f-407e-be91-7937ab68f3e6: its milestone is gated on click volume, and clicks are a traffic metric rather than an earning event.
+  ✅ [PASS] A legacy click-gated cash bonus is blocked at execution time
+  ✅ [PASS] The blocked bonus left the payable balance untouched
+  ✅ [PASS] A conversion-gated cash bonus still credits normally — the guard is targeted, not a blanket block
+  ✅ [PASS] A workflow granting a bonus on FIRST_CLICK_RECEIVED is rejected
+  ✅ [PASS] A workflow granting a bonus behind a CLICKS goal is rejected
+  ✅ [PASS] A click-triggered workflow with a non-monetary action is still allowed
+  ✅ [PASS] A bonus workflow triggered by an approved conversion is allowed
+
+===================================
+Compensation Invariant Results: 34 Passed, 0 Failed
+===================================
+

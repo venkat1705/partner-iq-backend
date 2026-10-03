@@ -1,0 +1,24 @@
+◇ injected env (20) from .env.test // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+
+🎯 Attribution / Click-ID / Cookie-Deletion / Conversion End-to-End Suite
+
+⚙️ Initializing essential PartnerIQ system defaults (RBAC & Templates)...
+Seeded 36 email design default templates
+✅ Essential PartnerIQ system defaults initialized (0 dummy orgs/users created).
+  ✅ [PASS] Tracking link created after affiliate/program active validation
+  ✅ [PASS] Click tracked and returns a durable Click ID
+  ✅ [PASS] UTM parameters captured on the click record
+  ✅ [PASS] identify() durably links customer to the click
+Attribution E2E suite failed: BadRequestException: Conversion currency (USD) does not match program currency (INR). Currency conversion is not supported.
+    at ConversionsService.recordNewConversion (/home/user/partner-iq-backend/src/modules/conversions/conversions.service.ts:870:13)
+    at ConversionsService.createConversion (/home/user/partner-iq-backend/src/modules/conversions/conversions.service.ts:829:25)
+    at main (/home/user/partner-iq-backend/src/tests/attribution-e2e.test.ts:117:42)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5) {
+  response: {
+    message: 'Conversion currency (USD) does not match program currency (INR). Currency conversion is not supported.',
+    error: 'Bad Request',
+    statusCode: 400
+  },
+  status: 400,
+  options: {}
+}

@@ -1,0 +1,150 @@
+◇ injected env (20) from .env.test // tip: ⌘ suppress logs { quiet: true }
+
+🧪 PartnerIQ Subscription Limits & Add-on Billing Suite
+
+📦 Plan catalog
+
+  ✅ [PASS] Starter is ₹5,000/month (500000 paise)
+  ✅ [PASS] Growth is ₹10,000/month
+  ✅ [PASS] Pro is ₹17,000/month
+  ✅ [PASS] Starter is ₹50,000/year
+  ✅ [PASS] Growth is ₹1,00,000/year
+  ✅ [PASS] Pro is ₹1,70,000/year
+  ✅ [PASS] Starter includes 1 organization
+  ✅ [PASS] Starter includes 3 programs
+  ✅ [PASS] Starter includes 50 affiliates
+  ✅ [PASS] Starter includes 5 members
+  ✅ [PASS] Growth includes 5 organizations
+  ✅ [PASS] Growth includes 10 programs
+  ✅ [PASS] Growth includes 200 affiliates
+  ✅ [PASS] Growth includes 15 members
+  ✅ [PASS] Pro is unlimited on every resource (NULL, never Infinity)
+  ✅ [PASS] Retired BUSINESS plan is hidden from the public catalog
+  ✅ [PASS] Organization add-on is ₹2,000/month
+  ✅ [PASS] Program add-on is ₹500/month
+  ✅ [PASS] Affiliate add-on is ₹50/month
+  ✅ [PASS] Member add-on is ₹200/month
+
+🟢 Starter limits
+
+  ✅ [PASS] Starter starts at 1/1 organizations
+  ✅ [PASS] Starter rejects a second organization
+  ✅ [PASS] Starter allows programs 1-3
+  ✅ [PASS] Starter rejects program 4
+  ✅ [PASS] Starter allows affiliates 1-50
+  ✅ [PASS] Starter rejects affiliate 51
+  ✅ [PASS] Starter allows members 1-5
+  ✅ [PASS] Starter rejects member 6
+  ✅ [PASS] Limit error reports currentUsage
+  ✅ [PASS] Limit error reports includedLimit
+  ✅ [PASS] Limit error reports additionalPurchased
+  ✅ [PASS] Limit error reports effectiveLimit
+  ✅ [PASS] Limit error reports remaining
+  ✅ [PASS] Limit error offers the add-on path
+  ✅ [PASS] Limit error offers the upgrade path
+  ✅ [PASS] Limit error names the add-on to purchase
+
+🔵 Growth limits (account-wide, not per organization)
+
+  ✅ [PASS] Growth allows organizations 1-5
+  ✅ [PASS] Growth rejects organization 6
+  ✅ [PASS] Growth counts programs across all organizations
+  ✅ [PASS] Growth rejects program 11 even in a different organization
+  ✅ [PASS] Growth counts affiliates across all organizations
+  ✅ [PASS] Growth rejects affiliate 201 even in a different organization
+  ✅ [PASS] Growth allows members 1-15
+  ✅ [PASS] Growth rejects member 16
+
+🟣 Pro is unlimited
+
+  ✅ [PASS] Pro created 12 organizations
+  ✅ [PASS] Pro created 40 programs
+  ✅ [PASS] Pro created 400 affiliates
+  ✅ [PASS] Pro created 60 members
+  ✅ [PASS] Pro reports every resource as unlimited with a null effective limit
+  ✅ [PASS] Pro never reports a resource as at-limit
+
+➕ Add-on capacity raises the effective limit
+
+  ✅ [PASS] Starter + 2 program add-ons gives an effective limit of 5
+  ✅ [PASS] Programs 4 and 5 are allowed
+  ✅ [PASS] Program 6 is still rejected
+  ✅ [PASS] Starter + 25 affiliate add-ons gives 75
+  ✅ [PASS] Affiliates 51-75 are allowed
+  ✅ [PASS] Affiliate 76 is still rejected
+  ✅ [PASS] Starter + 3 member add-ons gives 8
+  ✅ [PASS] Member 9 is still rejected
+  ✅ [PASS] Starter + 2 organization add-ons gives 3
+  ✅ [PASS] Organization 4 is still rejected
+  ✅ [PASS] A cancelled add-on stops contributing capacity
+
+🔁 A partner in many programs counts once
+
+  ✅ [PASS] One affiliate in three programs counts as one
+  ✅ [PASS] Three program memberships exist but do not inflate usage
+  ✅ [PASS] Suspending an affiliate frees their slot
+  ✅ [PASS] Restoring an affiliate reclaims their slot
+
+📊 Usage reflects create / delete / deactivate / restore
+
+  ✅ [PASS] Creating a program raises usage
+  ✅ [PASS] Soft-deleting a program frees capacity
+  ✅ [PASS] Restoring a program reclaims capacity
+  ✅ [PASS] TEST-environment programs do not consume program capacity
+  ✅ [PASS] One person across three organizations is one member seat
+  ✅ [PASS] A live invitation reserves a member seat
+  ✅ [PASS] An expired invitation does not hold a member seat forever
+
+⚡ Concurrent creation cannot bypass the limit
+
+  ✅ [PASS] Account sits at 49/50 affiliates
+  ✅ [PASS] Exactly one of the two racing requests succeeds
+  ✅ [PASS] Exactly one of the two racing requests is rejected
+  ✅ [PASS] The losing request is rejected with RESOURCE_LIMIT_REACHED
+  ✅ [PASS] Usage lands exactly on the limit, never above it
+  ✅ [PASS] Exactly the 5 remaining slots are filled out of 20 concurrent attempts
+  ✅ [PASS] A 20-way burst still lands exactly on 50
+
+🔄 Upgrade and downgrade
+
+  ✅ [PASS] Starter is at its program limit before upgrading
+  ✅ [PASS] Growth raises the program limit to 10
+  ✅ [PASS] Program 4 is allowed after upgrading
+  ✅ [PASS] Included capacity is replaced, not added twice; add-ons stack on top
+  ✅ [PASS] Growth to Pro makes programs unlimited
+  ✅ [PASS] Downgrade preview keeps purchased add-on capacity in the target-plan maths
+  ✅ [PASS] Downgrade is allowed when retained add-ons cover the gap (4 used, 3 + 2 = 5 available)
+  ✅ [PASS] Downgrade is blocked while usage exceeds the target plan
+  ✅ [PASS] Downgrade preview names programs as the blocking resource
+  ✅ [PASS] Downgrade preview reports how far over the account is (4 used vs 3 allowed)
+  ✅ [PASS] Downgrade preview deletes nothing
+
+🔐 Isolation, server-side pricing, and tax
+
+  ✅ [PASS] Account A sees only its own programs
+  ✅ [PASS] Account B sees only its own programs
+  ✅ [PASS] Two owners get two separate accounts
+  ✅ [PASS] 2 program add-ons price at ₹1,000 server-side
+  ✅ [PASS] Base Starter price is read from the database
+  ✅ [PASS] Recurring subtotal is base ₹5,000 + add-ons ₹1,000 = ₹6,000
+  ✅ [PASS] GST at 18% on ₹6,000 is ₹1,080
+  ✅ [PASS] Total recurring is ₹7,080
+  ✅ [PASS] Quote shows the new effective program limit of 5
+  ✅ [PASS] All monetary amounts are integer minor units
+  ✅ [PASS] Pro refuses an add-on for an already-unlimited resource
+  ✅ [PASS] Quantity 0 is rejected
+  ✅ [PASS] Quantity -3 is rejected
+  ✅ [PASS] Quantity 1.5 is rejected
+
+⛔ Lapsed subscriptions grant no new capacity
+
+  ✅ [PASS] An expired trial is reported as not entitled
+  ✅ [PASS] An expired trial falls back to the FREE allowance rather than keeping Growth
+  ✅ [PASS] An expired trial cannot create beyond the FREE allowance
+  ✅ [PASS] Reactivating the subscription restores the Growth allowance
+
+============================================================
+  Passed: 108
+  Failed: 0
+============================================================
+

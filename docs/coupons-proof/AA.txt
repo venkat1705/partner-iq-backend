@@ -1,0 +1,18 @@
+# Scenario AA — raw proof, run=1791062315582 (started 2026-10-03T21:18:35.644Z)
+CHECK PASS create: reopened after Cancel → code field empty: actual="" expected=""
+CHECK PASS edit: reopened after Cancel → original name: actual=false expected=false
+CHECK PASS create: reopened after X → code field empty: actual="" expected=""
+CHECK PASS edit: reopened after X → original name: actual=false expected=false
+CHECK PASS create: reopened after Escape → code field empty: actual="" expected=""
+CHECK PASS edit: reopened after Escape → original name: actual=false expected=false
+CHECK PASS create: reopened after outside → code field empty: actual="" expected=""
+CHECK PASS edit: reopened after outside → original name: actual=false expected=false
+CHECK PASS write requests: actual=[] expected=[]
+CHECK PASS SQL unchanged: actual=true expected=true
+CHECK PASS validate reopened after X: actual="" expected=""
+CHECK PASS assign search reopened after X: actual="" expected=""
+CHECK PASS validate reopened after Escape: actual="" expected=""
+CHECK PASS assign search reopened after Escape: actual="" expected=""
+CHECK PASS validate reopened after outside: actual="" expected=""
+CHECK PASS assign search reopened after outside: actual="" expected=""
+CHECK PASS write requests: actual=[] expected=[]

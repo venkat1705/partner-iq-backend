@@ -1,0 +1,82 @@
+◇ injected env (20) from .env.test // tip: ⌘ suppress logs { quiet: true }
+
+🧪 PartnerIQ Affiliate Invitation Flow Suite
+
+🔒 Accepting terms must not create an affiliate or a membership
+
+  ✅ [PASS] No affiliate record is created by accepting terms
+  ✅ [PASS] No program membership is created by accepting terms
+  ✅ [PASS] Invitation moves to TERMS_ACCEPTED, not JOINED
+  ✅ [PASS] Terms acceptance timestamp is recorded
+  ✅ [PASS] No join timestamp is recorded yet
+  ✅ [PASS] A partner with no portal account is sent to registration
+  ✅ [PASS] The invited email is returned so the portal can pre-fill and lock it
+  ✅ [PASS] The redirect carries the invitation token to the portal signup screen
+  ✅ [PASS] A partner who already has a portal account is sent to sign-in
+  ✅ [PASS] The sign-in redirect carries the invitation token
+  ✅ [PASS] Still no affiliate created for the existing-account path
+
+✅ New affiliate: join happens only after authentication
+
+  ✅ [PASS] Nothing joined before the account exists
+  ✅ [PASS] Completion reports the partner as joined
+  ✅ [PASS] A first completion is not reported as an existing membership
+  ✅ [PASS] Exactly one affiliate record is created
+  ✅ [PASS] Exactly one program membership is created
+  ✅ [PASS] Invitation reaches JOINED
+  ✅ [PASS] Join timestamp is recorded
+  ✅ [PASS] The authenticated user is recorded as the acceptor
+  ✅ [PASS] Invitation links to the affiliate it produced
+  ✅ [PASS] The affiliate record is linked to the portal account
+  ✅ [PASS] The success message names the organization and program
+
+👤 Existing affiliate: no second account, membership added
+
+  ✅ [PASS] No duplicate affiliate account is created
+  ✅ [PASS] The affiliate is added to the newly invited program
+  ✅ [PASS] The existing program membership is untouched
+
+🚫 The invitation cannot be redeemed by a different email
+
+  ✅ [PASS] A different authenticated email cannot complete the invitation
+  ✅ [PASS] No membership is created for the wrong account
+  ✅ [PASS] No affiliate is created for the wrong account
+  ✅ [PASS] The mismatch attempt is audited
+  ✅ [PASS] The invited partner can still complete the invitation
+
+🔁 Completing twice does not create a second membership
+
+  ✅ [PASS] The second completion reports an existing membership
+  ✅ [PASS] Still exactly one program membership
+  ✅ [PASS] Still exactly one affiliate record
+
+⛔ Expired, revoked and declined invitations are blocked
+
+  ✅ [PASS] An expired invitation cannot have its terms accepted
+  ✅ [PASS] An expired invitation cannot be completed even when authenticated
+  ✅ [PASS] An expired invitation creates no membership
+  ✅ [PASS] A revoked invitation cannot have its terms accepted
+  ✅ [PASS] A revoked invitation cannot be completed
+  ✅ [PASS] A revoked invitation creates no membership
+  ✅ [PASS] A declined invitation cannot be completed
+
+🏢 Inactive organizations and programs are blocked
+
+  ✅ [PASS] A paused program cannot be joined
+  ✅ [PASS] A suspended organization cannot be joined
+
+📄 Terms are required
+
+  ✅ [PASS] Terms must be accepted to proceed
+  ✅ [PASS] A refused acceptance leaves the invitation PENDING
+
+🔑 An unknown token grants nothing
+
+  ✅ [PASS] A token that matches no invitation is rejected
+  ✅ [PASS] No membership is created from an unknown token
+
+============================================================
+  Passed: 46
+  Failed: 0
+============================================================
+

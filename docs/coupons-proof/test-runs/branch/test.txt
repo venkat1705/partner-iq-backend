@@ -1,0 +1,35 @@
+◇ injected env (20) from .env.test // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+◇ injected env (20) from .env.test // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+🧪 Running PartnerIQ Comprehensive Test Suite...
+
+⚙️ Initializing essential PartnerIQ system defaults (RBAC & Templates)...
+Seeded 36 email design default templates
+Seeded email design brand/footer settings
+Seeded 10 global default educational blogs
+✅ Essential PartnerIQ system defaults initialized (0 dummy orgs/users created).
+  ✅ [PASS] Seed Data Initialized
+[Nest] 4971  - 10/03/2026, 9:25:18 PM   DEBUG [RiskEngineService] Risk assessment: score=20 level=LOW signals=[new_device]
+  ✅ [PASS] Admin Authentication Successful
+  ✅ [PASS] Token Rotation Succeeded
+  ✅ [PASS] Token Theft Detection & Token Family Revocation Passed
+  ✅ [PASS] Multi-tenant Org B Isolation Verified
+  ✅ [PASS] Active organization members cannot be invited as affiliates
+  ✅ [PASS] Marketing Asset Created and Published
+  ✅ [PASS] Asset Version History Tracks Current Version
+  ✅ [PASS] Asset Bundle Published with Reusable Asset
+  ✅ [PASS] Affiliate Sees Authorized Published Bundle
+  ✅ [PASS] Asset Activity Analytics Deduplicate Idempotent Events
+  ✅ [PASS] Cross-tenant Asset Access Blocked
+  ✅ [PASS] High performance 302 redirect & click logged
+[Nest] 4971  - 10/03/2026, 9:25:18 PM    WARN [FraudVelocityService] Redis is unavailable for fraud velocity tracking (unreachable, or a command was rejected); falling back to in-process counters. In a multi-instance deployment this undercounts velocity (each instance only sees its own traffic), weakening IP/affiliate/device velocity signals. (Connection is closed.)
+  ✅ [PASS] Conversion Created with Cents Precision
+  ✅ [PASS] Idempotency Key Prevents Duplicate Conversions
+  ✅ [PASS] Multi-touch attribution chooses the highest weighted partner in the journey
+  ✅ [PASS] Double-entry Ledger Balance Updated: $5.00
+  ✅ [PASS] Refund & Commission Clawback Executed
+  ✅ [PASS] HMAC SHA-256 Webhook Signature Generated
+
+===================================
+Test Results: 19 Passed, 0 Failed
+===================================
+

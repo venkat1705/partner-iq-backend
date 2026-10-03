@@ -26,9 +26,47 @@ Re-read this file and the task prompt after any context compaction.
 
 ## Phase 1 — inventory: done → docs/coupons-inventory.md (Checkpoint 1 report = that file; continuing per standing instructions)
 
-## Scenarios
+## Phase 2 — fixtures: done → docs/coupons-phase2-fixtures.md (prefix e2e-cpn-1791051925353, run MUSQ2MAX)
 
-(none run yet)
+## Phase 3 — scenario baseline (pre-fix), commit c5cf728
+
+Raw proof: docs/coupons-proof/baseline/<letter>.txt, run summaries docs/coupons-proof/baseline/_test-runs.txt.
+CHECKPOINT 2 report (written instead of stopping): baseline = FAIL for A (settings fetched twice), B (no use
+records), C2 (affiliate filter ignored), D (end day excluded / UTC dates), E (11 code rules), F (no 409, race),
+H (edit saved on 400, history rewritten), I (paused/archived/expired coupons accepted at sale), J (by-affiliate
+history follows current assignment), K (coupon affiliate never credited), L (no stored discount, 12.5 % impossible),
+M (limits never enforced), N, O, P, Q (payout impossible: ledger balance never persisted), R (portal zeros), S (no
+rate limit, emails in response), T, U (path echo only), V (VIEWER sees all controls, ANALYST page of 403s),
+W (5 input gaps), X (rows left behind), Y (201 while table locked), Z (no BOM, no formula guard, JSON columns),
+AA (selector issue), AB (fake zeros, stale filter results), AC (stale token — test bug), AD (no before/after),
+AE (backend cannot boot with 200k uses — store.ts), G (generator does not avoid existing codes).
+PASS at baseline: E1/E4, J2, S1/S2, T3, W (22 of 30), W-json, W-sql, W-invalid-id.
+
+## Phase 4 — fixes (CHECKPOINT 3 reports, money first)
+
+| # | Sev | Bug (money first) | Commit | Proving scenario |
+|---|---|---|---|---|
+| 1 | Critical (money) | Coupons ignored at sale time: limits, status, dates never enforced; coupon affiliate never credited; `couponAttributionPriority` never read | BE 52aa339 | I, K, M, N, P |
+| 2 | Critical (money) | New affiliate's EARNED balance never persisted (ledger proxy bypass) → payouts see no balance; balances lost on restart | BE 1c47bb3 | Q2 |
+| 3 | High (money) | Discount KPIs re-derived from the current discount and treated paid amounts as gross; edits rewrote history | BE 4f96bd9 (+b2bf59f) | B, H3, L |
+| 4 | High (money) | 100 %-off / fixed > price orders unrecordable (amount ≥ 1) → uses never counted | BE 52aa339 | L FREE / FIXBIG |
+| 5 | High | 4xx left coupons/edits behind (create with bad affiliate, edit end<start) | BE 4f96bd9 | H2, W16/17, X1/X2 |
+| 6 | High | API returned 201/200 while MySQL write was blocked; memory-only rows | BE 4f96bd9 | Y |
+| 7 | High | Code rules: too long (memory-only), %/quotes/spaces/emoji/Cyrillic accepted, case kept, duplicate 400 not 409, race | BE 4f96bd9 | E, F |
+| 8 | Medium | Org timezone ignored; UI sent UTC midnight (end day excluded) | BE 4f96bd9, FE | D, H1, P |
+| 9 | Medium | by-affiliate history followed current assignment | BE 4f96bd9 | J1 |
+| 10 | Medium | Validate endpoint unthrottled, returned affiliate emails | BE 4f96bd9 | S |
+| 11 | Medium | Archived coupons could be reactivated/edited; archive needed only coupons.edit | BE 4f96bd9 | I3, V |
+| 12 | Medium | Audit rows without before/after | BE 4f96bd9 | AD |
+| 13 | Medium | Migration down() partially reverted when refusing (found by round-trip) | BE b2bf59f | migration-roundtrip.txt |
+| 14 | Medium | Concurrent coupon uses deadlocked → 503 | BE 52aa339 | N |
+| 15 | Medium | Portal showed Uses/Sales/Earned = 0, `$`, "Active" for expired | AP | R |
+| 16+ | UI | FE: permission gating, error state instead of zeros, stale-response guard, affiliate filter, settings dedupe, export hardening, dialogs reset, date-only, per-customer field, generator | FE 7cbdd99, 6813153, 157ad54, 8cb16bb | A, AA, AB, C, D, G, V, Z |
+| 17 | High | On/off switch memory-first (200 while MySQL blocked) | BE 015730a | Y2 |
+| 18 | Low | Assignment email failure swallowed | BE 82c3e9c | review |
+| 19 | Critical (audit-introduced, test DB) | discountValue type change wiped values via schema sync | BE 98fc200 | incident-discountValue-sync.txt |
+
+Full list with cause/impact: docs/coupons-audit.md §4.
 
 ## User decisions (2026-10-03, reply to Checkpoint 0) — MUST survive compaction
 
@@ -66,3 +104,10 @@ Re-read this file and the task prompt after any context compaction.
 - Blocked → mark BLOCKED with exact reason, work around, continue.
 - Finish: push audit branch in every changed repo; final summary with done/decisions/bugs+commits/BLOCKED/
   review-first, money items at top.
+
+## Phase 5 — final (2026-10-03)
+
+- Final coupon suite (A–AE incl. AE 50k/55k, S4 billing boundary): **126 passed, 0 failed** (docs/coupons-audit.md §10).
+- Found during final runs: admin auth refresh race (D22, reported, not fixed), settings memory-first (fixed 015730a),
+  settings requested twice (fixed FE 8cb16bb), swallowed assignment email error (fixed 82c3e9c).
+- Report: docs/coupons-audit.md. Decisions: docs/decisions.md D1–D25.

@@ -1,0 +1,22 @@
+node:internal/modules/cjs/loader:1383
+  const err = new Error(message);
+              ^
+
+Error: Cannot find module '../../sdk/src/index'
+Require stack:
+- /home/user/partner-iq-backend/src/tests/sdk-test.ts
+    at node:internal/modules/cjs/loader:1383:15
+    at nextResolveSimple (/home/user/partner-iq-backend/node_modules/tsx/dist/register-BxraCus2.cjs:10:1006)
+    at /home/user/partner-iq-backend/node_modules/tsx/dist/register-BxraCus2.cjs:9:4680
+    at /home/user/partner-iq-backend/node_modules/tsx/dist/register-BxraCus2.cjs:9:3982
+    at resolveTsPaths (/home/user/partner-iq-backend/node_modules/tsx/dist/register-BxraCus2.cjs:10:759)
+    at /home/user/partner-iq-backend/node_modules/tsx/dist/register-BxraCus2.cjs:10:1199
+    at j._resolveFilename (file:///home/user/partner-iq-backend/node_modules/tsx/dist/register-DdgZzFJi.mjs:2:17957)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [ '/home/user/partner-iq-backend/src/tests/sdk-test.ts' ]
+}
+
+Node.js v22.22.0

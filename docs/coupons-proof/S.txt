@@ -1,0 +1,43 @@
+# Scenario S — raw proof, run=1791062315582 (started 2026-10-03T21:18:35.721Z)
+
+==== S1 missing ====
+> GET /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/validate/E2E-CPN-NOPE-404
+< HTTP 200 (21 ms)
+< {"success":true,"data":{"isValid":false,"reason":"Coupon code \"E2E-CPN-NOPE-404\" does not exist.","coupon":null}}
+CHECK PASS no affiliate email in response: actual=false expected=false
+
+==== S1 expired ====
+> GET /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/validate/E2E-CPN-MUSQ2MAX-EXPIRED
+< HTTP 200 (13 ms)
+< {"success":true,"data":{"isValid":false,"reason":"Coupon \"E2E-CPN-MUSQ2MAX-EXPIRED\" expired on 2026-10-03.","coupon":{"id":"d79e2114-ad20-4780-8a26-dbe1eed9142d","code":"E2E-CPN-MUSQ2MAX-EXPIRED","name":"e2e-cpn-1791051925353 fixture expired","description":null,"discountType":"FIXED_AMOUNT","discountValue":50,"status":"ACTIVE","maxRedemptions":null,"validFrom":"2026-09-23T20:13:15.000Z","validUntil":"2026-10-02T20:13:15.000Z","currentRedemptions":0}}}
+CHECK PASS no affiliate email in response: actual=false expected=false
+
+==== S1 paused ====
+> GET /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/validate/E2E-CPN-MUSQ2MAX-PAUSED
+< HTTP 200 (14 ms)
+< {"success":true,"data":{"isValid":false,"reason":"Coupon \"E2E-CPN-MUSQ2MAX-PAUSED\" is currently paused.","coupon":{"id":"f3936f7e-3ad2-419e-9e01-879956aafea2","code":"E2E-CPN-MUSQ2MAX-PAUSED","name":"e2e-cpn-1791051925353 fixture paused","description":null,"discountType":"PERCENTAGE","discountValue":25,"status":"PAUSED","maxRedemptions":null,"validFrom":null,"validUntil":null,"currentRedemptions":0}}}
+CHECK PASS no affiliate email in response: actual=false expected=false
+
+==== S1 valid ====
+> GET /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/validate/E2E-CPN-MUSQ2MAX-PCT10
+< HTTP 200 (7 ms)
+< {"success":true,"data":{"isValid":true,"reason":"Valid and active coupon.","coupon":{"id":"cff21dc0-3421-44cc-ba1e-24ff2232f494","code":"E2E-CPN-MUSQ2MAX-PCT10","name":"e2e-cpn-1791051925353 fixture pct10","description":null,"discountType":"PERCENTAGE","discountValue":10,"status":"ACTIVE","maxRedemptions":null,"validFrom":null,"validUntil":null,"currentRedemptions":0}}}
+CHECK PASS no affiliate email in response: actual=false expected=false
+
+==== S2 ORG_B_OWNER ====
+> GET /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/validate/<A code>
+< HTTP 403 (7 ms)
+< {"success":false,"statusCode":403,"code":"ORGANIZATION_MEMBERSHIP_REQUIRED","message":"User does not belong to this organization","error":{"code":"ORGANIZATION_MEMBERSHIP_REQUIRED","message":"User does not belong to this organization","requestId":"req_869198f7ef81e0fa1b5a3df4"},"correlationId":"req_869198f7ef81e0fa1b5a3df4","timestamp":"2026-10-03T21:22:48.377Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/validate/E2E-CPN-MUSQ2MAX-PCT10"}
+
+==== S2 ORG_A_NOPERM ====
+> GET /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/validate/<A code>
+< HTTP 403 (5 ms)
+< {"success":false,"statusCode":403,"code":"PERMISSION_DENIED","message":"Insufficient permissions for role 'ANALYST'. Required: coupons.view","error":{"code":"PERMISSION_DENIED","message":"Insufficient permissions for role 'ANALYST'. Required: coupons.view","requestId":"req_f06e808c57504bb91ac3c535"},"correlationId":"req_f06e808c57504bb91ac3c535","timestamp":"2026-10-03T21:22:48.749Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/validate/E2E-CPN-MUSQ2MAX-PCT10"}
+> GET /organizations/f93f90d6-f027-465d-9fca-c2f0bae66ce1/coupons/validate/<Org A-only code>
+< HTTP 200 (9 ms)
+< {"success":true,"data":{"isValid":false,"reason":"Coupon code \"E2E-CPN-MUSQ2MAX-PCT10\" does not exist.","coupon":null}}
+CHECK PASS Org B sees Org A-only code as missing: actual=false expected=false
+
+==== S3 70 guesses in a row ====
+statuses: 200,200,200,200,200,200,200,200,200,200,200,200,200,200,200,200,200,200,200,200,200,200,200,429,429,429,429,429,429,429,429,429,429,429,429,429,429,429,429,429,429,429,429,429,429,429,429,429,429,429,429,429,429,429,429,429,429,429,429,429,429,429,429,429,429,429,429,429,429,429
+CHECK PASS some requests got 429: actual=true expected=true

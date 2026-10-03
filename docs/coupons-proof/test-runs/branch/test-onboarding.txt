@@ -1,0 +1,28 @@
+◇ injected env (20) from .env.test // tip: ⌁ auth for agents [www.vestauth.com]
+🧪 Starting Onboarding Duplicate-Org Regression Suite...
+
+  ✅ [PASS] Refresh mid-onboarding resolves to the same organization
+  ✅ [PASS] Refresh mid-onboarding creates exactly one org row
+  ✅ [PASS] getOnboardingStatus reports in-progress after step 1
+  ✅ [PASS] getOnboardingStatus returns the in-progress org id
+  ✅ [PASS] Re-login mid-onboarding resolves to the same organization
+  ✅ [PASS] Re-login mid-onboarding creates exactly one org row
+  ✅ [PASS] Two concurrent onboarding requests resolve to the same organization
+  ✅ [PASS] Concurrent onboarding requests create exactly one org row
+  ✅ [PASS] No in-progress onboarding remains after completion
+  ✅ [PASS] A user who already completed onboarding can create a second, independent organization
+  ✅ [PASS] Completed user ends up owning exactly two organizations
+  ✅ [PASS] A new onboarding attempt after completion creates a genuinely new organization, not a stale lock hit
+  ✅ [PASS] Database rejects a second IN_PROGRESS org for the same user at the constraint level
+  ✅ [PASS] First org from this block was created successfully
+  ✅ [PASS] Plain create marks onboardingStatus as COMPLETED immediately
+  ✅ [PASS] Plain create leaves onboardingLockKey NULL
+  ✅ [PASS] Plain create starts the introductory trial
+  ❌ [FAIL] Plain create seeds the default commission rule
+  ❌ [FAIL] Plain create seeds the default tier ladder
+  ✅ [PASS] Plain create writes an ORGANIZATION_CREATED audit log entry
+  ✅ [PASS] Plain create dispatches a welcome email to the creator
+  ✅ [PASS] Plain create emits an in-app workspace ready notification
+
+📊 Onboarding Duplicate-Org Tests Complete: 20 passed, 2 failed
+

@@ -1,0 +1,31 @@
+# Scenario Y — raw proof, run=1791062315582 (started 2026-10-03T21:18:35.738Z)
+
+==== Y second session: LOCK TABLES organization_coupons READ ====
+> POST create while locked -> HTTP 503 after 5016 ms
+< {"success":false,"statusCode":503,"code":"Service Unavailable","message":"The coupon change could not be saved. Nothing was changed; please retry.","error":{"code":"Service Unavailable","message":"The coupon change could not be saved. Nothing was changed; please retry.","requestId":"req_32c271786a3026ed7aa65c8e"},"correlationId":"req_32c271786a3026ed7aa65c8e","timestamp":"2026-10-03T21:24:13.535Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons"}
+> PUT edit while locked -> HTTP 503 after 5024 ms
+< {"success":false,"statusCode":503,"code":"Service Unavailable","message":"The coupon change could not be saved. Nothing was changed; please retry.","error":{"code":"Service Unavailable","message":"The coupon change could not be saved. Nothing was changed; please retry.","requestId":"req_d2528fac462c8561a1d78555"},"correlationId":"req_d2528fac462c8561a1d78555","timestamp":"2026-10-03T21:24:18.559Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/cd36be31-f064-4777-a4df-1c46cfcabc20"}
+GET /coupons while locked: in-memory rows for Y = []
+backend log during the window:
+
+backend process while locked: running (pid 4598)
+restart: backend restarted, pid 4727
+mysql> SELECT code FROM organization_coupons WHERE normalizedCode='E2E-CPN-MUSQ2MAX-Y-NEW'
+[]
+mysql> SELECT name FROM organization_coupons WHERE id='cd36be31-f064-4777-a4df-1c46cfcabc20'
+[{"name":"e2e-cpn-1791051925353 Y edit me"}]
+CHECK PASS backend alive during lock: actual=true expected=true
+CHECK PASS create: success reported ⇔ row exists after restart: actual=true expected=true
+CHECK PASS edit: success reported ⇔ change exists after restart: actual=true expected=true
+CHECK PASS create while locked did not claim success: actual=false expected=false
+mysql> SELECT couponsEnabled FROM organization_coupon_settings WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' (before)
+[{"couponsEnabled":1}]
+
+==== Y2 second session: LOCK TABLES organization_coupon_settings READ; PUT couponsEnabled=false ====
+> PUT /organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/settings {"couponsEnabled":false} while locked -> HTTP 503 after 5067 ms
+< {"success":false,"statusCode":503,"code":"Service Unavailable","message":"The coupon change could not be saved. Nothing was changed; please retry.","error":{"code":"Service Unavailable","message":"The coupon change could not be saved. Nothing was changed; please retry.","requestId":"req_33e2e07321e77f8a444dbff2"},"correlationId":"req_33e2e07321e77f8a444dbff2","timestamp":"2026-10-03T21:24:32.878Z","path":"/api/v1/organizations/eb2b08d5-22c4-4dd7-a225-37421c48f27e/coupons/settings"}
+mysql> SELECT couponsEnabled FROM organization_coupon_settings WHERE organizationId='eb2b08d5-22c4-4dd7-a225-37421c48f27e' (after unlock + restart)
+[{"couponsEnabled":1}]
+restore couponsEnabled=true -> HTTP 200
+CHECK PASS switch while locked: success reported ⇔ value stored after restart: actual=true expected=true
+CHECK PASS switch while locked did not claim success: actual=false expected=false

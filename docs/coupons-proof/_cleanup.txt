@@ -1,0 +1,68 @@
+2026-10-03T19:00:57.515Z global teardown removed {"C":{"coupons":23,"conversions":0},"D":{"coupons":2,"conversions":0},"E":{"coupons":3,"conversions":0},"W":{"coupons":6,"conversions":0}}
+2026-10-03T19:45:41.603Z global teardown removed {"N":{"coupons":1,"conversions":4},"O":{"coupons":2,"conversions":3},"P":{"coupons":2,"conversions":11},"Q":{"coupons":2,"conversions":2},"R":{"coupons":2,"conversions":3},"T":{"coupons":2,"conversions":2},"V":{"coupons":6,"conversions":0},"W":{"coupons":6,"conversions":0},"X":{"coupons":3,"conversions":2},"Y":{"coupons":2,"conversions":0},"Z":{"coupons":5,"conversions":0},"AB":{"coupons":1,"conversions":1},"AD":{"coupons":1,"conversions":0}}
+2026-10-03T19:54:53.741Z global teardown removed {"Y":{"coupons":2,"conversions":0},"AB":{"coupons":1,"conversions":1},"AD":{"coupons":1,"conversions":0}}
+2026-10-03T20:00:18.589Z global teardown removed {"E":{"coupons":4,"conversions":0},"F":{"coupons":2,"conversions":0},"H":{"coupons":3,"conversions":2},"I":{"coupons":2,"conversions":6},"J":{"coupons":2,"conversions":2},"K":{"coupons":3,"conversions":4},"L":{"coupons":7,"conversions":7},"N":{"coupons":1,"conversions":9},"O":{"coupons":2,"conversions":2},"P":{"coupons":2,"conversions":11},"Q":{"coupons":2,"conversions":2},"T":{"coupons":2,"conversions":2},"W":{"coupons":1,"conversions":0},"X":{"coupons":3,"conversions":2}}
+2026-10-03T20:04:46.734Z global teardown removed {"E":{"coupons":4,"conversions":0},"F":{"coupons":2,"conversions":0},"H":{"coupons":3,"conversions":2},"I":{"coupons":2,"conversions":6},"J":{"coupons":2,"conversions":2},"K":{"coupons":4,"conversions":5},"L":{"coupons":7,"conversions":7},"N":{"coupons":1,"conversions":14},"O":{"coupons":2,"conversions":3},"P":{"coupons":2,"conversions":11},"Q":{"coupons":2,"conversions":2},"T":{"coupons":2,"conversions":2},"W":{"coupons":1,"conversions":0},"X":{"coupons":3,"conversions":2}}
+2026-10-03T20:06:36.476Z global teardown removed {"Q":{"coupons":2,"conversions":4}}
+2026-10-03T20:12:26.407Z global teardown removed {}
+2026-10-03T20:15:34.666Z global teardown removed {}
+2026-10-03T20:21:59.626Z global teardown removed {"B":{"coupons":2,"conversions":5},"C":{"coupons":23,"conversions":0},"D":{"coupons":2,"conversions":0},"K":{"coupons":2,"conversions":3},"L":{"coupons":7,"conversions":7},"M":{"coupons":1,"conversions":4},"AB":{"coupons":1,"conversions":1},"AD":{"coupons":1,"conversions":0}}
+2026-10-03T20:24:18.746Z global teardown removed {"B":{"coupons":2,"conversions":5},"C":{"coupons":23,"conversions":0},"AB":{"coupons":1,"conversions":1},"AD":{"coupons":1,"conversions":0}}
+2026-10-03T20:24:45.973Z global teardown removed {}
+2026-10-03T20:28:42.289Z global teardown removed {"D":{"coupons":2,"conversions":0},"E":{"coupons":4,"conversions":0},"F":{"coupons":2,"conversions":0},"H":{"coupons":3,"conversions":2},"I":{"coupons":2,"conversions":6},"J":{"coupons":2,"conversions":2},"K":{"coupons":4,"conversions":5},"L":{"coupons":7,"conversions":7},"M":{"coupons":1,"conversions":4}}
+2026-10-03T20:36:56.339Z global teardown removed {"B":{"coupons":2,"conversions":5},"C":{"coupons":23,"conversions":0},"D":{"coupons":2,"conversions":0},"E":{"coupons":4,"conversions":0},"F":{"coupons":2,"conversions":0},"H":{"coupons":3,"conversions":2},"I":{"coupons":2,"conversions":6},"J":{"coupons":2,"conversions":2},"K":{"coupons":4,"conversions":5},"L":{"coupons":7,"conversions":7},"M":{"coupons":3,"conversions":10},"N":{"coupons":1,"conversions":14},"O":{"coupons":2,"conversions":3},"P":{"coupons":2,"conversions":11},"Q":{"coupons":2,"conversions":2},"R":{"coupons":2,"conversions":3},"T":{"coupons":2,"conversions":2},"V":{"coupons":6,"conversions":0},"W":{"coupons":1,"conversions":0},"X":{"coupons":3,"conversions":2},"Y":{"coupons":1,"conversions":0},"Z":{"coupons":5,"conversions":0},"AB":{"coupons":1,"conversions":1},"AD":{"coupons":1,"conversions":0}}
+2026-10-03T20:43:41.723Z global teardown removed {"C":{"coupons":23,"conversions":0},"D":{"coupons":2,"conversions":0},"M":{"coupons":3,"conversions":10},"V":{"coupons":6,"conversions":0}}
+2026-10-03T21:08:45.883Z global teardown removed {"B":{"coupons":2,"conversions":5},"C":{"coupons":23,"conversions":0},"D":{"coupons":2,"conversions":0},"E":{"coupons":4,"conversions":0},"F":{"coupons":2,"conversions":0},"H":{"coupons":3,"conversions":2},"I":{"coupons":2,"conversions":6},"J":{"coupons":2,"conversions":2},"K":{"coupons":4,"conversions":5},"L":{"coupons":7,"conversions":7},"M":{"coupons":3,"conversions":10},"N":{"coupons":1,"conversions":14},"O":{"coupons":2,"conversions":3},"P":{"coupons":2,"conversions":11},"Q":{"coupons":2,"conversions":2},"R":{"coupons":2,"conversions":3},"T":{"coupons":2,"conversions":2},"V":{"coupons":6,"conversions":0},"W":{"coupons":1,"conversions":0},"X":{"coupons":3,"conversions":2},"Y":{"coupons":1,"conversions":0},"Z":{"coupons":5,"conversions":0},"AB":{"coupons":1,"conversions":1},"AD":{"coupons":1,"conversions":0}}
+2026-10-03T21:09:47.942Z global teardown removed {"L":{"coupons":7,"conversions":7},"M":{"coupons":3,"conversions":10}}
+2026-10-03T21:11:37.640Z global teardown removed {}
+2026-10-03T21:12:51.329Z global teardown removed {"Y":{"coupons":1,"conversions":0}}
+2026-10-03T21:14:27.218Z global teardown removed {"I":{"coupons":2,"conversions":6},"Y":{"coupons":1,"conversions":0}}
+2026-10-03T21:14:47.610Z global teardown removed {}
+2026-10-03T21:16:31.382Z global teardown removed {"AB":{"coupons":1,"conversions":1}}
+2026-10-03T21:16:54.122Z global teardown removed {}
+2026-10-03T21:17:59.149Z global teardown removed {}
+2026-10-03T21:24:47.726Z global teardown removed {"B":{"coupons":2,"conversions":5},"C":{"coupons":23,"conversions":0},"D":{"coupons":2,"conversions":0},"E":{"coupons":4,"conversions":0},"F":{"coupons":2,"conversions":0},"H":{"coupons":3,"conversions":2},"I":{"coupons":2,"conversions":6},"J":{"coupons":2,"conversions":2},"K":{"coupons":4,"conversions":5},"L":{"coupons":7,"conversions":7},"M":{"coupons":3,"conversions":10},"N":{"coupons":1,"conversions":14},"O":{"coupons":2,"conversions":3},"P":{"coupons":2,"conversions":11},"Q":{"coupons":2,"conversions":2},"R":{"coupons":2,"conversions":3},"T":{"coupons":2,"conversions":2},"V":{"coupons":6,"conversions":0},"W":{"coupons":1,"conversions":0},"X":{"coupons":3,"conversions":2},"Y":{"coupons":1,"conversions":0},"Z":{"coupons":5,"conversions":0},"AB":{"coupons":1,"conversions":1},"AD":{"coupons":1,"conversions":0}}
+
+2026-10-03T21:50:25Z final cleanup (e2e/scripts/cleanup.ts) — all audit test data removed:
+cleanup: 4 orgs, 9 users
+affiliate_performance_summaries.organizationId: 36
+affiliate_portal_profiles.email LIKE e2e-cpn-%: 2
+affiliates.organizationId: 24
+api_keys.organizationId: 9
+api_requests.organizationId: 10934
+attributions.organizationId: 14
+audit_logs.organizationId: 720
+auth_security_events.userId: 992
+auth_sessions.userId: 866
+billing_subscriptions.organizationId: 4
+clicks.organizationId: 14
+commissions.organizationId: 6
+conversions.organizationId: 55041
+email_delivery_logs.organizationId: 818
+email_delivery_logs.recipientEmail LIKE e2e-cpn-%: 115
+fraud_assessments.organizationId: 545
+fraud_metric_rollups.organizationId: 10
+ledger_accounts.organizationId: 18
+ledger_transactions.organizationId: 10
+mfa_challenges.userId: 9
+notification_preferences.userId: 10
+notifications.userId: 305
+organization_coupon_assignments.organizationId: 8
+organization_coupon_redemptions.organizationId: 55034
+organization_coupon_settings.organizationId: 2
+organization_coupon_usage.organizationId: 50011
+organization_coupons.organizationId: 50012
+organization_invitations.organizationId: 3
+organization_memberships.organizationId: 7
+organization_settings.organizationId: 2
+organization_trials.organizationId: 4
+payout_batches.organizationId: 5
+payout_items.organizationId: 5
+program_affiliates.organizationId: 24
+programs.organizationId: 10
+tracking_links.organizationId: 24
+user_devices.userId: 17
+user_legal_acceptances.userId: 21
+organizations.id: 4
+users.id: 9
+after: organizations=0, coupons=0, redemptions=0, conversions=0 (SQL counts)

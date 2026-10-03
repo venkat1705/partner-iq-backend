@@ -1,0 +1,11 @@
+# Scenario G — raw proof, run=1791062315582 (started 2026-10-03T21:18:35.681Z)
+sample: SAVEP6BEE2, SAVEXENPN5, SAVEXBMSVX, SAVEV8W9JJ, SAVE2C8BG8, SAVEHRHS98, SAVEXH5KY9, SAVEHZUC2V, SAVEM97Q9Z, SAVEXLSFEM
+CHECK PASS ambiguous / invalid generated codes: actual=[] expected=[]
+CHECK PASS duplicates among 200: actual=0 expected=0
+CHECK PASS clash with existing codes: actual=[] expected=[]
+Bulk import: N/A — no import endpoint or UI (inventory §1.1).
+> POST /organizations/<orgA>/coupons
+> body: {"code":"SAVEAAAAAA"}
+< HTTP 201 (22 ms)
+< {"success":true,"data":{"id":"bdcaa31d-eae6-4211-89db-4b97cb6424ac","organizationId":"eb2b08d5-22c4-4dd7-a225-37421c48f27e","code":"SAVEAAAAAA","name":"e2e-cpn-1791051925353 G existing","discountType":"PERCENTAGE","discountValue":5,"status":"ACTIVE","effectiveStatus":"ACTIVE","maxRedemptionsPerCustomer":null,"redemptionsCount":0,"remainingRedemptions":null,"validFromDate":null,"validUntilDate":null,"createdAt":"2026-10-03T21:21:59.367Z","updatedAt":"2026-10-03T21:21:59.367Z","assignedAffiliates":[]}}
+CHECK PASS generated code differs from existing SAVEAAAAAA: actual=true expected=true

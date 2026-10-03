@@ -64,10 +64,10 @@ test('AE large data timings and memory', async () => {
         const code = `PERF${String(n % 50000).padStart(6, '0')}`;
         const at = new Date(Date.now() - (n % 120) * 86400000);
         conv.push([vid, perf.id, 'LIVE', perf.programId, perf.affiliateId, `${fx.prefix}-AE-${n}`, `perf-cust-${n % 9000}`, 90000, 'INR', 'APPROVED', JSON.stringify({ couponCode: code }), at, at]);
-        if (hasRed) red.push([randomUUID(), perf.id, cid, vid, perf.affiliateId, perf.programId, `id:perf-cust-${n % 9000}`, 90000, 10000, 100000, 'INR', 'ACTIVE', at]);
+        if (hasRed) red.push([randomUUID(), perf.id, cid, code, vid, `${fx.prefix}-AE-${n}`, perf.affiliateId, perf.programId, `id:perf-cust-${n % 9000}`, 90000, 10000, 100000, 'INR', 'PERCENTAGE', 10, 'ACTIVE', at, at]);
       }
       await conn.query(`INSERT INTO conversions (id, organizationId, environment, programId, affiliateId, externalId, customerExternalId, amount, currency, status, metadata, occurredAt, createdAt) VALUES ?`, [conv]);
-      if (hasRed) await conn.query(`INSERT INTO organization_coupon_redemptions (id, organizationId, couponId, conversionId, affiliateId, programId, customerKey, orderAmount, discountAmount, grossAmount, currency, status, createdAt) VALUES ?`, [red]);
+      if (hasRed) await conn.query(`INSERT INTO organization_coupon_redemptions (id, organizationId, couponId, couponCode, conversionId, orderExternalId, affiliateId, programId, customerKey, orderAmount, discountAmount, grossAmount, currency, discountType, discountValue, status, occurredAt, createdAt) VALUES ?`, [red]);
     }
     if (hasRed) await conn.query(`INSERT INTO organization_coupon_usage (couponId, organizationId, redemptionCount) SELECT couponId, organizationId, COUNT(*) FROM organization_coupon_redemptions WHERE organizationId=? GROUP BY couponId, organizationId ON DUPLICATE KEY UPDATE redemptionCount=VALUES(redemptionCount)`, [perf.id]);
     proof.note(`inserted 50,000 coupons + ${USES} conversions${hasRed ? ` + ${USES} redemption rows` : ''} in ${Date.now() - t0} ms (direct SQL)`);
@@ -76,8 +76,8 @@ test('AE large data timings and memory', async () => {
     const [{ n: reds }] = await sql(`SELECT COUNT(*) n FROM organization_coupon_redemptions WHERE organizationId=?`, [perf.id]);
     if (Number(reds) < USES) {
       // conversions were inserted before the redemption table existed: derive the use rows directly in SQL
-      await conn.query(`INSERT INTO organization_coupon_redemptions (id, organizationId, couponId, conversionId, affiliateId, programId, customerKey, orderAmount, discountAmount, grossAmount, currency, status, createdAt)
-        SELECT UUID(), v.organizationId, c.id, v.id, v.affiliateId, v.programId, CONCAT('id:', v.customerExternalId), v.amount, 10000, 100000, 'INR', 'ACTIVE', v.occurredAt
+      await conn.query(`INSERT INTO organization_coupon_redemptions (id, organizationId, couponId, couponCode, conversionId, orderExternalId, affiliateId, programId, customerKey, orderAmount, discountAmount, grossAmount, currency, discountType, discountValue, status, occurredAt, createdAt)
+        SELECT UUID(), v.organizationId, c.id, c.code, v.id, v.externalId, v.affiliateId, v.programId, CONCAT('id:', v.customerExternalId), v.amount, 10000, 100000, 'INR', 'PERCENTAGE', 10, 'ACTIVE', v.occurredAt, v.occurredAt
         FROM conversions v JOIN organization_coupons c ON c.organizationId = v.organizationId AND c.normalizedCode = JSON_UNQUOTE(JSON_EXTRACT(v.metadata, '$.couponCode'))
         WHERE v.organizationId = ? AND v.externalId LIKE ? AND NOT EXISTS (SELECT 1 FROM organization_coupon_redemptions r WHERE r.conversionId = v.id)`, [perf.id, `${fx.prefix}-AE-%`]);
       await conn.query(`INSERT INTO organization_coupon_usage (couponId, organizationId, redemptionCount) SELECT couponId, organizationId, COUNT(*) FROM organization_coupon_redemptions WHERE organizationId=? GROUP BY couponId, organizationId ON DUPLICATE KEY UPDATE redemptionCount=VALUES(redemptionCount)`, [perf.id]);

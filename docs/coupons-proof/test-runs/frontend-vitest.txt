@@ -1,0 +1,17 @@
+
+ RUN  v3.2.7 /home/user/partner-iq-frontend
+
+ ✓ src/lib/auth/safe-return-to.test.ts (14 tests) 8ms
+ ✓ src/lib/analytics/transforms.test.ts (7 tests) 6ms
+ ✓ src/lib/format/currency.test.ts (20 tests) 22ms
+ ✓ src/lib/analytics/metrics.test.ts (33 tests) 11ms
+ ✓ src/lib/analytics/insights.test.ts (16 tests) 10ms
+ ✓ src/lib/auth/session-cleanup.test.ts (10 tests) 6ms
+ ✓ src/lib/auth/coupon-permissions.test.ts (5 tests) 6ms
+ ✓ src/lib/auth/post-auth-destination.test.ts (14 tests) 5ms
+
+ Test Files  8 passed (8)
+      Tests  119 passed (119)
+   Start at  21:46:54
+   Duration  1.95s (transform 245ms, setup 0ms, collect 380ms, tests 73ms, environment 2.74s, prepare 620ms)
+

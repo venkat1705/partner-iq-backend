@@ -1,0 +1,19 @@
+# Scenario Z — raw proof, run=1791062315582 (started 2026-10-03T21:18:35.741Z)
+
+==== Z exported file (raw) ====
+﻿"Code","Name","Discount","Status","Redemptions & Quota","Assigned Partners","Validity Window"
+"E2E-CPN-MUSQ2MAX-Z-4","Plain, ""quoted"" ₹ é 中文
+new line","9%","ACTIVE","0 / Unlimited","","Perpetual"
+"E2E-CPN-MUSQ2MAX-Z-3","'@cmd","8%","ACTIVE","0 / Unlimited","","Perpetual"
+"E2E-CPN-MUSQ2MAX-Z-2","'-2+3","7%","ACTIVE","0 / Unlimited","","Perpetual"
+"E2E-CPN-MUSQ2MAX-Z-1","'+SUM(1,2)","6%","ACTIVE","0 / Unlimited","","Perpetual"
+"E2E-CPN-MUSQ2MAX-Z-0","'=HYPERLINK(""http://evil"",""x"")","5%","ACTIVE","0 / Unlimited","","Perpetual"
+mysql> SELECT code, name, discountValue FROM organization_coupons WHERE normalizedCode LIKE 'E2E-CPN-MUSQ2MAX-Z-%'
+[{"code":"E2E-CPN-MUSQ2MAX-Z-0","name":"=HYPERLINK(\"http://evil\",\"x\")","discountValue":5},{"code":"E2E-CPN-MUSQ2MAX-Z-1","name":"+SUM(1,2)","discountValue":6},{"code":"E2E-CPN-MUSQ2MAX-Z-2","name":"-2+3","discountValue":7},{"code":"E2E-CPN-MUSQ2MAX-Z-3","name":"@cmd","discountValue":8},{"code":"E2E-CPN-MUSQ2MAX-Z-4","name":"Plain, \"quoted\" ₹ é 中文\nnew line","discountValue":9}]
+CHECK PASS UTF-8 BOM present (Excel shows ₹ é 中文): actual=true expected=true
+CHECK PASS row count == SQL: actual=5 expected=5
+CHECK PASS codes == SQL: actual=["E2E-CPN-MUSQ2MAX-Z-0","E2E-CPN-MUSQ2MAX-Z-1","E2E-CPN-MUSQ2MAX-Z-2","E2E-CPN-MUSQ2MAX-Z-3","E2E-CPN-MUSQ2MAX-Z-4"] expected=["E2E-CPN-MUSQ2MAX-Z-0","E2E-CPN-MUSQ2MAX-Z-1","E2E-CPN-MUSQ2MAX-Z-2","E2E-CPN-MUSQ2MAX-Z-3","E2E-CPN-MUSQ2MAX-Z-4"]
+CHECK PASS has Name column: actual=true expected=true
+CHECK PASS cells starting with = + - @: actual=[] expected=[]
+CHECK PASS special characters preserved: actual="Plain, \"quoted\" ₹ é 中文\nnew line" expected="Plain, \"quoted\" ₹ é 中文\nnew line"
+CHECK PASS other org data in file: actual=false expected=false

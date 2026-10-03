@@ -1,0 +1,32 @@
+◇ injected env (20) from .env.test // tip: ⌁ auth for agents [www.vestauth.com]
+
+🧪 PartnerIQ Legal Acceptance Suite
+
+  ✅ [PASS] Signup records all 3 required documents
+  ✅ [PASS] Terms, Privacy Policy and Anti-Fraud Guidelines are each recorded
+  ✅ [PASS] Each acceptance is stamped with the version currently in force
+  ✅ [PASS] The originating IP address is retained as evidence
+  ✅ [PASS] The user agent is retained as evidence
+  ✅ [PASS] The acceptance context is recorded
+  ✅ [PASS] The user is reported as having accepted everything
+  ✅ [PASS] No documents are outstanding after signup
+  ✅ [PASS] Accepting the same version twice does not create duplicate rows
+  ✅ [PASS] The original acceptance timestamp is preserved — it is the evidence that matters
+  ✅ [PASS] Bumping a document version marks that document as outstanding again
+  ✅ [PASS] Unchanged documents stay accepted
+  ✅ [PASS] The user no longer counts as fully accepted
+  ✅ [PASS] Re-accepting the new version clears the outstanding flag
+  ✅ [PASS] Both the old and new version acceptances are kept as an audit trail
+  ✅ [PASS] A user who never accepted anything is reported as not having accepted
+  ✅ [PASS] Every required document is outstanding for a brand-new user
+  ✅ [PASS] One user cannot see another user’s acceptances
+  ✅ [PASS] A Google signup records acceptance just like the password form
+  ✅ [PASS] An OAuth acceptance is distinguishable from a form acceptance
+  ✅ [PASS] An oversized user agent does not prevent the acceptance being recorded
+  ✅ [PASS] An oversized user agent is truncated to the column width
+
+============================================================
+  Passed: 22
+  Failed: 0
+============================================================
+
