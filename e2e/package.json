@@ -1,0 +1,11 @@
+{
+  "name": "partneriq-coupons-e2e",
+  "private": true,
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "mysql2": "^3.23.3"
+  }
+}
