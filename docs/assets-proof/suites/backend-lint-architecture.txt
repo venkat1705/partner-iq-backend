@@ -2,3 +2,4 @@
 > project-iq-backend@0.0.0 lint:architecture
 > eslint "src/**/*.ts" server.ts
 
+exit=0

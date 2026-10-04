@@ -1,7 +1,34 @@
-FAIL unit test/unit/demo-bookings.spec.ts
-FAIL test/unit/demo-bookings.spec.ts
+$ npx jest --selectProjects unit --forceExit --json  (summarised per suite)
+PASSED admin-api-activity.spec.ts                    10 passed, 0 failed
+PASSED admin-audit.spec.ts                           8 passed, 0 failed
+PASSED admin-fraud.spec.ts                           6 passed, 0 failed
+PASSED admin-jobs.spec.ts                            9 passed, 0 failed
+PASSED admin-security.spec.ts                        7 passed, 0 failed
+PASSED admin-system-health.spec.ts                   9 passed, 0 failed
+PASSED admin-webhooks.spec.ts                        8 passed, 0 failed
+PASSED analytics.spec.ts                             2 passed, 0 failed
+PASSED asset-bundle-access.spec.ts                   8 passed, 0 failed
+PASSED content-sniffer.spec.ts                       4 passed, 0 failed
+PASSED conversions-engine.spec.ts                    7 passed, 0 failed
+FAILED demo-bookings.spec.ts                         0 passed, 0 failed  —   ● Test suite failed to run
+PASSED disbursement-payouts.spec.ts                  2 passed, 0 failed
+PASSED feature-flags.spec.ts                         9 passed, 0 failed
+PASSED integration-test-connection.spec.ts           6 passed, 0 failed
+PASSED integrations-admin-oauth.spec.ts              1 passed, 0 failed
+PASSED integrations-marketplace.spec.ts              5 passed, 0 failed
+PASSED integrations-operations.spec.ts               5 passed, 0 failed
+PASSED legal-acceptance.spec.ts                      6 passed, 0 failed
+PASSED mfa-security.spec.ts                          1 passed, 0 failed
+PASSED organization-settings.spec.ts                 5 passed, 0 failed
+PASSED payouts-engine.spec.ts                        6 passed, 0 failed
+PASSED public-programs.spec.ts                       8 passed, 0 failed
+PASSED razorpay-oauth.spec.ts                        1 passed, 0 failed
+PASSED safe-redirect.spec.ts                         25 passed, 0 failed
+PASSED sanity.spec.ts                                1 passed, 0 failed
+PASSED storage-architecture.spec.ts                  5 passed, 0 failed
+PASSED storage-format.spec.ts                        2 passed, 0 failed
+PASSED tracking-links-engine.spec.ts                 7 passed, 0 failed
 Test Suites: 1 failed, 28 passed, 29 total
-Tests:       173 passed, 173 total
-Time:        16.768 s, estimated 26 s
+Tests:       0 failed, 173 passed, 173 total
 
-note: demo-bookings.spec.ts fails to compile on main as well (new DemoBookingsService() without its 2 constructor args); this branch does not touch src/modules/demo-bookings or that test (git diff main -- … is empty). Not fixed here (outside the audit).
+note: demo-bookings.spec.ts fails to compile on main as well (new DemoBookingsService() without its 2 constructor args); this branch does not touch src/modules/demo-bookings or that test.
