@@ -34,3 +34,11 @@ Headline findings: no file is stored anywhere (upload URL route does not exist, 
 list leaks every asset of the org (drafts/archived/deleted) and its download links are empty; PARTNER_TIER /
 AFFILIATE_SEGMENT bundles are visible to everyone; no admin bundle UI; fake portal ZIP; 50 GB fake quota;
 images/avatars/logos go to Cloudinary as base64 JSON; tax certificates store a client-supplied URL.
+
+## Part 2/3 — storage service + limit (2026-10-04)
+- 6482759 storage module, accounting tables + reversible migration, ESLint rule + architecture test.
+- 889ebce e2e-assets harness + failing baselines (docs/assets-proof/baseline).
+- 51b41fe asset module rewritten on StorageService + quota (uploads, trash, versions, bundles, portal access,
+  jobs, media off Cloudinary). Unit: asset-bundle-access 8/8, storage-architecture 5/5; npm test 19/19.
+- Next: admin UI (multipart upload with progress, storage bar/warnings/full state, trash, versions, bundles tab),
+  portal (signed downloads, bundles, locked state, real ZIP), then scenario specs A–AN.

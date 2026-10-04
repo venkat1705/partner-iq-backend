@@ -2,8 +2,8 @@
  * Streaming multipart uploads for assets and new versions: browser → backend → storage, never through memory or
  * local disk.
  *
- *  1. Size to reserve = X-File-Size header (declared file size) or, if absent, the request's Content-Length; neither
- *     → 411. Larger than the per-file limit → 413 before reading the body.
+ *  1. Size to reserve = X-File-Size header (declared file size), capped at the request's Content-Length when both are
+ *     sent; only Content-Length → that; neither → 411. Larger than the per-file limit → 413 before reading the body.
  *  2. Form fields (must come before the file part) are validated; invalid → 400, nothing reserved.
  *  3. Space is reserved atomically (StorageQuotaService.reserve → 413 / 429) before any byte goes to storage.
  *  4. The file part is piped into StorageService.uploadStream (magic bytes, byte counting with abort at the reserved
@@ -86,8 +86,9 @@ export class AssetUploadService {
       throw new LengthRequiredException('The upload size is unknown. Send the file size in the X-File-Size header (or a Content-Length).');
     }
     if (declared !== undefined && declared < 1) throw new BadRequestException({ statusCode: 400, code: 'EMPTY_FILE', message: 'The file is empty.' });
-    if (declared !== undefined && length !== undefined && declared > length) throw new BadRequestException('X-File-Size is larger than the request body.');
-    const bytes = declared ?? length!;
+    // the body length is a hard upper bound for the file: a larger declared size reserves only that much (only the
+    // real size is ever counted); a smaller declared size is enforced while streaming
+    const bytes = declared !== undefined && length !== undefined ? Math.min(declared, length) : (declared ?? length!);
     if (bytes > this.storage.settings.maxFileBytes) {
       throw new StorageTooLargeError(`Files can be at most ${this.storage.settings.maxFileBytes} bytes; this one is ${bytes} bytes.`, this.storage.settings.maxFileBytes);
     }

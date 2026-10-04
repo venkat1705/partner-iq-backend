@@ -52,8 +52,11 @@ export class StorageLimitReachedException extends HttpException {
         statusCode: HttpStatus.PAYLOAD_TOO_LARGE,
         code: 'STORAGE_LIMIT_REACHED',
         message: `Not enough storage space: this file needs ${formatBytesForMessage(details.neededBytes)} but only ${formatBytesForMessage(details.availableBytes)} of your ${formatBytesForMessage(details.limitBytes)} is left. Free space by emptying the trash or deleting older versions.`,
-        ...details,
-        howToFree: ['Empty the trash (files in the trash still count until they are permanently deleted).', 'Delete older versions of files you have replaced.', 'Delete files you no longer need.'],
+        // the global exception filter forwards `details` to the client
+        details: {
+          ...details,
+          howToFree: ['Empty the trash (files in the trash still count until they are permanently deleted).', 'Delete older versions of files you have replaced.', 'Delete files you no longer need.'],
+        },
       },
       HttpStatus.PAYLOAD_TOO_LARGE,
     );
@@ -63,7 +66,7 @@ export class StorageLimitReachedException extends HttpException {
 export class TooManyUploadsException extends HttpException {
   constructor(max: number) {
     super(
-      { statusCode: HttpStatus.TOO_MANY_REQUESTS, code: 'TOO_MANY_CONCURRENT_UPLOADS', message: `Your organization already has ${max} uploads in progress. Wait for one to finish, then try again.`, maxConcurrentUploads: max },
+      { statusCode: HttpStatus.TOO_MANY_REQUESTS, code: 'TOO_MANY_CONCURRENT_UPLOADS', message: `Your organization already has ${max} uploads in progress. Wait for one to finish, then try again.`, details: { maxConcurrentUploads: max } },
       HttpStatus.TOO_MANY_REQUESTS,
     );
   }

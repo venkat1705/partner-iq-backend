@@ -41,7 +41,7 @@ export class StorageUnavailableError extends StorageError {
 export class StorageTooLargeError extends StorageError {
   readonly code = 'STORAGE_FILE_TOO_LARGE';
   constructor(message: string, readonly limitBytes?: number) {
-    super({ statusCode: HttpStatus.PAYLOAD_TOO_LARGE, code: 'STORAGE_FILE_TOO_LARGE', message, limitBytes }, HttpStatus.PAYLOAD_TOO_LARGE);
+    super({ statusCode: HttpStatus.PAYLOAD_TOO_LARGE, code: 'STORAGE_FILE_TOO_LARGE', message, details: limitBytes !== undefined ? { limitBytes } : undefined }, HttpStatus.PAYLOAD_TOO_LARGE);
   }
 }
 
