@@ -1,0 +1,75 @@
+# Scenario T — raw proof, run=1791106935902 (started 2026-10-04T09:42:17.597Z)
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"fileName":"photo.jpg","size":287}
+< HTTP 201 (57 ms, 806 body bytes sent)
+< {"id":"b948fe69-aa47-481a-939a-3beaf0800334","mimeType":"image/jpeg","fileSize":287,"fileName":"photo.jpg"}
+  download: HTTP 200 content-type=image/jpeg disposition=attachment; filename="photo.jpg"; filename*=UTF-8''photo.jpg sameBytes=true
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"fileName":"photo.jpeg","size":285}
+< HTTP 201 (38 ms, 806 body bytes sent)
+< {"id":"c6e68bf0-7316-4269-bc20-ccb6fd4c24c5","mimeType":"image/jpeg","fileSize":285,"fileName":"photo.jpeg"}
+  download: HTTP 200 content-type=image/jpeg disposition=attachment; filename="photo.jpeg"; filename*=UTF-8''photo.jpeg sameBytes=true
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"fileName":"banner.png","size":203}
+< HTTP 201 (38 ms, 724 body bytes sent)
+< {"id":"b1ab7def-7c93-4203-80af-a4327c94d773","mimeType":"image/png","fileSize":203,"fileName":"banner.png"}
+  download: HTTP 200 content-type=image/png disposition=attachment; filename="banner.png"; filename*=UTF-8''banner.png sameBytes=true
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"fileName":"anim.gif","size":98}
+< HTTP 201 (33 ms, 615 body bytes sent)
+< {"id":"2a37fc2a-a875-4f73-88e8-3cb5cc2fee33","mimeType":"image/gif","fileSize":98,"fileName":"anim.gif"}
+  download: HTTP 200 content-type=image/gif disposition=attachment; filename="anim.gif"; filename*=UTF-8''anim.gif sameBytes=true
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"fileName":"modern.webp","size":76}
+< HTTP 201 (35 ms, 599 body bytes sent)
+< {"id":"41669b1e-fc85-44a0-8230-8aa491524bd5","mimeType":"image/webp","fileSize":76,"fileName":"modern.webp"}
+  download: HTTP 200 content-type=image/webp disposition=attachment; filename="modern.webp"; filename*=UTF-8''modern.webp sameBytes=true
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"fileName":"clip.mp4","size":2024}
+< HTTP 201 (32 ms, 2541 body bytes sent)
+< {"id":"b134af47-b418-4867-b77c-1ef0ad349126","mimeType":"video/mp4","fileSize":2024,"fileName":"clip.mp4"}
+  download: HTTP 200 content-type=video/mp4 disposition=attachment; filename="clip.mp4"; filename*=UTF-8''clip.mp4 sameBytes=true
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"fileName":"clip.mov","size":2024}
+< HTTP 201 (34 ms, 2541 body bytes sent)
+< {"id":"244e0c55-bfe9-4b13-a983-ce79b8d20476","mimeType":"video/quicktime","fileSize":2024,"fileName":"clip.mov"}
+  download: HTTP 200 content-type=video/quicktime disposition=attachment; filename="clip.mov"; filename*=UTF-8''clip.mov sameBytes=true
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"fileName":"clip.webm","size":2004}
+< HTTP 201 (43 ms, 2523 body bytes sent)
+< {"id":"463b5dce-0dee-4a89-bb8c-fd9576ce2e6d","mimeType":"video/webm","fileSize":2004,"fileName":"clip.webm"}
+  download: HTTP 200 content-type=video/webm disposition=attachment; filename="clip.webm"; filename*=UTF-8''clip.webm sameBytes=true
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"fileName":"guide.pdf","size":3015}
+< HTTP 201 (32 ms, 3534 body bytes sent)
+< {"id":"03076bf4-4293-48ea-98e1-02fd5278ffaf","mimeType":"application/pdf","fileSize":3015,"fileName":"guide.pdf"}
+  download: HTTP 200 content-type=application/pdf disposition=attachment; filename="guide.pdf"; filename*=UTF-8''guide.pdf sameBytes=true
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"fileName":"legacy.doc","size":3008}
+< HTTP 201 (33 ms, 3529 body bytes sent)
+< {"id":"a87d3526-56bc-4cca-ac42-573439299a74","mimeType":"application/msword","fileSize":3008,"fileName":"legacy.doc"}
+  download: HTTP 200 content-type=application/msword disposition=attachment; filename="legacy.doc"; filename*=UTF-8''legacy.doc sameBytes=true
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"fileName":"legacy.ppt","size":3008}
+< HTTP 201 (42 ms, 3529 body bytes sent)
+< {"id":"336e8250-eb0a-44db-8b56-27089d53402c","mimeType":"application/vnd.ms-powerpoint","fileSize":3008,"fileName":"legacy.ppt"}
+  download: HTTP 200 content-type=application/vnd.ms-powerpoint disposition=attachment; filename="legacy.ppt"; filename*=UTF-8''legacy.ppt sameBytes=true
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"fileName":"modern.docx","size":348}
+< HTTP 201 (32 ms, 871 body bytes sent)
+< {"id":"afe3a6ec-6c8e-426d-8fa3-a6452ede8600","mimeType":"application/vnd.openxmlformats-officedocument.wordprocessingml.document","fileSize":348,"fileName":"modern.docx"}
+  download: HTTP 200 content-type=application/vnd.openxmlformats-officedocument.wordprocessingml.document disposition=attachment; filename="modern.docx"; filename*=UTF-8''modern.docx sameBytes=true
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"fileName":"modern.pptx","size":354}
+< HTTP 201 (36 ms, 877 body bytes sent)
+< {"id":"28a770a5-7dcd-4813-b893-0c3a1161be2e","mimeType":"application/vnd.openxmlformats-officedocument.presentationml.presentation","fileSize":354,"fileName":"modern.pptx"}
+  download: HTTP 200 content-type=application/vnd.openxmlformats-officedocument.presentationml.presentation disposition=attachment; filename="modern.pptx"; filename*=UTF-8''modern.pptx sameBytes=true
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"fileName":"notes.txt","size":1750}
+< HTTP 201 (38 ms, 2269 body bytes sent)
+< {"id":"d6de773b-380b-4903-82fa-666ab5d61398","mimeType":"text/plain; charset=utf-8","fileSize":1750,"fileName":"notes.txt"}
+  download: HTTP 200 content-type=text/plain; charset=utf-8 disposition=attachment; filename="notes.txt"; filename*=UTF-8''notes.txt sameBytes=true
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"fileName":"leads.csv","size":31}
+< HTTP 201 (35 ms, 550 body bytes sent)
+< {"id":"3a7b9768-f3ee-4074-84a6-2c92c1006ffa","mimeType":"text/csv; charset=utf-8","fileSize":31,"fileName":"leads.csv"}
+  download: HTTP 200 content-type=text/csv; charset=utf-8 disposition=attachment; filename="leads.csv"; filename*=UTF-8''leads.csv sameBytes=true
+
+==== T2 thumbnails for the raster images (not counted toward storage) ====
+mysql> SELECT kind, countsTowardQuota, COUNT(*), SUM(sizeBytes) FROM stored_objects WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046' GROUP BY kind, countsTowardQuota
+[{"kind":"ASSET_FILE","countsTowardQuota":1,"n":15,"b":"18515"},{"kind":"THUMBNAIL","countsTowardQuota":0,"n":5,"b":"1433"}]
+
+==== T3 storage after all types: API / DB / S3 ====
+> GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage/usage
+< HTTP 200 (7 ms)
+< {"limitBytes":10485760,"usedBytes":18515,"reservedBytes":0,"availableBytes":10467245,"percentUsed":0.18,"overLimit":false,"activeUploads":0,"breakdown":{"filesBytes":18515,"olderVersionsBytes":0,"trashBytes":0},"counts":{"files":15,"olderVersions":0,"trashedAssets":0}}
+mysql> SELECT limitBytes, usedBytes, reservedBytes, activeUploads FROM organization_storage WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
+{"limitBytes":10485760,"usedBytes":18515,"reservedBytes":0,"activeUploads":0}
+mysql> SELECT SUM(sizeBytes), COUNT(*) FROM stored_objects WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046' AND countsTowardQuota=1
+{"bytes":18515,"count":15}
+S3 (MinIO, independent client) orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/: 15 objects, 18515 bytes

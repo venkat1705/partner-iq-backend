@@ -1,0 +1,72 @@
+# Scenario X — raw proof, run=1791106935902 (started 2026-10-04T09:42:21.230Z)
+
+==== X1 rename: the extension of the stored file must stay (the content does not change) ====
+> PATCH /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e253d22d-36ec-4845-a30a-62e8e75bbf53
+> body: {"fileName":"Summer flyer FINAL"}
+< HTTP 400 (13 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"The file name must keep the .pdf extension (the file content does not change).","error":{"code":"VALIDATION_ERROR","message":"The file name must keep the .pdf extension (the file content does not change).","requestId":"req_8394b7c3cf1420df2ab688c1"},"correlationId":"req_8394b7c3cf1420df2ab688c1","timestamp":"2026-10-04T09:42:21.387Z","path":"/api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e253d22d-36ec-4845-a30a-62e8e75bbf53"}
+> PATCH /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e253d22d-36ec-4845-a30a-62e8e75bbf53
+> body: {"fileName":"trick.exe"}
+< HTTP 400 (10 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"The file name must keep the .pdf extension (the file content does not change).","error":{"code":"VALIDATION_ERROR","message":"The file name must keep the .pdf extension (the file content does not change).","requestId":"req_3630e3722a3f3282c064306a"},"correlationId":"req_3630e3722a3f3282c064306a","timestamp":"2026-10-04T09:42:21.399Z","path":"/api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e253d22d-36ec-4845-a30a-62e8e75bbf53"}
+> PATCH /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e253d22d-36ec-4845-a30a-62e8e75bbf53
+> body: {"fileName":"Summer flyer FINAL.pdf"}
+< HTTP 200 (17 ms)
+< {"name":"e2e-ast-1791100374195-S flyer","fileName":"Summer flyer FINAL.pdf","folder":"General","description":null,"tags":[]}
+
+==== X2 move to a folder, edit text fields ====
+> PATCH /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e253d22d-36ec-4845-a30a-62e8e75bbf53
+> body: {"folderPath":"Print 2026"}
+< HTTP 200 (13 ms)
+< {"name":"e2e-ast-1791100374195-S flyer","fileName":"Summer flyer FINAL.pdf","folder":"Print 2026","description":null,"tags":[]}
+> PATCH /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e253d22d-36ec-4845-a30a-62e8e75bbf53
+> body: {"description":"A4 flyer","tags":["print","a4"]}
+< HTTP 200 (16 ms)
+< {"name":"e2e-ast-1791100374195-S flyer","fileName":"Summer flyer FINAL.pdf","folder":"Print 2026","description":"A4 flyer","tags":["print","a4"]}
+
+==== X3 fields that may not be changed by PATCH ====
+> PATCH /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e253d22d-36ec-4845-a30a-62e8e75bbf53
+> body: {"storageKey":"orgs/x/y"}
+< HTTP 400 (5 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"property storageKey should not exist","error":{"code":"VALIDATION_ERROR","message":"property storageKey should not exist","requestId":"req_cd9d308dc0e568482173c77b"},"correlationId":"req_cd9d308dc0e568482173c77b","timestamp":"2026-10-04T09:42:21.454Z","path":"/api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e253d22d-36ec-4845-a30a-62e8e75bbf53"}
+> PATCH /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e253d22d-36ec-4845-a30a-62e8e75bbf53
+> body: {"fileSize":1}
+< HTTP 400 (6 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"property fileSize should not exist","error":{"code":"VALIDATION_ERROR","message":"property fileSize should not exist","requestId":"req_752f39eeb9dd7331079ce51b"},"correlationId":"req_752f39eeb9dd7331079ce51b","timestamp":"2026-10-04T09:42:21.461Z","path":"/api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e253d22d-36ec-4845-a30a-62e8e75bbf53"}
+> PATCH /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e253d22d-36ec-4845-a30a-62e8e75bbf53
+> body: {"checksum":"x"}
+< HTTP 400 (6 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"property checksum should not exist","error":{"code":"VALIDATION_ERROR","message":"property checksum should not exist","requestId":"req_e6ffc385dfc0e5f3f1703b5b"},"correlationId":"req_e6ffc385dfc0e5f3f1703b5b","timestamp":"2026-10-04T09:42:21.468Z","path":"/api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e253d22d-36ec-4845-a30a-62e8e75bbf53"}
+> PATCH /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e253d22d-36ec-4845-a30a-62e8e75bbf53
+> body: {"organizationId":"46967d5b-48bc-400f-98a6-2c702e4106f6"}
+< HTTP 400 (5 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"property organizationId should not exist","error":{"code":"VALIDATION_ERROR","message":"property organizationId should not exist","requestId":"req_63e82cd0eed7b40d1857dbd1"},"correlationId":"req_63e82cd0eed7b40d1857dbd1","timestamp":"2026-10-04T09:42:21.474Z","path":"/api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e253d22d-36ec-4845-a30a-62e8e75bbf53"}
+> PATCH /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e253d22d-36ec-4845-a30a-62e8e75bbf53
+> body: {"version":9}
+< HTTP 400 (8 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"property version should not exist","error":{"code":"VALIDATION_ERROR","message":"property version should not exist","requestId":"req_1e7cf5fd0d5b57daacda2e37"},"correlationId":"req_1e7cf5fd0d5b57daacda2e37","timestamp":"2026-10-04T09:42:21.483Z","path":"/api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e253d22d-36ec-4845-a30a-62e8e75bbf53"}
+> PATCH /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e253d22d-36ec-4845-a30a-62e8e75bbf53
+> body: {"sourceType":"URL"}
+< HTTP 400 (7 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"property sourceType should not exist","error":{"code":"VALIDATION_ERROR","message":"property sourceType should not exist","requestId":"req_b6271727fd020426e0c6175f"},"correlationId":"req_b6271727fd020426e0c6175f","timestamp":"2026-10-04T09:42:21.491Z","path":"/api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e253d22d-36ec-4845-a30a-62e8e75bbf53"}
+mysql> SELECT name, fileName, folder, organizationId, storageKey, fileSize FROM assets WHERE id='e253d22d-36ec-4845-a30a-62e8e75bbf53'
+{"name":"e2e-ast-1791100374195-S flyer","fileName":"Summer flyer FINAL.pdf","folder":"Print 2026","organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","storageKey":"orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e253d22d-36ec-4845-a30a-62e8e75bbf53/v1/44b6b8675204e54e76400ec7","fileSize":1009}
+
+==== X4 replace the file = upload a new version (same type); old version keeps counting until deleted ====
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e253d22d-36ec-4845-a30a-62e8e75bbf53/versions/upload multipart {"size":2009}
+< HTTP 201 (32 ms, 2207 body bytes sent)
+< {"version":2,"fileSize":2009,"fileName":"flyer-v2.pdf"}
+
+==== X4: API / DB / S3 ====
+> GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage/usage
+< HTTP 200 (7 ms)
+< {"limitBytes":10485760,"usedBytes":3018,"reservedBytes":0,"availableBytes":10482742,"percentUsed":0.03,"overLimit":false,"activeUploads":0,"breakdown":{"filesBytes":2009,"olderVersionsBytes":1009,"trashBytes":0},"counts":{"files":1,"olderVersions":1,"trashedAssets":0}}
+mysql> SELECT limitBytes, usedBytes, reservedBytes, activeUploads FROM organization_storage WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
+{"limitBytes":10485760,"usedBytes":3018,"reservedBytes":0,"activeUploads":0}
+mysql> SELECT SUM(sizeBytes), COUNT(*) FROM stored_objects WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046' AND countsTowardQuota=1
+{"bytes":3018,"count":2}
+S3 (MinIO, independent client) orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/: 2 objects, 3018 bytes
+
+==== X5 audit trail of the changes ====
+mysql> SELECT action, beforeState, afterState FROM audit_logs WHERE resourceId='e253d22d-36ec-4845-a30a-62e8e75bbf53' ORDER BY createdAt
+[{"action":"ASSET_UPLOADED","beforeState":null,"afterState":"{\"name\":\"e2e-ast-1791100374195-S flyer\",\"assetType\":\"PDF\",\"fileName\":\"flyer.pdf\",\"tags\":[],\"status\":\"PUBLISHED\",\"isPublicToAffiliates\":true,\"isDownloadable\":true,\"isCopyable\":true,\"metadata\":{\"folderPath\":\"General\"},\"version\":1,\"fileSize\":1009,\"checksum\":\"3bd4ee5ec0531911db8f1306be5a9918676daa4fd4fc05934409e14cc1bb8f35\",\"sizeBytes\":1009,\"contentType\":\"application/pdf\",\"originalFileName\":\"flyer.pdf\"}"},{"action":"ASSET_RENAMED","beforeState":"{\"fileName\":\"flyer.pdf\"}","afterState":"{\"fileName\":\"Summer flyer FINAL.pdf\"}"},{"action":"ASSET_MOVED","beforeState":"{\"metadata\":{\"folderPath\":\"General\"}}","afterState":"{\"metadata\":{\"folderPath\":\"Print 2026\"}}"},{"action":"ASSET_UPDATED","beforeState":"{\"description\":null,\"tags\":[]}","afterState":"{\"description\":\"A4 flyer\",\"tags\":[\"print\",\"a4\"]}"},{"action":"ASSET_VERSION_ADDED","beforeState":"{\"version\":1,\"fileSize\":\"1009\",\"checksum\":\"3bd4ee5ec0531911db8f1306be5a9918676daa4fd4fc05934409e14cc1bb8f35\",\"fileName\":\"Summer flyer FINAL.pdf\"}","afterState":"{\"version\":2,\"fileSize\":2009,\"checksum\":\"0073fbf238a6bc89dfe31520f5a503e0fb7af4ab63f27c0d53aaad3475b80fe7\",\"fileName\":\"flyer-v2.pdf\"}"}]
