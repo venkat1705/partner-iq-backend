@@ -1,0 +1,27 @@
+# Scenario AH — raw proof, run=1791107377663 (started 2026-10-04T09:49:45.042Z)
+> POST /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/upload multipart {}
+< HTTP 415 (5 ms, 391 body bytes sent)
+< {"success":false,"statusCode":415,"code":"STORAGE_FILE_TYPE_REJECTED","message":".exe files are not allowed. Allowed: .jpg, .jpeg, .png, .gif, .webp, .mp4, .mov, .webm, .pdf, .doc, .ppt, .docx, .pptx, .txt, .csv.","error":{"code":"STORAGE_FILE_TYPE_REJECTED","message":".exe files are not allowed. Allowed: .jpg, .jpeg, .png, .gif, .webp, .mp4, .mov, .webm, .pdf, .doc, .ppt, .docx, .pptx, .txt, .csv.","requestId":"req_629e9e5e1eda37d2607e6f61"},"correlationId":"req_629e9e5e1eda37d2607e6f61","timestamp":"2026-10-04T09:49:45.082Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/upload"}
+> POST /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/upload multipart {}
+< HTTP 415 (21 ms, 3382 body bytes sent)
+< {"success":false,"statusCode":415,"code":"STORAGE_FILE_TYPE_REJECTED","message":"The file content does not match a .png file.","error":{"code":"STORAGE_FILE_TYPE_REJECTED","message":"The file content does not match a .png file.","requestId":"req_d36d6dbb4725264a9f4e0e95"},"correlationId":"req_d36d6dbb4725264a9f4e0e95","timestamp":"2026-10-04T09:49:45.103Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/upload"}
+> POST /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/upload multipart {}
+< HTTP 400 (6 ms, 3384 body bytes sent)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"name should not be empty","error":{"code":"VALIDATION_ERROR","message":"name should not be empty","requestId":"req_52002cdbbdb2d409748167fb"},"correlationId":"req_52002cdbbdb2d409748167fb","timestamp":"2026-10-04T09:49:45.110Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/upload"}
+> POST /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/upload multipart {}
+< HTTP 400 (7 ms, 3381 body bytes sent)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"assetType must be one of the following values: IMAGE, BANNER, LOGO, VIDEO, DOCUMENT, PDF, BRAND_GUIDELINE, EMAIL_TEMPLATE, SOCIAL_COPY, PROMOTIONAL_COPY, CTA, PRODUCT_DESCRIPTION, LINK, QR_CODE, COUPON, OTHER","error":{"code":"VALIDATION_ERROR","message":"assetType must be one of the following values: IMAGE, BANNER, LOGO, VIDEO, DOCUMENT, PDF, BRAND_GUIDELINE, EMAIL_TEMPLATE, SOCIAL_COPY, PROMOTIONAL_COPY, CTA, PRODUCT_DESCRIPTION, LINK, QR_CODE, COUPON, OTHER","requestId":"req_d21f28b8548f6842e118849e"},"correlationId":"req_d21f28b8548f6842e118849e","timestamp":"2026-10-04T09:49:45.117Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/upload"}
+> POST /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/upload multipart {}
+< HTTP 400 (6 ms, 3516 body bytes sent)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"Program does not belong to this organization","error":{"code":"VALIDATION_ERROR","message":"Program does not belong to this organization","requestId":"req_f4f4efe2078be3d8586133c7"},"correlationId":"req_f4f4efe2078be3d8586133c7","timestamp":"2026-10-04T09:49:45.123Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/upload"}
+> POST /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/upload multipart {}
+< HTTP 413 (21 ms, 2097537 body bytes sent)
+< {"success":false,"statusCode":413,"code":"STORAGE_FILE_TOO_LARGE","message":"The file is larger than the 1000 bytes allowed for this upload.","details":{"limitBytes":1000},"error":{"code":"STORAGE_FILE_TOO_LARGE","message":"The file is larger than the 1000 bytes allowed for this upload.","requestId":"req_7da1dd9c4de7dc7f642bb013"},"correlationId":"req_7da1dd9c4de7dc7f642bb013","timestamp":"2026-10-04T09:49:45.150Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/upload"}
+> POST /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/upload multipart {}
+< HTTP 403 (4 ms, 3385 body bytes sent)
+< {"success":false,"statusCode":403,"code":"PERMISSION_DENIED","message":"Insufficient permissions for role 'VIEWER'. Required: assets.create","error":{"code":"PERMISSION_DENIED","message":"Insufficient permissions for role 'VIEWER'. Required: assets.create","requestId":"req_e045cdbda26432e650d4b49e"},"correlationId":"req_e045cdbda26432e650d4b49e","timestamp":"2026-10-04T09:49:45.154Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/upload"}
+> POST /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/upload multipart {}
+< HTTP 401 (2 ms, 3385 body bytes sent)
+< {"success":false,"statusCode":401,"code":"UNAUTHENTICATED","message":"Missing or invalid Authorization header","error":{"code":"UNAUTHENTICATED","message":"Missing or invalid Authorization header","requestId":"req_105eb66458d0e337487470a5"},"correlationId":"req_105eb66458d0e337487470a5","timestamp":"2026-10-04T09:49:45.157Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/upload"}
+Org A footprint before={"assets":158,"versions":164,"bundles":79,"items":35,"objects":201,"openReservations":0,"usedBytes":4342558,"s3":201}
+Org A footprint after ={"assets":158,"versions":164,"bundles":79,"items":35,"objects":201,"openReservations":0,"usedBytes":4342558,"s3":201}

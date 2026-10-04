@@ -1,0 +1,82 @@
+# Scenario AE — raw proof, run=1791107377663 (started 2026-10-04T09:49:38.824Z)
+
+==== AE1 (a bulk request mixing an own and a foreign id is refused as a whole: the own file is not moved either) ====
+> GET (as Org A owner) /organizations/4fdfcd98-641e-416d-99a9-3abe852856ac/assets
+< HTTP 403 (8 ms)
+< {"success":false,"statusCode":403,"code":"ORGANIZATION_MEMBERSHIP_REQUIRED","message":"User does not belong to this organization","error":{"code":"ORGANIZATION_MEMBERSHIP_REQUIRED","message":"User does not belong to this organization","requestId":"req_7b751022463ca9b2d27d6b6f"},"correlationId":"req_7b751022463ca9b2d27d6b6f","timestamp":"2026-10-04T09:49:39.925Z","path":"/api/v1/organizations/4fdfcd98-641e-416d-99a9-3abe852856ac/assets"}
+> GET (as Org A owner) /organizations/4fdfcd98-641e-416d-99a9-3abe852856ac/assets/011a4df8-c852-44ef-ae2c-769f7586893d
+< HTTP 403 (10 ms)
+< {"success":false,"statusCode":403,"code":"ORGANIZATION_MEMBERSHIP_REQUIRED","message":"User does not belong to this organization","error":{"code":"ORGANIZATION_MEMBERSHIP_REQUIRED","message":"User does not belong to this organization","requestId":"req_f0a26d216c5146c361f44dd5"},"correlationId":"req_f0a26d216c5146c361f44dd5","timestamp":"2026-10-04T09:49:39.939Z","path":"/api/v1/organizations/4fdfcd98-641e-416d-99a9-3abe852856ac/assets/011a4df8-c852-44ef-ae2c-769f7586893d"}
+> GET (as Org A owner) /organizations/4fdfcd98-641e-416d-99a9-3abe852856ac/assets/011a4df8-c852-44ef-ae2c-769f7586893d/download
+< HTTP 403 (6 ms)
+< {"success":false,"statusCode":403,"code":"ORGANIZATION_MEMBERSHIP_REQUIRED","message":"User does not belong to this organization","error":{"code":"ORGANIZATION_MEMBERSHIP_REQUIRED","message":"User does not belong to this organization","requestId":"req_70c08ced7840e30b99af155a"},"correlationId":"req_70c08ced7840e30b99af155a","timestamp":"2026-10-04T09:49:39.946Z","path":"/api/v1/organizations/4fdfcd98-641e-416d-99a9-3abe852856ac/assets/011a4df8-c852-44ef-ae2c-769f7586893d/download"}
+> GET (as Org A owner) /organizations/4fdfcd98-641e-416d-99a9-3abe852856ac/storage/usage
+< HTTP 403 (5 ms)
+< {"success":false,"statusCode":403,"code":"ORGANIZATION_MEMBERSHIP_REQUIRED","message":"User does not belong to this organization","error":{"code":"ORGANIZATION_MEMBERSHIP_REQUIRED","message":"User does not belong to this organization","requestId":"req_c4724305a95f3102e5a6bbae"},"correlationId":"req_c4724305a95f3102e5a6bbae","timestamp":"2026-10-04T09:49:39.952Z","path":"/api/v1/organizations/4fdfcd98-641e-416d-99a9-3abe852856ac/storage/usage"}
+> GET (as Org A owner) /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/011a4df8-c852-44ef-ae2c-769f7586893d
+< HTTP 404 (11 ms)
+< {"success":false,"statusCode":404,"code":"Not Found","message":"ASSET_NOT_FOUND","error":{"code":"Not Found","message":"ASSET_NOT_FOUND","requestId":"req_34091cb7fbe1fb61fc369c78"},"correlationId":"req_34091cb7fbe1fb61fc369c78","timestamp":"2026-10-04T09:49:39.962Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/011a4df8-c852-44ef-ae2c-769f7586893d"}
+> GET (as Org A owner) /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/011a4df8-c852-44ef-ae2c-769f7586893d/download
+< HTTP 404 (15 ms)
+< {"success":false,"statusCode":404,"code":"Not Found","message":"ASSET_NOT_FOUND","error":{"code":"Not Found","message":"ASSET_NOT_FOUND","requestId":"req_487252b6f95a15afe66372c1"},"correlationId":"req_487252b6f95a15afe66372c1","timestamp":"2026-10-04T09:49:39.980Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/011a4df8-c852-44ef-ae2c-769f7586893d/download"}
+> GET (as Org A owner) /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/011a4df8-c852-44ef-ae2c-769f7586893d/thumbnail
+< HTTP 404 (7 ms)
+< {"success":false,"statusCode":404,"code":"Not Found","message":"ASSET_NOT_FOUND","error":{"code":"Not Found","message":"ASSET_NOT_FOUND","requestId":"req_b489b4b7787ba736cc8a36b1"},"correlationId":"req_b489b4b7787ba736cc8a36b1","timestamp":"2026-10-04T09:49:39.989Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/011a4df8-c852-44ef-ae2c-769f7586893d/thumbnail"}
+> GET (as Org A owner) /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/011a4df8-c852-44ef-ae2c-769f7586893d/versions
+< HTTP 404 (7 ms)
+< {"success":false,"statusCode":404,"code":"Not Found","message":"ASSET_NOT_FOUND","error":{"code":"Not Found","message":"ASSET_NOT_FOUND","requestId":"req_66d33270187b923078547dc2"},"correlationId":"req_66d33270187b923078547dc2","timestamp":"2026-10-04T09:49:39.999Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/011a4df8-c852-44ef-ae2c-769f7586893d/versions"}
+> PATCH (as Org A owner) /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/011a4df8-c852-44ef-ae2c-769f7586893d
+> body: {"name":"pwned"}
+< HTTP 404 (12 ms)
+< {"success":false,"statusCode":404,"code":"Not Found","message":"ASSET_NOT_FOUND","error":{"code":"Not Found","message":"ASSET_NOT_FOUND","requestId":"req_6c64c60957f5c0d66e2e99a2"},"correlationId":"req_6c64c60957f5c0d66e2e99a2","timestamp":"2026-10-04T09:49:40.012Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/011a4df8-c852-44ef-ae2c-769f7586893d"}
+> DELETE (as Org A owner) /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/011a4df8-c852-44ef-ae2c-769f7586893d
+< HTTP 404 (11 ms)
+< {"success":false,"statusCode":404,"code":"Not Found","message":"ASSET_NOT_FOUND","error":{"code":"Not Found","message":"ASSET_NOT_FOUND","requestId":"req_6c94164aeaa8792bf54b4fd4"},"correlationId":"req_6c94164aeaa8792bf54b4fd4","timestamp":"2026-10-04T09:49:40.025Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/011a4df8-c852-44ef-ae2c-769f7586893d"}
+> DELETE (as Org A owner) /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/011a4df8-c852-44ef-ae2c-769f7586893d/permanent
+< HTTP 404 (12 ms)
+< {"success":false,"statusCode":404,"code":"Not Found","message":"ASSET_NOT_FOUND","error":{"code":"Not Found","message":"ASSET_NOT_FOUND","requestId":"req_898eb30c867ae9b5e6377133"},"correlationId":"req_898eb30c867ae9b5e6377133","timestamp":"2026-10-04T09:49:40.038Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/011a4df8-c852-44ef-ae2c-769f7586893d/permanent"}
+> POST (as Org A owner) /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/bulk-action
+> body: {"action":"ARCHIVE","assetIds":["011a4df8-c852-44ef-ae2c-769f7586893d"]}
+< HTTP 404 (11 ms)
+< {"success":false,"statusCode":404,"code":"ASSET_NOT_FOUND","message":"1 of the selected assets were not found in this organization (or are in the trash). Nothing was changed.","details":{"missingIds":["011a4df8-c852-44ef-ae2c-769f7586893d"]},"error":{"code":"ASSET_NOT_FOUND","message":"1 of the selected assets were not found in this organization (or are in the trash). Nothing was changed.","requestId":"req_133c8eeb74519da5c4badc11"},"correlationId":"req_133c8eeb74519da5c4badc11","timestamp":"2026-10-04T09:49:40.050Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/bulk-action"}
+> POST (as Org A owner) /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/bulk-action
+> body: {"action":"MOVE","assetIds":["4e0ec144-984b-4f2a-9504-49fc939da64b","011a4df8-c852-44ef-ae2c-769f7586893d"],"folderPath":"x"}
+< HTTP 404 (8 ms)
+< {"success":false,"statusCode":404,"code":"ASSET_NOT_FOUND","message":"1 of the selected assets were not found in this organization (or are in the trash). Nothing was changed.","details":{"missingIds":["011a4df8-c852-44ef-ae2c-769f7586893d"]},"error":{"code":"ASSET_NOT_FOUND","message":"1 of the selected assets were not found in this organization (or are in the trash). Nothing was changed.","requestId":"req_a4abc6bcfa3d20d76c05a05b"},"correlationId":"req_a4abc6bcfa3d20d76c05a05b","timestamp":"2026-10-04T09:49:40.059Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/bulk-action"}
+> POST (as Org A owner) /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles/1037e110-b51e-4798-9693-312d43c242d9/assets
+> body: {"assetId":"011a4df8-c852-44ef-ae2c-769f7586893d"}
+< HTTP 404 (11 ms)
+< {"success":false,"statusCode":404,"code":"Not Found","message":"ASSET_NOT_FOUND","error":{"code":"Not Found","message":"ASSET_NOT_FOUND","requestId":"req_50b72c65f3a8065adcf73f22"},"correlationId":"req_50b72c65f3a8065adcf73f22","timestamp":"2026-10-04T09:49:40.072Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles/1037e110-b51e-4798-9693-312d43c242d9/assets"}
+> PATCH (as Org A owner) /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles/1037e110-b51e-4798-9693-312d43c242d9
+> body: {"coverImageAssetId":"011a4df8-c852-44ef-ae2c-769f7586893d"}
+< HTTP 400 (9 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"The cover must be an image file of this organization.","error":{"code":"VALIDATION_ERROR","message":"The cover must be an image file of this organization.","requestId":"req_55ada60933383f6242488c88"},"correlationId":"req_55ada60933383f6242488c88","timestamp":"2026-10-04T09:49:40.082Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles/1037e110-b51e-4798-9693-312d43c242d9"}
+> GET (as Org A owner) /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles/0961086d-cde3-4228-95f2-910f68195fc1
+< HTTP 404 (5 ms)
+< {"success":false,"statusCode":404,"code":"Not Found","message":"ASSET_BUNDLE_NOT_FOUND","error":{"code":"Not Found","message":"ASSET_BUNDLE_NOT_FOUND","requestId":"req_b3434e93d2d41ddd138a9dae"},"correlationId":"req_b3434e93d2d41ddd138a9dae","timestamp":"2026-10-04T09:49:40.088Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles/0961086d-cde3-4228-95f2-910f68195fc1"}
+> GET (as Org A owner) /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles/0961086d-cde3-4228-95f2-910f68195fc1/zip
+< HTTP 404 (6 ms)
+< {"success":false,"statusCode":404,"code":"Not Found","message":"ASSET_BUNDLE_NOT_FOUND","error":{"code":"Not Found","message":"ASSET_BUNDLE_NOT_FOUND","requestId":"req_abc55531b09ff340345448c0"},"correlationId":"req_abc55531b09ff340345448c0","timestamp":"2026-10-04T09:49:40.095Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles/0961086d-cde3-4228-95f2-910f68195fc1/zip"}
+> DELETE (as Org A owner) /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles/0961086d-cde3-4228-95f2-910f68195fc1
+< HTTP 404 (7 ms)
+< {"success":false,"statusCode":404,"code":"Not Found","message":"ASSET_BUNDLE_NOT_FOUND","error":{"code":"Not Found","message":"ASSET_BUNDLE_NOT_FOUND","requestId":"req_6e4a294a02cf5d9ffd6e554d"},"correlationId":"req_6e4a294a02cf5d9ffd6e554d","timestamp":"2026-10-04T09:49:40.103Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles/0961086d-cde3-4228-95f2-910f68195fc1"}
+
+==== AE2 upload a version onto Org B's asset through Org A's path ====
+> POST /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/011a4df8-c852-44ef-ae2c-769f7586893d/versions/upload multipart {}
+< HTTP 404 (5 ms, 590 body bytes sent)
+< {"success":false,"statusCode":404,"code":"Not Found","message":"ASSET_NOT_FOUND","error":{"code":"Not Found","message":"ASSET_NOT_FOUND","requestId":"req_a70e5846068770b140a7e2b6"},"correlationId":"req_a70e5846068770b140a7e2b6","timestamp":"2026-10-04T09:49:40.111Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/011a4df8-c852-44ef-ae2c-769f7586893d/versions/upload"}
+Org B footprint before={"assets":2,"versions":2,"bundles":2,"items":0,"objects":4,"openReservations":0,"usedBytes":2618,"s3":4}
+Org B footprint after ={"assets":2,"versions":2,"bundles":2,"items":0,"objects":4,"openReservations":0,"usedBytes":2618,"s3":4}
+mysql> own file after the refused mixed bulk MOVE
+{"folder":"General","deletedAt":null}
+
+==== AE3 affiliates of Org B see nothing of Org A, even with ?organizationId=A ====
+> GET (as AFFILIATE_B1) /affiliate/me/assets?organizationId=46967d5b-48bc-400f-98a6-2c702e4106f6
+< HTTP 200 (8 ms)
+< 0 items
+> GET (as AFFILIATE_B1) /affiliate/me/asset-bundles?organizationId=46967d5b-48bc-400f-98a6-2c702e4106f6
+< HTTP 200 (8 ms)
+< 0 items
+> GET (as AFFILIATE_B1) /affiliate/me/assets/4e0ec144-984b-4f2a-9504-49fc939da64b/download
+< HTTP 404 (9 ms)
+< {"success":false,"statusCode":404,"code":"Not Found","message":"ASSET_NOT_FOUND","error":{"code":"Not Found","message":"ASSET_NOT_FOUND","requestId":"req_e7cbc84310df62981f37b404"},"correlationId":"req_e7cbc84310df62981f37b404","timestamp":"2026-10-04T09:49:40.517Z","path":"/api/v1/affiliate/me/assets/4e0ec144-984b-4f2a-9504-49fc939da64b/download"}

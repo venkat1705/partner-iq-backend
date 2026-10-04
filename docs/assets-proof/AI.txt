@@ -1,0 +1,14 @@
+# Scenario AI — raw proof, run=1791107377663 (started 2026-10-04T09:49:46.220Z)
+mysql(session 2)> LOCK TABLES assets WRITE, asset_bundles WRITE
+> PATCH (tables locked) /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/9928178d-c0a6-4e0a-a679-5c78f73da615
+> body: {"name":"renamed while locked"}
+< HTTP 503 (5012 ms)
+< {"success":false,"statusCode":503,"code":"Service Unavailable","message":"The change could not be saved because the database is busy or unavailable. Nothing was changed; please retry.","error":{"code":"Service Unavailable","message":"The change could not be saved because the database is busy or unavailable. Nothing was changed; please retry.","requestId":"req_8e9f74264e84b67ff35d45cd"},"correlationId":"req_8e9f74264e84b67ff35d45cd","timestamp":"2026-10-04T09:49:51.276Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/9928178d-c0a6-4e0a-a679-5c78f73da615"}
+> DELETE (tables locked) /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/9928178d-c0a6-4e0a-a679-5c78f73da615
+< HTTP 503 (5011 ms)
+< {"success":false,"statusCode":503,"code":"Service Unavailable","message":"The change could not be saved because the database is busy or unavailable. Nothing was changed; please retry.","error":{"code":"Service Unavailable","message":"The change could not be saved because the database is busy or unavailable. Nothing was changed; please retry.","requestId":"req_898b92012152600fc180e25e"},"correlationId":"req_898b92012152600fc180e25e","timestamp":"2026-10-04T09:49:56.287Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/9928178d-c0a6-4e0a-a679-5c78f73da615"}
+> POST bundle (tables locked) /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles
+< HTTP 503 (5011 ms)
+< {"success":false,"statusCode":503,"code":"Service Unavailable","message":"The change could not be saved because the database is busy or unavailable. Nothing was changed; please retry.","error":{"code":"Service Unavailable","message":"The change could not be saved because the database is busy or unavailable. Nothing was changed; please retry.","requestId":"req_0da217708b795f3e7f65ba9e"},"correlationId":"req_0da217708b795f3e7f65ba9e","timestamp":"2026-10-04T09:50:01.298Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles"}
+mysql> SELECT name, deletedAt FROM assets WHERE id='9928178d-c0a6-4e0a-a679-5c78f73da615'
+{"name":"e2e-ast-1791100374195-Xmutn36fv ai.png","deletedAt":null}

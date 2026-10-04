@@ -1,0 +1,24 @@
+# Scenario AF — raw proof, run=1791107377663 (started 2026-10-04T09:49:40.547Z)
+| action | permission | OWNER | ADMIN | MANAGER | VIEWER | NOPERM |
+|---|---|---|---|---|---|---|
+| list assets | assets.view | 200 | 200 | 200 | 403 | 403 |
+| storage usage | assets.view | 200 | 200 | 200 | 403 | 403 |
+| download | assets.view | 200 | 200 | 200 | 403 | 403 |
+| upload | assets.create | 201 | 201 | 201 | 403 | 403 |
+| create text asset | assets.create | 201 | 201 | 201 | 403 | 403 |
+| edit | assets.edit | 200 | 200 | 200 | 403 | 403 |
+| new version | assets.edit | 201 | 201 | 201 | 403 | 403 |
+| bulk move | assets.edit | 200 | 200 | 200 | 403 | 403 |
+| move to trash | assets.delete | 200 | 200 | 403 | 403 | 403 |
+| bulk archive (trash) | assets.delete | 200 | 200 | 403 | 403 | 403 |
+| permanent delete | assets.delete | 200 | 200 | 403 | 403 | 403 |
+| empty trash | assets.delete | 200 | 200 | 403 | 403 | 403 |
+| list bundles | assetBundles.view | 200 | 200 | 200 | 403 | 403 |
+| create bundle | assetBundles.create | 201 | 201 | 201 | 403 | 403 |
+| edit bundle | assetBundles.edit | 200 | 200 | 200 | 403 | 403 |
+| publish bundle | assetBundles.publish | 200 | 200 | 200 | 403 | 403 |
+| archive bundle | assetBundles.delete | 200 | 200 | 403 | 403 | 403 |
+| delete bundle | assetBundles.delete | 200 | 200 | 403 | 403 | 403 |
+| analytics | assets.view | 200 | 200 | 200 | 403 | 403 |
+| change storage limit | platform | 403 | 403 | 403 | 403 | 403 |
+all cells match the backend permission catalog
