@@ -1,0 +1,18 @@
+# Scenario H-3GB — raw proof, run=1791109021420 (started 2026-10-04T10:17:02.391Z)
+> PATCH /admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit
+> body: {"limitBytes":3221225472,"reason":"back to the default for the 3 GB run"}
+< HTTP 200 (16 ms)
+< {"success":true,"data":{"organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","previousLimitBytes":104857600,"limitBytes":3221225472,"usedBytes":0}}
+plan: 15 × 209715200 + 1 × 75497472 = 3221225472 bytes (= 3 GB), then 1 byte
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"size":75497472}
+< HTTP 201 (661 ms, 75497994 body bytes sent)
+< {"fileSize":75497472}
+after 24.479 s: {"usedBytes":3221225472,"limitBytes":3221225472,"availableBytes":0,"percentUsed":100}
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"size":1}
+< HTTP 413 (9 ms, 495 body bytes sent)
+< {"success":false,"statusCode":413,"code":"STORAGE_LIMIT_REACHED","message":"Not enough storage space: this file needs 1 B but only 0 B of your 3.0 GB is left. Free space by emptying the trash or deleting older versions.","details":{"neededBytes":1,"availableBytes":0,"limitBytes":3221225472,"usedBytes":3221225472,"reservedBytes":0,"howToFree":["Empty the trash (files in the trash still count until they are permanently deleted).","Delete older versions of files you have replaced.","Delete files you no longer need."]},"error":{"code":"STORAGE_LIMIT_REACHED","message":"Not enough storage space: this file needs 1 B but only 0 B of your 3.0 GB is left. Free space by emptying the trash or deleting older versions.","requestId":"req_4d3aaaa4839d69886d4a89f4"},"correlationId":"req_4d3aaaa4839d69886d4a89f4","timestamp":"2026-10-04T10:17:27.658Z","path":"/api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload"}
+mysql> SELECT * FROM organization_storage WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
+{"limitBytes":3221225472,"usedBytes":3221225472,"reservedBytes":0,"activeUploads":0}
+S3: 16 objects, 3221225472 bytes
+mysql> after deleting the 3 GB of test files
+{"limitBytes":3221225472,"usedBytes":0,"reservedBytes":0,"activeUploads":0}

@@ -42,7 +42,10 @@ export function formatBytesForMessage(bytes: number): string {
     v /= 1024;
     i += 1;
   }
-  return `${i === 0 ? v : v.toFixed(1)} ${units[i]}`;
+  if (i === 0) return `${Math.round(v)} B`;
+  // same rule as the UI's formatStorage: one decimal, trailing ".0" dropped (3,221,225,472 bytes = "3 GB")
+  const r = Math.round(v * 10) / 10;
+  return `${r % 1 === 0 ? r.toFixed(0) : r.toFixed(1)} ${units[i]}`;
 }
 
 export class StorageLimitReachedException extends HttpException {
