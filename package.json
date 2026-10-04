@@ -31,9 +31,15 @@
     "test:legal": "tsx src/tests/legal-acceptance.test.ts",
     "test:affiliate-portal": "tsx src/tests/affiliate-portal-data.test.ts",
     "test:program-links": "tsx src/tests/program-default-links.test.ts",
-    "test:invitations": "cross-env DATABASE_PORT=59999 DATABASE_URL= tsx src/tests/affiliate-invitation-flow.test.ts"
+    "test:invitations": "cross-env DATABASE_PORT=59999 DATABASE_URL= tsx src/tests/affiliate-invitation-flow.test.ts",
+    "storage:setup": "node dist/src/common/storage/cli/setup-bucket.js",
+    "storage:describe": "node dist/src/common/storage/cli/setup-bucket.js --describe",
+    "lint:architecture": "eslint \"src/**/*.ts\" server.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1146.0",
+    "@aws-sdk/lib-storage": "^3.1146.0",
+    "@aws-sdk/s3-request-presigner": "^3.1146.0",
     "@google/genai": "^2.4.0",
     "@nestjs/common": "^11.1.28",
     "@nestjs/core": "^11.1.28",
@@ -44,6 +50,7 @@
     "@types/qrcode": "^1.5.6",
     "bcryptjs": "^3.0.3",
     "bullmq": "^6.0.9",
+    "busboy": "^1.6.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "cookie-parser": "^1.4.7",
@@ -59,6 +66,7 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "serverless-http": "^4.0.0",
+    "sharp": "^0.34.5",
     "swagger-ui-express": "^5.0.1",
     "typeorm": "^1.1.0",
     "uuid": "^14.0.1",
@@ -69,6 +77,7 @@
     "@nestjs/cli": "^11.0.24",
     "@nestjs/testing": "^11.1.28",
     "@types/bcryptjs": "^3.0.0",
+    "@types/busboy": "^1.5.4",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^4.17.21",
     "@types/jest": "^30.0.0",
@@ -78,10 +87,12 @@
     "@types/uuid": "^11.0.0",
     "cross-env": "^10.1.0",
     "esbuild": "^0.25.0",
+    "eslint": "^9.39.5",
     "jest": "^30.5.2",
     "ts-jest": "^29.4.13",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
-    "typescript": "~5.8.2"
+    "typescript": "~5.8.2",
+    "typescript-eslint": "^8.71.0"
   }
 }
