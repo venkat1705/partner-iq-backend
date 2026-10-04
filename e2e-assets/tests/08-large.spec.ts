@@ -155,6 +155,7 @@ test('H (3 GB). the real default limit: fill 3 GB with 200 MB files, then one mo
   const one = await uploadAsset(org, ROLE, { fileName: 'one.txt', content: Buffer.from('x'), assetType: 'DOCUMENT' });
   proofUpload(proof, 'one more byte', orgPath(org, '/assets/upload'), one, { size: 1 });
   expect(one.status).toBe(413);
+  expect(one.body.message).toContain('of your 3 GB is left'); // same wording as the storage bar
   const d = await dbStorage(org);
   proof.sql(`SELECT * FROM organization_storage WHERE organizationId='${org}'`, d);
   expect(d).toMatchObject({ usedBytes: 3221225472, limitBytes: 3221225472, reservedBytes: 0 });
