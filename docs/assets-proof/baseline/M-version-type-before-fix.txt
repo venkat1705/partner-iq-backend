@@ -1,0 +1,42 @@
+# Scenario M — raw proof, run=1791106369208 (started 2026-10-04T09:32:59.613Z)
+> PATCH /admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit
+> body: {"limitBytes":10485760,"reason":"e2e test limit"}
+< HTTP 200 (10 ms)
+< {"success":true,"data":{"organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","previousLimitBytes":10485760,"limitBytes":10485760,"usedBytes":0}}
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/a467d5a2-07c8-470f-b4b5-10597e41970f/versions/upload multipart {"size":2097152}
+< HTTP 201 (55 ms, 2097449 body bytes sent)
+< {"success":true,"data":{"id":"a467d5a2-07c8-470f-b4b5-10597e41970f","organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","environment":"LIVE","programId":null,"name":"e2e-ast-1791100374195-Q m-v1","description":null,"assetType":"DOCUMENT","sourceType":"FILE","contentType":"text/plain; charset=utf-8","fileName":"m-v2.txt","originalFileName":"m-v2.txt","fileExtension":"txt","mimeType":"text/plain; charset=utf-8","fileSize":2097152,"storageProvider":"s3","textContent":null,"htmlContent":null,"externalUrl":null,"width":null,"height":null,"duration":null,"language":null,"country":null,"tags":[],"metadata":{"folderPath":"General"},"status":"PUBLISHED","isPublicToAffiliates":true,"isDownloadable":true,"isCopyable":true,"version":2,"checksum":"0092293d7c28fb475773cacd22f30f4c238b46925f14d7d22f659739e50dddd8","createdBy":"436de58a-082e-4b68-94b7-24e33d46358e","updatedBy":"436de58a-082e-4b68-94b7-24e33d46358e","createdAt":"2026-10-04T09:33:00.418Z","updatedAt":"2026-10-04T09:33:00.477Z","deletedAt":null,"folder":"General","hasFile":true,"legacyFileMissing":false,"inline":false,"usage":{"views":0,"previews":0,"downloads":0,"copies":0,"uniqueAffiliates":0},"associatedBundleCount":0}}
+
+==== M1 after v2: API / DB / S3 ====
+> GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage/usage
+< HTTP 200 (10 ms)
+< {"limitBytes":10485760,"usedBytes":3145728,"reservedBytes":0,"availableBytes":7340032,"percentUsed":30,"overLimit":false,"activeUploads":0,"breakdown":{"filesBytes":2097152,"olderVersionsBytes":1048576,"trashBytes":0},"counts":{"files":1,"olderVersions":1,"trashedAssets":0}}
+mysql> SELECT limitBytes, usedBytes, reservedBytes, activeUploads FROM organization_storage WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
+{"limitBytes":10485760,"usedBytes":3145728,"reservedBytes":0,"activeUploads":0}
+mysql> SELECT SUM(sizeBytes), COUNT(*) FROM stored_objects WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046' AND countsTowardQuota=1
+{"bytes":3145728,"count":2}
+S3 (MinIO, independent client) orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/: 2 objects, 3145728 bytes
+> GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/a467d5a2-07c8-470f-b4b5-10597e41970f/versions
+< HTTP 200 (8 ms)
+< {"success":true,"data":[{"id":"dfe3df10-3502-444d-9d79-51462d87ef00","assetId":"a467d5a2-07c8-470f-b4b5-10597e41970f","versionNumber":2,"fileName":"m-v2.txt","mimeType":"text/plain; charset=utf-8","fileSize":2097152,"checksum":"0092293d7c28fb475773cacd22f30f4c238b46925f14d7d22f659739e50dddd8","createdBy":"436de58a-082e-4b68-94b7-24e33d46358e","createdAt":"2026-10-04T09:33:00.477Z","changeNotes":"second","isCurrent":true,"hasFile":true},{"id":"8114851a-ccce-478e-860f-e6f4274367ae","assetId":"a467d5a2-07c8-470f-b4b5-10597e41970f","versionNumber":1,"fileName":"m-v1.txt","mimeType":"text/plain; charset=utf-8","fileSize":1048576,"checksum":"299cdfc596d8676b9a58081b33528c834f3ad972b1d0e4f670a61b25c47dedb9","createdBy":"436de58a-082e-4b68-94b7-24e33d46358e","createdAt":"2026-10-04T09:33:00.418Z","changeNotes":"Initial upload","isCurrent":false,"hasFile":true}]}
+
+==== M2 a version with a different file type is refused ====
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/a467d5a2-07c8-470f-b4b5-10597e41970f/versions/upload multipart {"fileName":"m.png"}
+< HTTP 201 (54 ms, 1500 body bytes sent)
+< {"success":true,"data":{"id":"a467d5a2-07c8-470f-b4b5-10597e41970f","organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","environment":"LIVE","programId":null,"name":"e2e-ast-1791100374195-Q m-v1","description":null,"assetType":"DOCUMENT","sourceType":"FILE","contentType":"image/png","fileName":"m.png","originalFileName":"m.png","fileExtension":"png","mimeType":"image/png","fileSize":1309,"storageProvider":"s3","textContent":null,"htmlContent":null,"externalUrl":null,"width":null,"height":null,"duration":null,"language":null,"country":null,"tags":[],"metadata":{"folderPath":"General"},"status":"PUBLISHED","isPublicToAffiliates":true,"isDownloadable":true,"isCopyable":true,"version":3,"checksum":"99e5c4a29a1843d736a70c8d8e5e6c1c59d44bdaacc1b9577075d8a34165570f","createdBy":"436de58a-082e-4b68-94b7-24e33d46358e","updatedBy":"436de58a-082e-4b68-94b7-24e33d46358e","createdAt":"2026-10-04T09:33:00.418Z","updatedAt":"2026-10-04T09:33:00.631Z","deletedAt":null,"folder":"General","hasFile":true,"legacyFileMissing":false,"inline":true,"usage":{"views":0,"previews":0,"downloads":0,"copies":0,"uniqueAffiliates":0},"associatedBundleCount":0}}
+status 201 (a .txt asset getting a .png version)
+
+==== M3 restore v1 (pointer only, no copy, no extra space) ====
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/a467d5a2-07c8-470f-b4b5-10597e41970f/restore/8114851a-ccce-478e-860f-e6f4274367ae
+< HTTP 200 (27 ms)
+< {"success":true,"data":{"id":"a467d5a2-07c8-470f-b4b5-10597e41970f","organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","environment":"LIVE","programId":null,"name":"e2e-ast-1791100374195-Q m-v1","description":null,"assetType":"DOCUMENT","sourceType":"FILE","contentType":"text/plain; charset=utf-8","fileName":"m-v1.txt","originalFileName":"m.png","fileExtension":"png","mimeType":"text/plain; charset=utf-8","fileSize":1048576,"storageProvider":"s3","textContent":null,"htmlContent":null,"externalUrl":null,"width":null,"height":null,"duration":null,"language":null,"country":null,"tags":[],"metadata":{"folderPath":"General"},"status":"PUBLISHED","isPublicToAffiliates":true,"isDownloadable":true,"isCopyable":true,"version":4,"checksum":"299cdfc596d8676b9a58081b33528c834f3ad972b1d0e4f670a61b25c47dedb9","createdBy":"436de58a-082e-4b68-94b7-24e33d46358e","updatedBy":"436de58a-082e-4b68-94b7-24e33d46358e","createdAt":"2026-10-04T09:33:00.418Z","updatedAt":"2026-10-04T09:33:00.675Z","deletedAt":null,"folder":"General","hasFile":true,"legacyFileMissing":false,"inline":false,"thumbnailUrl":"http://127.0.0.1:9000/partneriq-assets-test/orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/thumbnails/a467d5a2-07c8-470f-b4b5-10597e41970f/320/da383a044cf60495265ef1e0?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=piqbackend633c5da5%2F20261004%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20261004T093300Z&X-Amz-Expires=300&X-Amz-Signature=9c1567b58bf7b3e9b1a1b33bda3f3a8db54d4343bb2794be90f791be94f9bc29&X-Amz-SignedHeaders=host&response-cache-control=private%2C%20max-age%3D0%2C%20no-store&response-content-disposition=inline%3B%20filename%3D%22thumbnail.jpg%22%3B%20filename%2A%3DUTF-8%27%27thumbnail.jpg&response-content-type=image%2Fjpeg&x-amz-checksum-mode=ENABLED&x-id=GetObject","usage":{"views":0,"previews":0,"downloads":0,"copies":0,"uniqueAffiliates":0},"associatedBundleCount":0}}
+
+==== M3: API / DB / S3 ====
+> GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage/usage
+< HTTP 200 (7 ms)
+< {"limitBytes":10485760,"usedBytes":3147037,"reservedBytes":0,"availableBytes":7338723,"percentUsed":30.01,"overLimit":false,"activeUploads":0,"breakdown":{"filesBytes":1048576,"olderVersionsBytes":2098461,"trashBytes":0},"counts":{"files":1,"olderVersions":2,"trashedAssets":0}}
+mysql> SELECT limitBytes, usedBytes, reservedBytes, activeUploads FROM organization_storage WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
+{"limitBytes":10485760,"usedBytes":3147037,"reservedBytes":0,"activeUploads":0}
+mysql> SELECT SUM(sizeBytes), COUNT(*) FROM stored_objects WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046' AND countsTowardQuota=1
+{"bytes":3147037,"count":3}
+S3 (MinIO, independent client) orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/: 3 objects, 3147037 bytes

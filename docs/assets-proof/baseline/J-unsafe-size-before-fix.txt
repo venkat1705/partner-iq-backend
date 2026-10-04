@@ -1,0 +1,64 @@
+# Scenario J — raw proof, run=1791106578350 (started 2026-10-04T09:36:22.247Z)
+> PATCH /admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit
+> body: {"limitBytes":10485760,"reason":"e2e test limit"}
+< HTTP 200 (9 ms)
+< {"success":true,"data":{"organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","previousLimitBytes":10485760,"limitBytes":10485760,"usedBytes":0}}
+
+==== J1 declares 1 MB, sends 3 MB → stopped at the reservation, nothing saved ====
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"size":3145728,"declaredSize":1048576}
+< HTTP 413 (28 ms, 3146246 body bytes sent)
+< {"success":false,"statusCode":413,"code":"STORAGE_FILE_TOO_LARGE","message":"The file is larger than the 1048576 bytes allowed for this upload.","details":{"limitBytes":1048576},"error":{"code":"STORAGE_FILE_TOO_LARGE","message":"The file is larger than the 1048576 bytes allowed for this upload.","requestId":"req_304ec3f01451c018261bf48d"},"correlationId":"req_304ec3f01451c018261bf48d","timestamp":"2026-10-04T09:36:22.410Z","path":"/api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload"}
+
+==== J1 after: API / DB / S3 ====
+> GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage/usage
+< HTTP 200 (12 ms)
+< {"limitBytes":10485760,"usedBytes":0,"reservedBytes":0,"availableBytes":10485760,"percentUsed":0,"overLimit":false,"activeUploads":0,"breakdown":{"filesBytes":0,"olderVersionsBytes":0,"trashBytes":0},"counts":{"files":0,"olderVersions":0,"trashedAssets":0}}
+mysql> SELECT limitBytes, usedBytes, reservedBytes, activeUploads FROM organization_storage WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
+{"limitBytes":10485760,"usedBytes":0,"reservedBytes":0,"activeUploads":0}
+mysql> SELECT SUM(sizeBytes), COUNT(*) FROM stored_objects WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046' AND countsTowardQuota=1
+{"bytes":0,"count":0}
+S3 (MinIO, independent client) orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/: 0 objects, 0 bytes
+
+==== J2 declares 5 MB, sends 1 MB → saved with the real size, the rest of the reservation released ====
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"size":1048576,"declaredSize":5242880}
+< HTTP 201 (45 ms, 1049098 body bytes sent)
+< {"success":true,"data":{"id":"e364afde-8371-47cf-ac2e-d36d30e27643","organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","environment":"LIVE","programId":null,"name":"e2e-ast-1791100374195-Q j-small","description":null,"assetType":"DOCUMENT","sourceType":"FILE","contentType":"text/plain; charset=utf-8","fileName":"j-small.txt","originalFileName":"j-small.txt","fileExtension":"txt","mimeType":"text/plain; charset=utf-8","fileSize":1048576,"storageProvider":"s3","textContent":null,"htmlContent":null,"externalUrl":null,"width":null,"height":null,"duration":null,"language":null,"country":null,"tags":[],"metadata":{"folderPath":"General"},"status":"PUBLISHED","isPublicToAffiliates":true,"isDownloadable":true,"isCopyable":true,"version":1,"checksum":"8503313563017f01d25fdee96e5367eeb95b9c99d802ceece0667b3a8308606b","createdBy":"436de58a-082e-4b68-94b7-24e33d46358e","updatedBy":"436de58a-082e-4b68-94b7-24e33d46358e","createdAt":"2026-10-04T09:36:22.463Z","updatedAt":"2026-10-04T09:36:22.463Z","deletedAt":null,"folder":"General","hasFile":true,"legacyFileMissing":false,"inline":false,"usage":{"views":0,"previews":0,"downloads":0,"copies":0,"uniqueAffiliates":0},"associatedBundleCount":0}}
+
+==== J2 after: API / DB / S3 ====
+> GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage/usage
+< HTTP 200 (9 ms)
+< {"limitBytes":10485760,"usedBytes":1048576,"reservedBytes":0,"availableBytes":9437184,"percentUsed":10,"overLimit":false,"activeUploads":0,"breakdown":{"filesBytes":1048576,"olderVersionsBytes":0,"trashBytes":0},"counts":{"files":1,"olderVersions":0,"trashedAssets":0}}
+mysql> SELECT limitBytes, usedBytes, reservedBytes, activeUploads FROM organization_storage WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
+{"limitBytes":10485760,"usedBytes":1048576,"reservedBytes":0,"activeUploads":0}
+mysql> SELECT SUM(sizeBytes), COUNT(*) FROM stored_objects WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046' AND countsTowardQuota=1
+{"bytes":1048576,"count":1}
+S3 (MinIO, independent client) orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/: 1 objects, 1048576 bytes
+mysql> SELECT bytes, status FROM storage_reservations ORDER BY createdAt DESC LIMIT 1
+[{"bytes":1049098,"status":"COMMITTED"}]
+
+==== J3 declared larger than the per-file limit (200 MB) → 413 before the body is read ====
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"size":314572800}
+< HTTP 413 (6 ms, 4063707 body bytes sent)
+< {"success":false,"statusCode":413,"code":"STORAGE_FILE_TOO_LARGE","message":"Files can be at most 209715200 bytes; this one is 314572800 bytes.","details":{"limitBytes":209715200},"error":{"code":"STORAGE_FILE_TOO_LARGE","message":"Files can be at most 209715200 bytes; this one is 314572800 bytes.","requestId":"req_7f9b77c7bc66cf46005e3293"},"correlationId":"req_7f9b77c7bc66cf46005e3293","timestamp":"2026-10-04T09:36:22.501Z","path":"/api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload"}
+
+==== J3b a tiny file with an exaggerated X-File-Size is accepted at its real size (reservation = min(header, Content-Length)) ====
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"size":1000,"declaredSize":314572800}
+< HTTP 201 (30 ms, 1534 body bytes sent)
+< {"success":true,"data":{"id":"4ad9a0ad-b479-4d13-93e2-6692363128a0","organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","environment":"LIVE","programId":null,"name":"e2e-ast-1791100374195-Q j-exaggerated","description":null,"assetType":"DOCUMENT","sourceType":"FILE","contentType":"text/plain; charset=utf-8","fileName":"j-exaggerated.txt","originalFileName":"j-exaggerated.txt","fileExtension":"txt","mimeType":"text/plain; charset=utf-8","fileSize":1000,"storageProvider":"s3","textContent":null,"htmlContent":null,"externalUrl":null,"width":null,"height":null,"duration":null,"language":null,"country":null,"tags":[],"metadata":{"folderPath":"General"},"status":"PUBLISHED","isPublicToAffiliates":true,"isDownloadable":true,"isCopyable":true,"version":1,"checksum":"7db032a03eec3f6cc526c4530e5ea214b54356a7f143fca8e70fbd21ac71c304","createdBy":"436de58a-082e-4b68-94b7-24e33d46358e","updatedBy":"436de58a-082e-4b68-94b7-24e33d46358e","createdAt":"2026-10-04T09:36:22.524Z","updatedAt":"2026-10-04T09:36:22.524Z","deletedAt":null,"folder":"General","hasFile":true,"legacyFileMissing":false,"inline":false,"usage":{"views":0,"previews":0,"downloads":0,"copies":0,"uniqueAffiliates":0},"associatedBundleCount":0}}
+
+==== J4 nonsense sizes ====
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"x-file-size":"-5"}
+< HTTP 400 (4 ms, 618 body bytes sent)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"X-File-Size must be the file size in bytes.","error":{"code":"VALIDATION_ERROR","message":"X-File-Size must be the file size in bytes.","requestId":"req_e60ff0e69753abf2bf036f45"},"correlationId":"req_e60ff0e69753abf2bf036f45","timestamp":"2026-10-04T09:36:22.541Z","path":"/api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload"}
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"x-file-size":"abc"}
+< HTTP 400 (5 ms, 618 body bytes sent)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"X-File-Size must be the file size in bytes.","error":{"code":"VALIDATION_ERROR","message":"X-File-Size must be the file size in bytes.","requestId":"req_008c00852b8c50b54876d8bc"},"correlationId":"req_008c00852b8c50b54876d8bc","timestamp":"2026-10-04T09:36:22.547Z","path":"/api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload"}
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"x-file-size":"1e3"}
+< HTTP 400 (5 ms, 618 body bytes sent)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"X-File-Size must be the file size in bytes.","error":{"code":"VALIDATION_ERROR","message":"X-File-Size must be the file size in bytes.","requestId":"req_d8df2d86c2f147a540031003"},"correlationId":"req_d8df2d86c2f147a540031003","timestamp":"2026-10-04T09:36:22.553Z","path":"/api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload"}
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"x-file-size":"0x10"}
+< HTTP 400 (5 ms, 618 body bytes sent)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"X-File-Size must be the file size in bytes.","error":{"code":"VALIDATION_ERROR","message":"X-File-Size must be the file size in bytes.","requestId":"req_6f43b682f6d62a1d2dfaf3e3"},"correlationId":"req_6f43b682f6d62a1d2dfaf3e3","timestamp":"2026-10-04T09:36:22.559Z","path":"/api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload"}
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"x-file-size":"9007199254740993"}
+< HTTP 201 (34 ms, 618 body bytes sent)
+< {"success":true,"data":{"id":"274c8c4e-7671-45c7-8d8d-21df42f50c02","organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","environment":"LIVE","programId":null,"name":"e2e-ast-1791100374195-Q j-bad","description":null,"assetType":"DOCUMENT","sourceType":"FILE","contentType":"text/plain; charset=utf-8","fileName":"j-bad.txt","originalFileName":"j-bad.txt","fileExtension":"txt","mimeType":"text/plain; charset=utf-8","fileSize":100,"storageProvider":"s3","textContent":null,"htmlContent":null,"externalUrl":null,"width":null,"height":null,"duration":null,"language":null,"country":null,"tags":[],"metadata":{"folderPath":"General"},"status":"PUBLISHED","isPublicToAffiliates":true,"isDownloadable":true,"isCopyable":true,"version":1,"checksum":"b2c97df2fa96c9f577cd3b8f0e14dccfe0c8036d50ddd7bda44b51810e93517a","createdBy":"436de58a-082e-4b68-94b7-24e33d46358e","updatedBy":"436de58a-082e-4b68-94b7-24e33d46358e","createdAt":"2026-10-04T09:36:22.582Z","updatedAt":"2026-10-04T09:36:22.582Z","deletedAt":null,"folder":"General","hasFile":true,"legacyFileMissing":false,"inline":false,"usage":{"views":0,"previews":0,"downloads":0,"copies":0,"uniqueAffiliates":0},"associatedBundleCount":0}}

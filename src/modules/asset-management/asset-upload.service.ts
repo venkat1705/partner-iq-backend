@@ -19,7 +19,7 @@ import { randomUUID } from 'crypto';
 import type { Request, Response } from 'express';
 import type { Readable } from 'stream';
 import { AssetSourceType, AssetStatus } from '../../common/enums';
-import { StorageService, StorageTooLargeError, StoredObjectInfo, extensionOf } from '../../common/storage';
+import { ALLOWED_FILE_TYPES, StorageService, StorageTooLargeError, StoredObjectInfo, extensionOf } from '../../common/storage';
 import { dbStore } from '../../database/store';
 import { Asset, AssetVersion, StoredObject } from '../../database/schema';
 import { StorageQuotaService } from '../storage-quota/storage-quota.service';
@@ -78,7 +78,7 @@ export class AssetUploadService {
   private sizeToReserve(req: Request): number {
     const declaredRaw = req.headers['x-file-size'];
     const lengthRaw = req.headers['content-length'];
-    const parse = (v: unknown) => (typeof v === 'string' && /^\d{1,16}$/.test(v.trim()) ? Number(v.trim()) : undefined);
+    const parse = (v: unknown) => (typeof v === 'string' && /^\d{1,16}$/.test(v.trim()) && Number.isSafeInteger(Number(v.trim())) ? Number(v.trim()) : undefined);
     const declared = parse(declaredRaw);
     const length = parse(lengthRaw);
     if (declaredRaw !== undefined && declared === undefined) throw new BadRequestException('X-File-Size must be the file size in bytes.');
@@ -186,6 +186,18 @@ export class AssetUploadService {
     const ext = extensionOf(originalName);
     if (!ext || !this.storage.settings.allowedExtensions.includes(ext)) {
       throw new HttpException({ statusCode: 415, code: 'STORAGE_FILE_TYPE_REJECTED', message: `.${ext || '?'} files are not allowed. Allowed: ${this.storage.settings.allowedExtensions.map((e) => '.' + e).join(', ')}.` }, 415);
+    }
+
+    // a new version keeps the file type of the current one (the UI promises it; a .png banner must not silently become
+    // a PDF inside bundles and affiliate pages). A different type is a new asset. (decision A28)
+    if (mode.kind === 'version' && target?.fileExtension) {
+      const family = Object.values(ALLOWED_FILE_TYPES).find((t) => t.extensions.includes(String(target.fileExtension).toLowerCase()));
+      if (family && !family.extensions.includes(ext)) {
+        throw new HttpException(
+          { statusCode: 415, code: 'VERSION_FILE_TYPE_MISMATCH', message: `A new version must be a .${family.extensions[0]} file like the current one (got .${ext}). Upload a different file type as a new asset.` },
+          415,
+        );
+      }
     }
 
     // validate metadata before reserving anything
