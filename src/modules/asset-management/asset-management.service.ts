@@ -322,23 +322,26 @@ export class AssetManagementService {
   }
 
   async bulkAction(organizationId: string, actorId: string, dto: BulkAssetActionDto) {
+    // all or nothing: an id that is not a live asset of this organization refuses the whole request (before, such ids
+    // were skipped and the request still reported success)
+    const ids = [...new Set(dto.assetIds)];
+    const { assets } = await repos();
+    const found = await assets.find({ where: { id: In(ids), organizationId, deletedAt: IsNull() }, select: { id: true } });
+    const missing = ids.filter((id) => !found.some((a) => a.id === id));
+    if (missing.length) {
+      throw new NotFoundException({ statusCode: 404, code: 'ASSET_NOT_FOUND', message: `${missing.length} of the selected assets were not found in this organization (or are in the trash). Nothing was changed.`, details: { missingIds: missing } });
+    }
+    if (dto.action === 'MOVE' && !dto.folderPath) throw new BadRequestException('folderPath is required for MOVE');
+    if (dto.action === 'TAG' && !dto.tags?.length) throw new BadRequestException('tags are required for TAG');
     const affected: string[] = [];
-    for (const assetId of [...new Set(dto.assetIds)]) {
-      try {
-        if (dto.action === 'ARCHIVE') await this.trashAsset(organizationId, assetId, actorId);
-        else if (dto.action === 'MOVE') {
-          if (!dto.folderPath) throw new BadRequestException('folderPath is required for MOVE');
-          await this.updateAsset(organizationId, assetId, actorId, { folderPath: dto.folderPath });
-        } else if (dto.action === 'TAG') {
-          if (!dto.tags?.length) throw new BadRequestException('tags are required for TAG');
-          const asset = await this.findAsset(organizationId, assetId);
-          await this.updateAsset(organizationId, assetId, actorId, { tags: [...(asset.tags || []), ...dto.tags] });
-        }
-        affected.push(assetId);
-      } catch (err) {
-        if (err instanceof NotFoundException) continue;
-        throw err;
+    for (const assetId of ids) {
+      if (dto.action === 'ARCHIVE') await this.trashAsset(organizationId, assetId, actorId);
+      else if (dto.action === 'MOVE') await this.updateAsset(organizationId, assetId, actorId, { folderPath: dto.folderPath });
+      else if (dto.action === 'TAG') {
+        const asset = await this.findAsset(organizationId, assetId);
+        await this.updateAsset(organizationId, assetId, actorId, { tags: [...new Set([...(asset.tags || []), ...dto.tags!])] });
       }
+      affected.push(assetId);
     }
     return { success: true, count: affected.length, affected };
   }
