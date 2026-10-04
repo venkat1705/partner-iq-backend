@@ -1,6 +1,7 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { IsIn, IsOptional, IsUUID } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
+import { Type } from 'class-transformer';
 import type { Response } from 'express';
 import { pipeline } from 'stream';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -11,6 +12,22 @@ class PortalOrgQueryDto {
   @IsOptional()
   @IsUUID()
   organizationId?: string;
+}
+
+class PortalAssetListQueryDto extends PortalOrgQueryDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  /** default and maximum 500 (most recently updated first) */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(500)
+  limit?: number;
 }
 
 class PortalDownloadQueryDto {
@@ -43,8 +60,8 @@ export class AffiliateAssetsController {
 
   @Get('assets')
   @ApiOperation({ summary: 'Marketing files this affiliate may use (published, shared, in their programs, not tier-locked)' })
-  listAssets(@Req() req: any, @Query() query: PortalOrgQueryDto) {
-    return this.service.listAssets(portalUser(req), query.organizationId);
+  listAssets(@Req() req: any, @Query() query: PortalAssetListQueryDto) {
+    return this.service.listAssets(portalUser(req), query.organizationId, { page: query.page, limit: query.limit });
   }
 
   @Get('assets/:assetId/download')

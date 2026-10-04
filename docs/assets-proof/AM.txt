@@ -1,0 +1,30 @@
+# Scenario AM — raw proof, run=1791108939120 (started 2026-10-04T10:15:40.488Z)
+
+==== AM1 seed (direct SQL, batches of 1000) ====
+mysql> counts in Org B after seeding (2.1 s)
+{"a":20003,"b":1003,"i":5000}
+
+==== AM2 admin API timings (each call measured end to end, warm) ====
+first page                       HTTP 200    136 ms      51 KB  total=20003
+page 400                         HTTP 200    134 ms      51 KB  total=20003
+search "summer"                  HTTP 200    215 ms      51 KB  total=2858
+search that matches nothing      HTTP 200    118 ms       0 KB  total=0
+sort by name                     HTTP 200     48 ms      51 KB  total=20003
+filter type + status + folder    HTTP 200     45 ms      51 KB  total=666
+tag filter                       HTTP 200    138 ms      51 KB  total=400
+folders                          HTTP 200     79 ms       2 KB  items=25
+bundles list (1k)                HTTP 200     54 ms     734 KB  items=1003
+storage usage                    HTTP 200      9 ms       1 KB  
+analytics                        HTTP 200     41 ms       0 KB  
+usage intelligence               HTTP 200    220 ms      17 KB  
+storage analytics                HTTP 200    130 ms      14 KB  
+
+==== AM3 portal (affiliate B1): assets and bundles ====
+portal assets                    HTTP 200    277 ms     289 KB  items=500
+portal bundles                   HTTP 200    202 ms    1372 KB  items=500
+
+==== AM4 admin page with 20k assets ====
+admin page ready in 1122 ms; "Showing 48 of 20003 assets Prev Page 1 of 417 Next"
+after "Next": Page 2 of 417
+all calls within budget
+seeded AM rows deleted again

@@ -130,22 +130,47 @@ export class AffiliateAssetsService {
     };
   }
 
-  async listAssets(user: PortalUser, organizationId?: string) {
-    const out = [];
+  /** assetId → bundles that contain it (one pass over the items instead of a scan per asset). */
+  private bundlesByAsset(list: AssetBundle[], items: Array<{ assetBundleId: string; assetId: string }>) {
+    const byId = new Map(list.map((b) => [b.id, b]));
+    const out = new Map<string, AssetBundle[]>();
+    for (const i of items) {
+      const b = byId.get(i.assetBundleId);
+      if (!b) continue;
+      const arr = out.get(i.assetId);
+      if (arr) arr.push(b);
+      else out.set(i.assetId, [b]);
+    }
+    return out;
+  }
+
+  /**
+   * Files this affiliate may use, most recently updated first, one page at a time (default and maximum 500).
+   * Access is checked for every candidate (cheap: indexed bundles); thumbnails are signed and texts personalised only
+   * for the returned page — before, a 20,000-asset organization blocked the event loop for minutes (scenario AM).
+   */
+  async listAssets(user: PortalUser, organizationId?: string, opts: { page?: number; limit?: number } = {}) {
+    const limit = Math.min(Math.max(1, opts.limit ?? 500), 500);
+    const page = Math.max(1, opts.page ?? 1);
+    const allowed: Array<{ asset: Asset; ctx: AffiliateAccessContext }> = [];
     for (const affiliate of await this.affiliatesFor(user, organizationId)) {
       const ctx = this.context(affiliate);
       if (!ctx.active) continue;
       const { assets } = await repos();
-      const rows = await assets.find({ where: { organizationId: affiliate.organizationId, status: AssetStatus.PUBLISHED, deletedAt: IsNull() }, order: { updatedAt: 'DESC' } });
+      const qb = assets.createQueryBuilder('a')
+        .where('a.organizationId = :org AND a.status = :st AND a.deletedAt IS NULL', { org: affiliate.organizationId, st: AssetStatus.PUBLISHED })
+        .andWhere(ctx.programIds.length ? '(a.programId IS NULL OR a.programId IN (:...p))' : 'a.programId IS NULL', { p: ctx.programIds });
+      const rows = await qb.getMany();
       const { list, items } = await this.bundlesOf(affiliate.organizationId);
-      const allowed = rows.filter((asset) => {
-        const containing = list.filter((b) => items.some((i) => i.assetBundleId === b.id && i.assetId === asset.id));
-        return assetAccess(asset, ctx, containing, { forDownload: false }).allowed;
-      });
-      const thumbs = await this.thumbnails(allowed.map((a) => a.id));
-      for (const asset of allowed) out.push(this.personalize(asset, ctx, thumbs.get(asset.id)));
+      const byAsset = this.bundlesByAsset(list, items);
+      for (const asset of rows) {
+        if (assetAccess(asset, ctx, byAsset.get(asset.id) || [], { forDownload: false }).allowed) allowed.push({ asset, ctx });
+      }
     }
-    return out;
+    allowed.sort((x, y) => new Date(y.asset.updatedAt).getTime() - new Date(x.asset.updatedAt).getTime());
+    const slice = allowed.slice((page - 1) * limit, page * limit);
+    const thumbs = await this.thumbnails(slice.map((x) => x.asset.id));
+    return { data: slice.map((x) => this.personalize(x.asset, x.ctx, thumbs.get(x.asset.id))), meta: { total: allowed.length, page, limit } };
   }
 
   private bundleSummary(bundle: AssetBundle) {
@@ -164,26 +189,38 @@ export class AffiliateAssetsService {
       const { assets } = await repos();
       const assetIds = [...new Set(items.map((i) => i.assetId))];
       const assetRows = assetIds.length ? await assets.find({ where: { id: In(assetIds), organizationId: affiliate.organizationId } }) : [];
-      const thumbs = await this.thumbnails(assetRows.filter((a) => !a.deletedAt).map((a) => a.id));
+      const itemsByBundle = new Map<string, typeof items>();
+      for (const i of items) {
+        const arr = itemsByBundle.get(i.assetBundleId);
+        if (arr) arr.push(i);
+        else itemsByBundle.set(i.assetBundleId, [i]);
+      }
+      const assetById = new Map(assetRows.map((a) => [a.id, a]));
+      // decide visibility first; thumbnails are signed only for files of bundles this affiliate can open
+      const open: Array<{ bundle: AssetBundle; visible: Array<{ item: (typeof items)[number]; asset: Asset }> }> = [];
       for (const bundle of list.sort((a, b) => Number(b.featured) - Number(a.featured) || a.displayOrder - b.displayOrder)) {
         const access = bundleAccess(bundle, ctx);
         if (!access.visible) continue;
-        const bundleItems = items.filter((i) => i.assetBundleId === bundle.id);
+        const bundleItems = itemsByBundle.get(bundle.id) || [];
         if (access.locked) {
           // locked: show that it exists and how to unlock it — never its files
           out.push({ ...this.bundleSummary(bundle), locked: true, lockReason: access.reason, requiredTier: access.requiredTier, assetCount: bundleItems.length, items: [] });
           continue;
         }
         const visible = bundleItems
-          .map((i) => ({ item: i, asset: assetRows.find((a) => a.id === i.assetId) }))
+          .map((i) => ({ item: i, asset: assetById.get(i.assetId)! }))
           .filter((x) => x.asset && !x.asset.deletedAt && x.asset.status === AssetStatus.PUBLISHED && (!x.asset.programId || ctx.programIds.includes(x.asset.programId)));
-        out.push({
-          ...this.bundleSummary(bundle),
-          locked: false,
-          assetCount: visible.length,
-          totalBytes: visible.reduce((s, x) => s + Number(x.asset!.fileSize || 0), 0),
-          items: visible.map((x) => ({ id: x.item.id, displayOrder: x.item.displayOrder, customTitle: x.item.customTitle, customDescription: x.item.customDescription, asset: this.personalize(x.asset!, ctx, thumbs.get(x.asset!.id)) })),
-        });
+        const entry = { ...this.bundleSummary(bundle), locked: false, assetCount: visible.length, totalBytes: visible.reduce((s, x) => s + Number(x.asset.fileSize || 0), 0), items: [] as unknown[] };
+        out.push(entry);
+        open.push({ bundle, visible });
+        (entry as any).__open = open.length - 1;
+      }
+      const thumbs = await this.thumbnails([...new Set(open.flatMap((o) => o.visible.map((x) => x.asset.id)))]);
+      for (const entry of out as any[]) {
+        if (entry.__open === undefined) continue;
+        const o = open[entry.__open];
+        entry.items = o.visible.map((x) => ({ id: x.item.id, displayOrder: x.item.displayOrder, customTitle: x.item.customTitle, customDescription: x.item.customDescription, asset: this.personalize(x.asset, ctx, thumbs.get(x.asset.id)) }));
+        delete entry.__open;
       }
     }
     return out;

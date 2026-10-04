@@ -1,0 +1,25 @@
+# Scenario AM — raw proof, run=1791108535972 (started 2026-10-04T10:08:57.386Z)
+
+==== AM1 seed (direct SQL, batches of 1000) ====
+mysql> counts in Org B after seeding (2.0 s)
+{"a":20003,"b":1003,"i":5000}
+
+==== AM2 admin API timings (each call measured end to end, warm) ====
+first page                       HTTP 200    137 ms      52 KB  total=20003
+page 400                         HTTP 200    161 ms      52 KB  total=20003
+search "summer"                  HTTP 200    250 ms      52 KB  total=2858
+search that matches nothing      HTTP 200    134 ms       0 KB  total=0
+sort by name                     HTTP 200    159 ms      52 KB  total=20003
+filter type + status + folder    HTTP 200     50 ms      51 KB  total=666
+tag filter                       HTTP 200     82 ms       0 KB  total=0
+folders                          HTTP 200    119 ms       2 KB  items=25
+bundles list (1k)                HTTP 200   4732 ms    7691 KB  items=1003
+storage usage                    HTTP 200      8 ms       1 KB  
+analytics                        HTTP 200     51 ms       0 KB  
+usage intelligence               HTTP 200    230 ms      17 KB  
+storage analytics                HTTP 200    173 ms      14 KB  
+
+==== AM3 portal (affiliate B1): assets and bundles ====
+portal assets                    HTTP 0 120003 ms       0 KB  items=0
+
+(backend health while the portal request ran: curl localhost:5000/api/docs-json --max-time 5 -> timeout (exit 28): the event loop was blocked)
