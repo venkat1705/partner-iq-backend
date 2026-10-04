@@ -1,0 +1,20 @@
+# Scenario AG3 — raw proof, run=1791108262167 (started 2026-10-04T10:04:47.262Z)
+> PATCH /affiliate/me/profile
+> body: {"avatarUrl":"https://evil.example.com/track.gif"}
+< HTTP 400 (6 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"avatarUrl must be an image uploaded with POST /affiliate/me/avatar (or null to remove it).","error":{"code":"VALIDATION_ERROR","message":"avatarUrl must be an image uploaded with POST /affiliate/me/avatar (or null to remove it).","requestId":"req_63999f85af09ece98245e566"},"correlationId":"req_63999f85af09ece98245e566","timestamp":"2026-10-04T10:04:47.631Z","path":"/api/v1/affiliate/me/profile"}
+> PATCH /affiliate/me/profile
+> body: {"avatarUrl":"javascript:alert(1)"}
+< HTTP 400 (7 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"avatarUrl must be an image uploaded with POST /affiliate/me/avatar (or null to remove it).","error":{"code":"VALIDATION_ERROR","message":"avatarUrl must be an image uploaded with POST /affiliate/me/avatar (or null to remove it).","requestId":"req_bd3092216c62217783d078d8"},"correlationId":"req_bd3092216c62217783d078d8","timestamp":"2026-10-04T10:04:47.639Z","path":"/api/v1/affiliate/me/profile"}
+> PATCH /affiliate/me/profile
+> body: {"avatarUrl":"http://localhost:5000/api/v1/media/550b9aee-d4da-4dee-b47e-14e401d4c099"}
+< HTTP 400 (7 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"avatarUrl must be an image uploaded with POST /affiliate/me/avatar (or null to remove it).","error":{"code":"VALIDATION_ERROR","message":"avatarUrl must be an image uploaded with POST /affiliate/me/avatar (or null to remove it).","requestId":"req_6da6ae0016fc35870c7ebfcd"},"correlationId":"req_6da6ae0016fc35870c7ebfcd","timestamp":"2026-10-04T10:04:47.647Z","path":"/api/v1/affiliate/me/profile"}
+mysql> SELECT avatarUrl FROM users WHERE id='442b8736-2f7f-4548-b35f-05e8cb0e5a52'
+{"avatarUrl":null}
+
+==== AG3b the multipart avatar upload stores the image and sets the URL; removing it with null works ====
+> POST /affiliate/me/avatar multipart {"fileName":"me.png"}
+< HTTP 201 (20 ms, 12645 body bytes sent)
+< {"success":true,"data":{"avatarUrl":"http://localhost:5000/api/v1/media/4f60bf9f-9d55-4ff1-a25b-272caf9d1b3e"}}

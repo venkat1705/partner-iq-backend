@@ -315,3 +315,29 @@ test('AL. audit log: every change has actor, action, target and before/after; sh
   const leak = await api('GET', orgPath(A, '/asset-activity'), { token: await tok('ORG_B_OWNER') });
   expect([403, 404]).toContain(leak.status);
 });
+
+test('AG3. avatars: only files stored by the storage service; a client-supplied URL is refused', async () => {
+  const proof = new Proof('AG3');
+  const t = await tok('AFFILIATE_3');
+  // start from no avatar (a run before the fix stored the evil URL on this test user)
+  expect((await api('PATCH', '/affiliate/me/profile', { token: t, body: { avatarUrl: null } })).status).toBe(200);
+  for (const avatarUrl of ['https://evil.example.com/track.gif', 'javascript:alert(1)', `http://localhost:5000/api/v1/media/${crypto.randomUUID()}`]) {
+    const r = await api('PATCH', '/affiliate/me/profile', { token: t, body: { avatarUrl } });
+    proof.http('PATCH', '/affiliate/me/profile', { ...r, body: r.status < 300 ? { avatarUrl: r.data?.avatarUrl ?? r.data?.user?.avatarUrl } : r.body }, { avatarUrl });
+    expect(r.status, avatarUrl).toBe(400);
+  }
+  const row = await sqlOne<any>(`SELECT avatarUrl FROM users WHERE id=?`, [f.users.AFFILIATE_3.userId]);
+  proof.sql(`SELECT avatarUrl FROM users WHERE id='${f.users.AFFILIATE_3.userId}'`, row);
+  expect(row.avatarUrl ?? null).toBeNull();
+  proof.h('AG3b the multipart avatar upload stores the image and sets the URL; removing it with null works');
+  const up = await upload('/affiliate/me/avatar', { token: t, fileName: 'me.png', content: await makePng(64, 64, 4) });
+  proofUpload(proof, 'AG3b', '/affiliate/me/avatar', up, { fileName: 'me.png' });
+  expect(up.status).toBe(201);
+  expect(up.data.avatarUrl).toMatch(/\/api\/v1\/media\/[0-9a-f-]{36}$/);
+  const media = await fetch(up.data.avatarUrl.replace(/^https?:\/\/[^/]+/, 'http://localhost:5000'), { redirect: 'manual' });
+  expect(media.status).toBe(302);
+  const keep = await api('PATCH', '/affiliate/me/profile', { token: t, body: { avatarUrl: up.data.avatarUrl } });
+  expect(keep.status).toBe(200);
+  const clear = await api('PATCH', '/affiliate/me/profile', { token: t, body: { avatarUrl: null } });
+  expect(clear.status).toBe(200);
+});

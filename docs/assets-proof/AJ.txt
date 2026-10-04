@@ -1,21 +1,21 @@
-# Scenario AJ — raw proof, run=1791107377663 (started 2026-10-04T09:50:01.335Z)
+# Scenario AJ — raw proof, run=1791108262167 (started 2026-10-04T10:04:46.241Z)
 
 ==== AJ1 affiliate 1 clicks download 5 times at once and twice more; affiliate 2 once ====
 burst statuses: 200,200,200,200,200
-mysql> SELECT affiliateId, idempotencyKey FROM affiliate_asset_activities WHERE assetId='593a56c3-1277-4b84-af81-6d7e98ffaa2e' AND activityType='DOWNLOAD'
-[{"affiliateId":"67dafacb-3c37-49ce-aa6a-6613433ab376","idempotencyKey":"dl:67dafacb-3c37-49ce-aa6a-6613433ab376:593a56c3-1277-4b84-af81-6d7e98ffaa2e:29851790"},{"affiliateId":"a8c8ad67-29b8-4d86-99ae-a27664dc3ebd","idempotencyKey":"dl:a8c8ad67-29b8-4d86-99ae-a27664dc3ebd:593a56c3-1277-4b84-af81-6d7e98ffaa2e:29851790"}]
-analytics totals.downloads 17 -> 19; rule: One DOWNLOAD is counted per affiliate, file and minute: repeated download-link requests for the same file within the same minute count once.
+mysql> SELECT affiliateId, idempotencyKey FROM affiliate_asset_activities WHERE assetId='2a1134fb-1ccc-4f0b-9236-6563ef829a3c' AND activityType='DOWNLOAD'
+[{"affiliateId":"a8c8ad67-29b8-4d86-99ae-a27664dc3ebd","idempotencyKey":"dl:a8c8ad67-29b8-4d86-99ae-a27664dc3ebd:2a1134fb-1ccc-4f0b-9236-6563ef829a3c:29851804"},{"affiliateId":"67dafacb-3c37-49ce-aa6a-6613433ab376","idempotencyKey":"dl:67dafacb-3c37-49ce-aa6a-6613433ab376:2a1134fb-1ccc-4f0b-9236-6563ef829a3c:29851804"}]
+analytics totals.downloads 19 -> 21; rule: One DOWNLOAD is counted per affiliate, file and minute: repeated download-link requests for the same file within the same minute count once.
 
 ==== AJ2 copy activity with the same idempotency key twice counts once ====
-> POST /affiliate/me/assets/593a56c3-1277-4b84-af81-6d7e98ffaa2e/activity
-> body: {"activityType":"COPY","idempotencyKey":"55954faa-b2d7-4875-a5d7-d9907414bd91"}
-< HTTP 200 (11 ms)
+> POST /affiliate/me/assets/2a1134fb-1ccc-4f0b-9236-6563ef829a3c/activity
+> body: {"activityType":"COPY","idempotencyKey":"4d1588e0-306e-4da3-b9ef-185b6c688e0e"}
+< HTTP 200 (14 ms)
 < {"success":true,"data":{"success":true}}
-> POST /affiliate/me/assets/593a56c3-1277-4b84-af81-6d7e98ffaa2e/activity
-> body: {"activityType":"COPY","idempotencyKey":"55954faa-b2d7-4875-a5d7-d9907414bd91"}
-< HTTP 200 (9 ms)
+> POST /affiliate/me/assets/2a1134fb-1ccc-4f0b-9236-6563ef829a3c/activity
+> body: {"activityType":"COPY","idempotencyKey":"4d1588e0-306e-4da3-b9ef-185b6c688e0e"}
+< HTTP 200 (11 ms)
 < {"success":true,"data":{"success":true,"deduped":true}}
-> POST (forged DOWNLOAD activity) /affiliate/me/assets/593a56c3-1277-4b84-af81-6d7e98ffaa2e/activity
+> POST (forged DOWNLOAD activity) /affiliate/me/assets/2a1134fb-1ccc-4f0b-9236-6563ef829a3c/activity
 > body: {"activityType":"DOWNLOAD"}
 < HTTP 400 (4 ms)
-< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"activityType must be one of the following values: VIEW, PREVIEW, COPY, LINK_COPY, COUPON_COPY","error":{"code":"VALIDATION_ERROR","message":"activityType must be one of the following values: VIEW, PREVIEW, COPY, LINK_COPY, COUPON_COPY","requestId":"req_4e1be8106bd5f06b1134d2b2"},"correlationId":"req_4e1be8106bd5f06b1134d2b2","timestamp":"2026-10-04T09:50:02.200Z","path":"/api/v1/affiliate/me/assets/593a56c3-1277-4b84-af81-6d7e98ffaa2e/activity"}
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"activityType must be one of the following values: VIEW, PREVIEW, COPY, LINK_COPY, COUPON_COPY","error":{"code":"VALIDATION_ERROR","message":"activityType must be one of the following values: VIEW, PREVIEW, COPY, LINK_COPY, COUPON_COPY","requestId":"req_e79070cc9da0feef18c718ec"},"correlationId":"req_e79070cc9da0feef18c718ec","timestamp":"2026-10-04T10:04:47.150Z","path":"/api/v1/affiliate/me/assets/2a1134fb-1ccc-4f0b-9236-6563ef829a3c/activity"}

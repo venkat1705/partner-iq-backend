@@ -36,6 +36,7 @@ import {
 import { AuthService } from '../auth/auth.service';
 import { AuditService } from '../audit/audit.service';
 import { initializeDataSource } from '../../database/data-source';
+import { StoredObject } from '../../database/schema-storage';
 import {
   User,
   UserIdentity,
@@ -457,7 +458,17 @@ export class AffiliatePortalController {
         nameChanged = true;
       }
       if (body.avatarUrl !== undefined) {
-        user.avatarUrl = body.avatarUrl;
+        // only an image this user uploaded through POST /affiliate/me/avatar (stored by StorageService), or null / ''
+        // to remove it — never an arbitrary client-supplied URL
+        if (body.avatarUrl === null || body.avatarUrl === '') {
+          user.avatarUrl = null as any;
+        } else {
+          const mediaId = typeof body.avatarUrl === 'string' ? body.avatarUrl.match(/\/api\/v1\/media\/([0-9a-f-]{36})$/i)?.[1] : undefined;
+          const ds = await initializeDataSource();
+          const own = mediaId ? await ds.getRepository(StoredObject).findOne({ where: { id: mediaId, ownerUserId: user.id, kind: 'AVATAR' } }) : null;
+          if (!own) throw new BadRequestException('avatarUrl must be an image uploaded with POST /affiliate/me/avatar (or null to remove it).');
+          user.avatarUrl = body.avatarUrl;
+        }
       }
       if (body.password) {
         if (body.password.length < 8) {

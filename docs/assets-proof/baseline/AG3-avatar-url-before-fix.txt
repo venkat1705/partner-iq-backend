@@ -1,0 +1,5 @@
+# Scenario AG3 — raw proof, run=1791108206024 (started 2026-10-04T10:03:27.425Z)
+> PATCH /affiliate/me/profile
+> body: {"avatarUrl":"https://evil.example.com/track.gif"}
+< HTTP 200 (19 ms)
+< {"avatarUrl":"https://evil.example.com/track.gif"}
