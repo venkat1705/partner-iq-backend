@@ -1,0 +1,20 @@
+# Scenario AD — raw proof, run=1791107160104 (started 2026-10-04T09:46:11.608Z)
+affiliate link: host=127.0.0.1:9000 path=/partneriq-assets-test/orgs/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/1686ce8b-b532-4be8-af2c-5f22cacf2dbe/v1/904becc4b8358707daa6543d X-Amz-Expires=300 expiresAt=2026-10-04T09:51:11.647Z
+
+==== AD1 the link cannot be pointed at another object (signature covers the path) ====
+Org B has no stored file to aim at (skipped sub-check)
+
+==== AD2 other organizations / unknown ids → 404, no link ====
+> GET (as AFFILIATE_B1) /affiliate/me/assets/1686ce8b-b532-4be8-af2c-5f22cacf2dbe/download
+< HTTP 404 (5 ms)
+< {"success":false,"statusCode":404,"code":"Not Found","message":"ASSET_NOT_FOUND","error":{"code":"Not Found","message":"ASSET_NOT_FOUND","requestId":"req_5bc3e367214a1a58732b31db"},"correlationId":"req_5bc3e367214a1a58732b31db","timestamp":"2026-10-04T09:46:11.657Z","path":"/api/v1/affiliate/me/assets/1686ce8b-b532-4be8-af2c-5f22cacf2dbe/download"}
+
+==== AD3 expiry: backend restarted with STORAGE_DOWNLOAD_URL_TTL_SECONDS=2 ====
+backend up (pid 26033)
+fresh link -> HTTP 200; same link after 3.5 s -> HTTP 403 AccessDenied
+backend up (pid 26080)
+
+==== AD4 link is refused once the file is trashed (no new link; the old one expires) ====
+> GET (trashed file) /affiliate/me/assets/1686ce8b-b532-4be8-af2c-5f22cacf2dbe/download
+< HTTP 404 (48 ms)
+< {"success":false,"statusCode":404,"code":"Not Found","message":"ASSET_NOT_FOUND","error":{"code":"Not Found","message":"ASSET_NOT_FOUND","requestId":"req_fbbf6bedf1d8e9db3a6e7ecf"},"correlationId":"req_fbbf6bedf1d8e9db3a6e7ecf","timestamp":"2026-10-04T09:46:25.635Z","path":"/api/v1/affiliate/me/assets/1686ce8b-b532-4be8-af2c-5f22cacf2dbe/download"}
