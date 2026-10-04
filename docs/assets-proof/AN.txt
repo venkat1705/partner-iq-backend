@@ -1,0 +1,26 @@
+# Scenario AN — raw proof, run=1791108400837 (started 2026-10-04T10:07:23.470Z)
+CHECK PASS admin "overview" tab does not claim "Managed CDN": actual=false expected=false
+CHECK PASS admin "overview" tab does not claim "Enterprise Plan": actual=false expected=false
+CHECK PASS admin "overview" tab does not claim "50 GB": actual=false expected=false
+CHECK FAIL admin "overview" tab does not claim "Intelligent Library": actual=true expected=false
+CHECK PASS admin "storage" tab does not claim "Managed CDN": actual=false expected=false
+CHECK PASS admin "storage" tab does not claim "Enterprise Plan": actual=false expected=false
+CHECK PASS admin "storage" tab does not claim "50 GB": actual=false expected=false
+CHECK FAIL admin "storage" tab does not claim "Intelligent Library": actual=true expected=false
+
+==== AN2 VIEWER: no Assets entry in the navigation (the backend gives VIEWER no asset permission) ====
+VIEWER navigation: OVERVIEW Dashboard PARTNER MANAGEMENT Programs Affiliates Deals ATTRIBUTION & CONVERSIONS Conversions Commissions PARTNER GROWTH Gamification & Tiers New Coupons RISK & INTELLIGENCE Fraud Detection AI Shield Analytics FINANCE Payouts Billing & Plans
+
+==== AN3 portal: real download, locked bundle text, real ZIP; no fake "brand kit" toast, no "Copy Asset URL" ====
+> PATCH (test affiliate profile) /affiliate/me/profile
+< HTTP 200 (11 ms)
+< {"status":200}
+avatar upload (multipart → storage): HTTP 201
+> PATCH (test affiliate profile) /affiliate/me/tax-profile
+< HTTP 200 (11 ms)
+< {"status":200}
+CHECK PASS portal has no "Download Brand Kit (.ZIP)" button: actual=false expected=false
+CHECK PASS portal has no "Copy Asset URL": actual=false expected=false
+portal download started: suggested file name "ai.png"
+portal ZIP download: "e2e-ast-1791100374195-bmutmx84d-aa-all-org.zip"
+locked bundle texts (AFFILIATE_2 at Bronze): ["Unlocks at e2e-ast-1791100374195 SILVER · 1 file(s)","Unlocks at e2e-ast-1791100374195 SILVER · 1 file(s)","Unlocks at e2e-ast-1791100374195 SILVER · 1 file(s)","Unlocks at e2e-ast-1791100374195 SILVER · 1 file(s)","Unlocks at e2e-ast-1791100374195 SILVER · 1 file(s)"]

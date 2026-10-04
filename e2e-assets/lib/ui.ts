@@ -25,18 +25,18 @@ export async function adminLogin(page: Page, role: string) {
 const roles = new WeakMap<Page, string>();
 
 /**
- * Known bug outside coupons (decision D22, proof docs/coupons-proof/auth-reload-race.txt): every full page load
+ * Known bug outside coupons (decision D22, proof docs/assets-proof/auth-reload-race.txt (same race as the coupons audit, decision D22 there)): every full page load
  * sends two concurrent POST /auth/refresh (auth-context + admin-context); the backend treats the loser as token
  * reuse and revokes the session, so ~15 % of loads land on the login form. When that happens the event is
  * logged to that proof file and the test signs in again once — coupon assertions are unchanged.
  */
-async function recoverFromAuthRace(page: Page, where: string, reload: () => Promise<unknown>) {
+export async function recoverFromAuthRace(page: Page, where: string, reload: () => Promise<unknown>) {
   const onLogin = page.url().includes('/login') || (await page.locator('input[name=password]').count()) > 0;
   if (!onLogin) return;
   const role = roles.get(page);
   if (!role) throw new Error(`landed on the login form at ${where} and no role is known to sign in again`);
   fs.appendFileSync(
-    path.resolve(__dirname, '..', '..', 'docs', 'coupons-proof', 'auth-reload-race.txt'),
+    path.resolve(__dirname, '..', '..', 'docs', 'assets-proof', 'auth-reload-race.txt'),
     `${new Date().toISOString()} logged out by the refresh race during ${where} (${role}); signed in again\n`,
   );
   await adminLogin(page, role);

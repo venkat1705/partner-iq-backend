@@ -1,0 +1,32 @@
+# Scenario G-ui — raw proof, run=1791108400837 (started 2026-10-04T10:06:42.317Z)
+UI: "3.5 MB of 10 MB used" | DB usedBytes=3670016 limitBytes=10485760 → expected "3.5 MB of 10 MB used"
+page ready in 1242 ms; organization API requests:
+2× GET /api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046
+2× GET /api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/programs
+2× GET /api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/affiliates
+2× GET /api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/tracking-links
+6× GET /api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/members
+2× GET /api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/audit-logs
+2× GET /api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/fraud/reviews
+2× GET /api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/conversions
+2× GET /api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/payouts/items
+2× GET /api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/payouts
+2× GET /api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/api-keys
+3× GET /api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/billing/subscription
+2× GET /api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/coupons/settings
+2× GET /api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/integrations/hubspot
+1× GET /api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/billing/trial
+1× GET /api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage/usage
+1× GET /api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets
+1× GET /api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/folders
+1× GET /api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/asset-analytics/storage
+1× GET /api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/asset-analytics/usage-intelligence
+1× GET /api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/asset-activity
+1× GET /api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/asset-analytics
+console errors: ["Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID","Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID","Failed to load resource: the server responded with a status of 401 (Unauthorized)"]
+asset requests: 1× storage/usage, 1× aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets, 1× assets/folders, 1× asset-analytics/storage, 1× asset-analytics/usage-intelligence, 1× aef2cbcd-2473-47f3-ae0b-9fb7546ec046/asset-activity, 1× aef2cbcd-2473-47f3-ae0b-9fb7546ec046/asset-analytics
+
+==== refresh: same numbers ====
+
+==== the 3 GB default is displayed as "3 GB" ====
+UI with the default limit: "3.5 MB of 3 GB used"

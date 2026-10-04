@@ -1,0 +1,18 @@
+# Scenario O-ui — raw proof, run=1791108400837 (started 2026-10-04T10:06:49.882Z)
+at 81.95%: 8.2 MB of 10 MB used
+95 % warning: Storage almost full (96.8%). Only 324 KB left. New uploads will be refused once it is full — empty the trash (0 B) or delete older versions (0 B).
+
+==== pre-check in the upload dialog: a file larger than what is left is refused before uploading ====
+pre-check message: Not enough storage space
+This file needs 1 MB; 324 KB is left of your 10 MB limit.
+Free space by emptying the trash or deleting older versions, then try again.
+
+==== server 413 (usage changed after the page loaded): the message shows needed / left / how to free space ====
+413 shown in the dialog: Not enough storage space
+This file needs 200 KB; 100 KB is left of your 10 MB limit.
+Free space by emptying the trash or deleting older versions, then try again.
+
+==== full: upload button disabled, storage-full banner, nothing deleted ====
+full state: Storage full — uploads are paused.
+Your organization uses 10 MB of its 10 MB limit. Existing files stay available: you can still view, download and delete them. To upload again, free space: empty the trash (0 B), delete older versions (0 B) or delete files you no longer need. Nothing is ever deleted automatically.
+Open trash

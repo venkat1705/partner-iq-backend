@@ -1,0 +1,12 @@
+# Scenario Z-ui — raw proof, run=1791108400837 (started 2026-10-04T10:07:13.416Z)
+
+==== Z-ui create a bundle and add the file ====
+mysql> bundle in the database
+{"name":"e2e-ast-1791100374195-UI UI bundle","visibility":"PRIVATE","n":1}
+
+==== L-ui move to trash from the library, see it in Trash (still counted), restore ====
+trash header: 7.2 KB | storage bar trash: 7.2 KB
+
+==== delete forever with confirmation frees the space ====
+mysql> after delete forever
+{"limitBytes":104857600,"usedBytes":0,"reservedBytes":0,"activeUploads":0}

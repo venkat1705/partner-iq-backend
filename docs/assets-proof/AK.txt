@@ -1,15 +1,20 @@
-# Scenario AK — raw proof, run=1791108009585 (started 2026-10-04T10:00:18.609Z)
+# Scenario AK — raw proof, run=1791108400837 (started 2026-10-04T10:06:56.772Z)
 
 ==== AK1 empty state ====
 
 ==== T-ui upload a PNG through the dialog ====
 mysql> newest asset
-{"id":"de4625ee-bb9c-4a41-80cb-66d43757b125","fileSize":180578,"fileName":"ui-banner.png"}
+{"id":"d4f36bc7-33d3-4d32-83fc-cef463258f1b","fileSize":180578,"fileName":"ui-banner.png"}
 
 ==== AK2 cancel a slow upload: CDP throttles the upload to 1 MB/s, cancel after the progress bar appears ====
 mysql> during the upload
 {"limitBytes":104857600,"usedBytes":180578,"reservedBytes":20971520,"activeUploads":1}
 mysql> after cancel
-{"limitBytes":104857600,"usedBytes":21152098,"reservedBytes":0,"activeUploads":0}
+{"limitBytes":104857600,"usedBytes":180578,"reservedBytes":0,"activeUploads":0}
 mysql> open reservations
 []
+
+==== AK3 Escape closes the dialog; reopening starts clean ====
+
+==== AK4 a failing list request shows an error with "Try again" (no silent empty list) ====
+error state: Simulated failure Try again
