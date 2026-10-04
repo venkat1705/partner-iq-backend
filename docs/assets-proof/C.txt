@@ -1,0 +1,21 @@
+# Scenario C — raw proof, run=1791104006081 (started 2026-10-04T08:53:43.518Z)
+
+==== C1 bucket settings reported by StorageService.describeBucketSettings() ====
+> GET /admin/storage/bucket-settings
+< HTTP 200 (100 ms)
+< {"success":true,"data":{"bucket":"partneriq-assets-test","publicAccessBlock":"NotImplemented: A header you provided implies functionality that is not implemented","bucketPolicy":"NoSuchBucketPolicy: The bucket policy does not exist","encryption":{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]},"lifecycle":"NoSuchLifecycleConfiguration: The lifecycle configuration does not exist","versioning":"Never enabled","anonymousReadProbe":{"status":403,"body":"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Error><Code>AccessDenied</Code><Message>Access Denied.</Message><BucketName>partneriq-assets-test</BucketName><Resource>/partneriq-assets-test/</Resource><Reque"}}}
+> POST /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/upload multipart {"fileName":"c-security.txt","size":2048}
+< HTTP 201 (72 ms, 2569 body bytes sent)
+< {"success":true,"data":{"id":"8a166636-a095-4192-aee0-eaec09d538cd","organizationId":"46967d5b-48bc-400f-98a6-2c702e4106f6","environment":"LIVE","programId":null,"name":"e2e-ast-1791100374195-C doc","description":null,"assetType":"DOCUMENT","sourceType":"FILE","contentType":"text/plain; charset=utf-8","fileName":"c-security.txt","originalFileName":"c-security.txt","fileExtension":"txt","mimeType":"text/plain; charset=utf-8","fileSize":2048,"storageProvider":"s3","textContent":null,"htmlContent":null,"externalUrl":null,"width":null,"height":null,"duration":null,"language":null,"country":null,"tags":[],"metadata":{"folderPath":"General"},"status":"PUBLISHED","isPublicToAffiliates":true,"isDownloadable":true,"isCopyable":true,"version":1,"checksum":"fb101ff3459a00d146b53be177cacdb72e7dc1c3545660116a239bf54f0b253d","createdBy":"94f6e85e-6488-450c-924a-320504a705e5","updatedBy":"94f6e85e-6488-450c-924a-320504a705e5","createdAt":"2026-10-04T08:53:44.451Z","updatedAt":"2026-10-04T08:53:44.451Z","deletedAt":null,"folder":"General","hasFile":true,"legacyFileMissing":false,"inline":false,"usage":{"views":0,"previews":0,"downloads":0,"copies":0,"uniqueAffiliates":0},"associatedBundleCount":0}}
+mysql> SELECT storageKey FROM assets WHERE id='8a166636-a095-4192-aee0-eaec09d538cd'
+{"storageKey":"orgs/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/8a166636-a095-4192-aee0-eaec09d538cd/v1/373bf8c1a4ded69fb5dff858"}
+anonymous GET http://127.0.0.1:9000/partneriq-assets-test/orgs/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/8a166636-a095-4192-aee0-eaec09d538cd/v1/373bf8c1a4ded69fb5dff858 -> HTTP 403 <?xml version="1.0" encoding="UTF-8"?>
+<Error><Code>AccessDenied</Code><Message>Access Denied.</Message><Key>orgs/46967d5b-48bc-400f-98a6-2c702e4106f6/assets/8a166636-a095-4192-aee0-eaec09d538cd/v1/37
+anonymous LIST bucket -> HTTP 403
+HeadObject (independent client): {"size":2048,"contentType":"text/plain; charset=utf-8","sse":"AES256"}
+signed URL params: X-Amz-Expires=300 response-content-disposition=attachment; filename="c-security.txt"; filename*=UTF-8''c-security.txt
+signed URL with changed disposition -> HTTP 403
+publicAccessBlock: "NotImplemented: A header you provided implies functionality that is not implemented" (MinIO has no PublicAccessBlock API — decision A5; anonymous access proven denied above)
+log check: no signed URL or secret in the backend log
+CHECK PASS backend log contains no X-Amz-Signature: actual=false expected=false
+CHECK PASS backend log contains no secret access key: actual=false expected=false

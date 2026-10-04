@@ -1,0 +1,20 @@
+# Scenario E — raw proof, run=1791103799693 (started 2026-10-04T08:50:20.174Z)
+
+==== E1 client connection killed after 20 MB of a 60 MB upload ====
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"size":62914560,"killAfterBytes":20971520}
+< HTTP 0 (371 ms, 20971520 body bytes sent, client error: connection killed by test)
+< undefined
+mysql> SELECT * FROM organization_storage WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
+{"limitBytes":3221225472,"usedBytes":0,"reservedBytes":0,"activeUploads":0}
+mysql> SELECT * FROM storage_reservations WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046' AND status='RESERVED'
+[]
+mysql> SELECT status, releaseReason, bytes FROM storage_reservations ORDER BY createdAt DESC LIMIT 1
+[{"status":"RELEASED","releaseReason":"STORAGE_UPLOAD_ABORTED","bytes":62914560}]
+incomplete multipart uploads under orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/: (none)
+
+==== E2 storage (MinIO) stopped during an upload ====
+$ scripts/minio.sh stop -> stopped
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"size":41943040,"throttleMs":15}
+< HTTP 400 (6118 ms, 25952711 body bytes sent)
+< {"success":false,"statusCode":400,"code":"STORAGE_UPLOAD_ABORTED","message":"The upload was interrupted before the file was complete. Nothing was saved.","error":{"code":"STORAGE_UPLOAD_ABORTED","message":"The upload was interrupted before the file was complete. Nothing was saved.","requestId":"req_9d7c5c74361c0bd078a221db"},"correlationId":"req_9d7c5c74361c0bd078a221db","timestamp":"2026-10-04T08:50:29.782Z","path":"/api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload"}
+$ scripts/minio.sh start -> started

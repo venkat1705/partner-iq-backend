@@ -1,0 +1,45 @@
+# Scenario B — raw proof, run=1791104006081 (started 2026-10-04T08:53:39.766Z)
+[missing bucket] env patch {} -> StorageConfigError: Invalid storage configuration — the backend cannot start:
+  - STORAGE_BUCKET is required (name of the private bucket that holds every uploaded file)
+See .env.example (STORAGE_* variables) and docs/storage-setup.md. (exit 3)
+[invalid bucket name] env patch {"STORAGE_BUCKET":"B"} -> StorageConfigError: Invalid storage configuration — the backend cannot start:
+  - STORAGE_BUCKET "B" is not a valid S3 bucket name (3–63 lowercase letters, digits, dots or hyphens)
+See .env.example (STORAGE_* variables) and docs/storage-setup.md. (exit 3)
+[bad region] env patch {"STORAGE_REGION":"mars"} -> StorageConfigError: Invalid storage configuration — the backend cannot start:
+  - STORAGE_REGION "mars" is not a valid region name (expected e.g. ap-south-1)
+See .env.example (STORAGE_* variables) and docs/storage-setup.md. (exit 3)
+[unknown provider] env patch {"STORAGE_PROVIDER":"ftp"} -> StorageConfigError: Invalid storage configuration — the backend cannot start:
+  - STORAGE_PROVIDER must be "s3" (got "ftp")
+See .env.example (STORAGE_* variables) and docs/storage-setup.md. (exit 3)
+[no credentials and no IAM role] env patch {} -> StorageConfigError: Invalid storage configuration — the backend cannot start:
+  - storage credentials are missing: set STORAGE_ACCESS_KEY_ID and STORAGE_SECRET_ACCESS_KEY, or STORAGE_USE_IAM_ROLE=true to use the instance/task role
+See .env.example (STORAGE_* variables) and docs/storage-setup.md. (exit 3)
+[only one of the two keys] env patch {} -> StorageConfigError: Invalid storage configuration — the backend cannot start:
+  - STORAGE_SECRET_ACCESS_KEY is missing (STORAGE_ACCESS_KEY_ID is set)
+See .env.example (STORAGE_* variables) and docs/storage-setup.md. (exit 3)
+[KMS without key id] env patch {"STORAGE_ENCRYPTION":"aws:kms"} -> StorageConfigError: Invalid storage configuration — the backend cannot start:
+  - STORAGE_KMS_KEY_ID is required when STORAGE_ENCRYPTION=aws:kms
+See .env.example (STORAGE_* variables) and docs/storage-setup.md. (exit 3)
+[limit not a number] env patch {"STORAGE_DEFAULT_ORG_LIMIT_BYTES":"3GB"} -> StorageConfigError: Invalid storage configuration — the backend cannot start:
+  - STORAGE_DEFAULT_ORG_LIMIT_BYTES must be a whole number (got "3GB")
+See .env.example (STORAGE_* variables) and docs/storage-setup.md. (exit 3)
+[negative max file size] env patch {"STORAGE_MAX_FILE_BYTES":"-1"} -> StorageConfigError: Invalid storage configuration — the backend cannot start:
+  - STORAGE_MAX_FILE_BYTES must be a whole number (got "-1")
+See .env.example (STORAGE_* variables) and docs/storage-setup.md. (exit 3)
+[unknown file type] env patch {"STORAGE_ALLOWED_FILE_TYPES":"png,exe"} -> StorageConfigError: Invalid storage configuration — the backend cannot start:
+  - STORAGE_ALLOWED_FILE_TYPES contains unsupported types: exe (supported: jpeg, png, gif, webp, mp4, mov, webm, pdf, doc, ppt, docx, pptx, txt, csv)
+See .env.example (STORAGE_* variables) and docs/storage-setup.md. (exit 3)
+[endpoint not a URL] env patch {"STORAGE_ENDPOINT":"minio:9000"} -> StorageConfigError: Invalid storage configuration — the backend cannot start:
+  - STORAGE_ENDPOINT "minio:9000" is not a valid http(s) URL
+See .env.example (STORAGE_* variables) and docs/storage-setup.md. (exit 3)
+[valid] env patch {} -> OK bucket=test-bucket limit=3221225472 (exit 0)
+
+==== B2 the whole application refuses to start without a bucket (port 5099) ====
+$ PORT=5099 STORAGE_BUCKET= node dist/src/main.js
+exit=1 signal=null
+[31m[Nest] 21506  - [39m10/04/2026, 8:53:43 AM [31m  ERROR[39m [38;5;3m[ExceptionHandler] [39mStorageConfigError: Invalid storage configuration — the backend cannot start:
+  - STORAGE_BUCKET is required (name of the private bucket that holds every uploaded file)
+See .env.example (STORAGE_* variables) and docs/storage-setup.md.
+    at loadStorageConfig [90m(/home/user/partner-iq-backend/[39mdist/src/common/storage/storage.config.js:144:15[90m)[39m
+    at createStorageService [90m(/home/user/partner-iq-backend/[39mdist/src/common/storage/storage.module.js:22:59[90m)[39m
+CHECK PASS no secret value printed: actual=false expected=false

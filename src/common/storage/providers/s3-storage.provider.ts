@@ -247,11 +247,23 @@ export class S3StorageProvider extends StorageService {
       this.log('upload', input, input.key, 'ok', { bytes: info.sizeBytes, type: fileType, ms: Date.now() - started });
       return info;
     } catch (err: any) {
-      const mapped = this.mapError(failure || err);
+      // Which error explains the failure: the client really went away (request closed early) → aborted; one of our
+      // own checks (size, type, timeout) → that; otherwise the storage call's error. A stream error caused by the
+      // storage side tearing down the upload must not be reported as the client's fault.
+      // lib-storage aborts its other part requests when one fails (storage down), which surfaces as AbortError even
+      // though the client is still sending — only input.signal says the client left.
+      const fromStorage = this.mapError(err && err !== failure ? err : failure || err);
+      const mapped = input.signal?.aborted
+        ? new StorageUploadAbortedError()
+        : failure instanceof StorageError
+          ? failure
+          : fromStorage instanceof StorageUploadAbortedError
+            ? new StorageUnavailableError()
+            : fromStorage;
       if (upload) await upload.abort().catch(() => undefined);
       // a single-part upload may already have completed — never leave an object behind
       await this.client.send(new DeleteObjectCommand({ Bucket: this.config.bucket, Key: input.key })).catch(() => undefined);
-      this.log('upload', input, input.key, 'failed', { code: mapped.code, bytes: inspector.bytes, ms: Date.now() - started });
+      this.log('upload', input, input.key, 'failed', { code: mapped.code, cause: `${err?.name || ''}/${err?.code || err?.cause?.code || ''}`, first: `${failure?.name || ''}/${(failure as any)?.code || ''}`, clientGone: Boolean(input.signal?.aborted), bytes: inspector.bytes, ms: Date.now() - started });
       throw mapped;
     } finally {
       clearTimeout(timer);

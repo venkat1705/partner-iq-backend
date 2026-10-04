@@ -1,0 +1,45 @@
+# Scenario A — raw proof, run=1791104006081 (started 2026-10-04T08:53:26.976Z)
+
+==== A1 architecture lint (ESLint no-restricted-imports / properties / syntax) ====
+$ npm run lint:architecture
+exit=0
+(no findings)
+
+==== A2 architecture unit test ====
+$ npx jest storage-architecture
+exit=0
+◇ injected env (20) from .env.test // tip: ◈ secrets for agents [www.dotenvx.com]
+[2m[22m
+[2m      [2mat _log ([22m[2mnode_modules/dotenv/lib/main.js[2m:131:11)[22m[2m[22m
+
+  [2mconsole.log[22m
+    ◇ injected env (20) from .env.test // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+[2m[22m
+[2m      [2mat _log ([22m[2mnode_modules/dotenv/lib/main.js[2m:131:11)[22m[2m[22m
+
+[1mTest Suites: [22m[1m[32m1 passed[39m[22m, 1 total
+[1mTests:       [22m[1m[32m5 passed[39m[22m, 5 total
+[1mSnapshots:   [22m0 total
+[1mTime:[22m        4.197 s
+[2mRan all test suites[22m[2m matching [22mstorage-architecture[2m.[22m
+[1mForce exiting Jest: [22mHave you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?
+
+==== A3 grep: AWS SDK imports in backend src (outside src/common/storage) ====
+(none)
+
+==== A4 grep: fs write calls in backend src (outside src/common/storage) ====
+src/modules/email-design/providers/development-email.provider.ts:23:        fs.mkdirSync(scratchDir, { recursive: true });
+src/modules/email-design/providers/development-email.provider.ts:26:      fs.writeFileSync(filePath, input.htmlContent, 'utf8');
+
+==== A5 grep: S3 / Cloudinary / multer in the two frontends and the backend ====
+frontend:
+(none)
+portal:
+(none)
+backend multer:
+(none)
+backend cloudinary:
+(none)
+CHECK PASS lint:architecture exit 0: actual=0 expected=0
+CHECK PASS architecture unit test exit 0: actual=0 expected=0
+CHECK PASS no fs writes outside storage (dev email provider exempt): actual=[] expected=[]

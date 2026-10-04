@@ -1,0 +1,38 @@
+# Scenario E — raw proof, run=1791104006081 (started 2026-10-04T08:53:46.457Z)
+
+==== E1 client connection killed after 20 MB of a 60 MB upload ====
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"size":62914560,"killAfterBytes":20971520}
+< HTTP 0 (373 ms, 20971520 body bytes sent, client error: connection killed by test)
+< undefined
+mysql> SELECT * FROM organization_storage WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
+{"limitBytes":3221225472,"usedBytes":0,"reservedBytes":0,"activeUploads":0}
+mysql> SELECT * FROM storage_reservations WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046' AND status='RESERVED'
+[]
+mysql> SELECT status, releaseReason, bytes FROM storage_reservations ORDER BY createdAt DESC LIMIT 1
+[{"status":"RELEASED","releaseReason":"STORAGE_UPLOAD_ABORTED","bytes":62914560}]
+incomplete multipart uploads under orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/: (none)
+
+==== E2 storage (MinIO) stopped during an upload ====
+$ scripts/minio.sh stop -> stopped
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"size":41943040,"throttleMs":15}
+< HTTP 503 (6248 ms, 26214855 body bytes sent)
+< {"success":false,"statusCode":503,"code":"STORAGE_UNAVAILABLE","message":"File storage is not reachable. Nothing was saved; please retry.","error":{"code":"STORAGE_UNAVAILABLE","message":"File storage is not reachable. Nothing was saved; please retry.","requestId":"req_aa8c212de2b5b656cb47e104"},"correlationId":"req_aa8c212de2b5b656cb47e104","timestamp":"2026-10-04T08:53:56.165Z","path":"/api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload"}
+$ scripts/minio.sh start -> started
+mysql> SELECT * FROM organization_storage WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
+{"limitBytes":3221225472,"usedBytes":0,"reservedBytes":0,"activeUploads":0}
+> POST /admin/storage/jobs/cleanup-reservations/run
+< HTTP 200 (15 ms)
+< {"success":true,"data":{"expiredReservations":0,"released":0,"orphanObjectsDeleted":0,"abortedMultipart":0,"deletionQueue":{"deleted":0,"failed":0}}}
+incomplete multipart uploads after the cleanup job: (none)
+
+==== E3 database write blocked (assets table locked by another session) when the upload commits ====
+mysql(session 2)> LOCK TABLES assets WRITE
+mysql(session 2)> UNLOCK TABLES
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"size":3145728}
+< HTTP 503 (5073 ms, 3146228 body bytes sent)
+< {"success":false,"statusCode":503,"code":"Service Unavailable","message":"The change could not be saved because the database is busy or unavailable. Nothing was changed; please retry.","error":{"code":"Service Unavailable","message":"The change could not be saved because the database is busy or unavailable. Nothing was changed; please retry.","requestId":"req_3729f5bf59b4e675204ed9bc"},"correlationId":"req_3729f5bf59b4e675204ed9bc","timestamp":"2026-10-04T08:54:03.779Z","path":"/api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload"}
+mysql> SELECT * FROM organization_storage WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
+{"limitBytes":3221225472,"usedBytes":0,"reservedBytes":0,"activeUploads":0}
+mysql> SELECT COUNT(*) FROM assets WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
+{"before":0,"after":0}
+S3 objects under orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/: []
