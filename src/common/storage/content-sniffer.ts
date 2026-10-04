@@ -129,7 +129,10 @@ export function sniffFileType(head: Buffer, fileName: string, allowed: FileTypeI
   } else if (binary === 'ole') {
     detected = ['doc', 'ppt'].includes(claimed) ? claimed : 'doc';
   } else if (binary === 'zip') {
-    detected = ['docx', 'pptx'].includes(claimed) ? claimed : null;
+    // Office Open XML packages start with the [Content_Types].xml part (ECMA-376 part 2); any other ZIP renamed to
+    // .docx/.pptx (e.g. an archive carrying an executable) is refused
+    const ooxml = head.subarray(0, Math.min(head.length, 1024)).includes(Buffer.from('[Content_Types].xml'));
+    detected = ['docx', 'pptx'].includes(claimed) && ooxml ? claimed : null;
     if (!detected) return { ok: false, reason: `The file content is a ZIP archive, not a .${ext} file.` };
   } else if (binary) {
     detected = binary;

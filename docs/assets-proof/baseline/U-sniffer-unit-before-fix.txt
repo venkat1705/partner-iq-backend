@@ -1,0 +1,25 @@
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+    -   "ok": false,
+    +   "ok": true,
+      }
+
+      17 |
+      18 |   it('refuses any other ZIP renamed to .docx / .pptx (e.g. an archive carrying an .exe)', () => {
+    > 19 |     expect(sniffFileType(zipWith('payload.exe'), 'report.docx', ALL, true)).toMatchObject({ ok: false });
+         |                                                                             ^
+      20 |     expect(sniffFileType(zipWith('a.txt'), 'deck.pptx', ALL, true)).toMatchObject({ ok: false });
+      21 |   });
+      22 | });
+
+      at Object.<anonymous> (test/unit/content-sniffer.spec.ts:19:77)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 3 passed, 4 total
+Snapshots:   0 total
+Time:        4.481 s
+Ran all test suites matching content-sniffer.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?
