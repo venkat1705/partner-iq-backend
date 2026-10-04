@@ -1,9 +1,9 @@
-# Scenario S — raw proof, run=1791106935902 (started 2026-10-04T09:42:17.130Z)
+# Scenario S — raw proof, run=1791110473528 (started 2026-10-04T10:42:19.376Z)
 > GET /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets?limit=48&page=1
-< HTTP 200 (20 ms)
-< {"count":48,"meta":{"page":1,"limit":48,"total":64,"sortBy":"updatedAt","sortDir":"desc"}}
+< HTTP 200 (54 ms)
+< {"count":48,"meta":{"page":1,"limit":48,"total":404,"sortBy":"updatedAt","sortDir":"desc"}}
 fields of one row: assetType, associatedBundleCount, checksum, contentType, country, createdAt, createdBy, deletedAt, description, duration, environment, externalUrl, fileExtension, fileName, fileSize, folder, hasFile, height, htmlContent, id, inline, isCopyable, isDownloadable, isPublicToAffiliates, language, legacyFileMissing, metadata, mimeType, name, organizationId, originalFileName, programId, sourceType, status, storageProvider, tags, textContent, updatedAt, updatedBy, usage, version, width
 > GET /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets?limit=1000
-< HTTP 400 (9 ms)
-< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"limit must not be greater than 100","error":{"code":"VALIDATION_ERROR","message":"limit must not be greater than 100","requestId":"req_2e56156c8b4c45a57cd7fc4b"},"correlationId":"req_2e56156c8b4c45a57cd7fc4b","timestamp":"2026-10-04T09:42:17.575Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets?limit=1000"}
+< HTTP 400 (5 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"limit must not be greater than 100","error":{"code":"VALIDATION_ERROR","message":"limit must not be greater than 100","requestId":"req_951b6d4d57cd75f3b42c2692"},"correlationId":"req_951b6d4d57cd75f3b42c2692","timestamp":"2026-10-04T10:42:19.441Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/assets?limit=1000"}
 UI page load (requests, duplicates, timings) is measured in 07-ui.spec.ts; 20k rows in AM.

@@ -1,7 +1,7 @@
-# Scenario AC — raw proof, run=1791107160104 (started 2026-10-04T09:46:07.880Z)
+# Scenario AC — raw proof, run=1791110473528 (started 2026-10-04T10:42:29.005Z)
 
 ==== AC1 admin ZIP ====
-GET …/asset-bundles/70a175ec-a89c-49de-8be8-43d4995621bc/zip (admin) -> {"status":200,"bytes":18181,"type":"application/zip","disposition":"attachment; filename=\"e2e-ast-1791100374195-bmutmyile-ac-kit.zip\""}
+GET …/asset-bundles/64b3baca-bed8-496f-8064-a1be7cd97edc/zip (admin) -> {"status":200,"bytes":18181,"type":"application/zip","disposition":"attachment; filename=\"e2e-ast-1791100374195-bmutoyzkh-ac-kit.zip\""}
 $ unzip -t admin.zip
 Archive:  /home/user/partner-iq-backend/e2e-assets/test-results/zips/admin.zip
     testing: same.txt                 OK
@@ -16,12 +16,12 @@ pic.png
 draft.txt
 
 ==== AC2 affiliate ZIP: only files the affiliate may download (no draft) ====
-affiliate ZIP -> {"status":200,"bytes":16071,"type":"application/zip","disposition":"attachment; filename=\"e2e-ast-1791100374195-bmutmyile-ac-kit.zip\""}; entries: pic.png, same (2).txt, same.txt
+affiliate ZIP -> {"status":200,"bytes":16071,"type":"application/zip","disposition":"attachment; filename=\"e2e-ast-1791100374195-bmutoyzkh-ac-kit.zip\""}; entries: pic.png, same (2).txt, same.txt
 AFFILIATE_3 (not in program A1) -> HTTP 404
 
 ==== AC3 large bundle: 4 × 45 MB, backend memory while streaming ====
-ZIP of 4 × 45 MB: 188744142 bytes in 0.5 s; backend RSS before=410 MB peak=445 MB growth=35 MB
+ZIP of 4 × 45 MB: 188744142 bytes in 0.4 s; backend RSS before=499 MB peak=512 MB growth=13 MB
 $ unzip -t big.zip | tail -1
 No errors detected in compressed data of /home/user/partner-iq-backend/e2e-assets/test-results/zips/big.zip.
 mysql> usedBytes after the ZIPs (ZIPs use no storage)
-{"usedBytes":193008518}
+{"usedBytes":195129752}

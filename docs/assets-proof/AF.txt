@@ -1,4 +1,4 @@
-# Scenario AF — raw proof, run=1791108262167 (started 2026-10-04T10:04:25.187Z)
+# Scenario AF — raw proof, run=1791110473528 (started 2026-10-04T10:42:46.864Z)
 | action | permission | OWNER | ADMIN | MANAGER | VIEWER | NOPERM |
 |---|---|---|---|---|---|---|
 | list assets | assets.view | 200 | 200 | 200 | 403 | 403 |

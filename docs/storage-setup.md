@@ -88,3 +88,21 @@ and `MINIO_API_STALE_UPLOADS_EXPIRY=24h`; the backend uses a separate MinIO user
 | Retries / timeouts | `STORAGE_RETRY_MAX_ATTEMPTS`, `STORAGE_REQUEST_TIMEOUT_MS`, `STORAGE_UPLOAD_TIMEOUT_MS` |
 | Key layout | `storage-keys.ts` (`buildObjectKey` / `parseObjectKey`) |
 | A new provider (e.g. Google Cloud Storage) | add `providers/<name>-storage.provider.ts` implementing `StorageService`, add the provider name to `storage.config.ts`, add one `case` in `createStorageService()` (`storage.module.ts`) |
+
+## Moving files that existed before the storage service
+
+```
+npm run build
+npm run storage:migrate-legacy                         # dry run: lists what would be copied, changes nothing
+npm run storage:migrate-legacy -- --apply              # copy, verify, point rows at the new objects
+npm run storage:migrate-legacy -- --apply --media      # also logos, banners, avatars (Cloudinary URLs)
+#   --org=<organizationId>  limit to one organization;  --limit=<n>  at most n files
+```
+
+- Sources are fetched only from `STORAGE_MIGRATION_ALLOWED_HOSTS` (default `res.cloudinary.com`), https only
+  (`STORAGE_MIGRATION_ALLOW_HTTP=true` for test environments). Anything else is reported as skipped.
+- Every copy is verified (stored size = bytes received = source Content-Length; re-read SHA-256 = upload SHA-256);
+  a failed check deletes the copy and leaves the row unchanged. Original URLs are kept (`stored_objects.migratedFrom`).
+- Asset files count toward the organization's limit and may push it over (uploads are then blocked, nothing is deleted).
+- Run it while the backend is stopped, or restart the backend afterwards (programs/organizations/users are cached in
+  memory). The report ends with totals; exit code 2 when any file failed. Re-running is a no-op for copied rows.

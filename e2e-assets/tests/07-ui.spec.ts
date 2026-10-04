@@ -171,6 +171,13 @@ test('T/K/AK (UI). upload through the dialog, progress, cancel mid-way leaves no
     (ENV as any).ADMIN_UI = 'http://127.0.0.1:3011';
     await adminLogin(sp, ROLE);
     await openAssets(sp, org, 'assets');
+    // over the slow link the trial "Upgrade PartnerIQ" dialog can open after openAssets' check: close it first
+    const pricing = sp.getByText('Pick the organization plan you want to activate');
+    await pricing.waitFor({ timeout: 8000 }).catch(() => undefined);
+    if (await pricing.isVisible().catch(() => false)) {
+      await sp.keyboard.press('Escape');
+      await pricing.waitFor({ state: 'hidden', timeout: 5000 });
+    }
     await sp.getByTestId('open-upload').click();
     await sp.getByTestId('asset-file-input').setInputFiles({ name: 'slow.txt', mimeType: 'text/plain', buffer: makeText(20 * MB, 'slow') });
     await sp.getByTestId('upload-submit').click();

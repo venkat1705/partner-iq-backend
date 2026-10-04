@@ -1,16 +1,16 @@
-# Scenario V — raw proof, run=1791106935902 (started 2026-10-04T09:42:20.193Z)
+# Scenario V — raw proof, run=1791110473528 (started 2026-10-04T10:42:20.843Z)
 
 ==== V1 PNG of 30000 × 30000 pixels (900 M pixels) that compresses to a few hundred KB ====
 bomb size on disk: 109445 bytes
 > POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"size":109445}
-< HTTP 201 (44 ms, 109958 body bytes sent)
-< {"id":"2e91282f-173f-4160-834b-28737cd8ad55","fileSize":109445}
-mysql> SELECT metadata->thumbnailStatus, thumbnailError FROM assets WHERE id='2e91282f-173f-4160-834b-28737cd8ad55'
+< HTTP 201 (36 ms, 109958 body bytes sent)
+< {"id":"495d5cb4-0d66-47c5-819d-31edaf783b06","fileSize":109445}
+mysql> SELECT metadata->thumbnailStatus, thumbnailError FROM assets WHERE id='495d5cb4-0d66-47c5-819d-31edaf783b06'
 {"s":"FAILED_IMAGE_TOO_LARGE","e":null}
-backend RSS before=216 MB after=216 MB
+backend RSS before=437 MB after=437 MB
 
 ==== V2 JPEG with GPS EXIF: the original is stored byte-exact (decision A16), the thumbnail has no EXIF ====
 uploaded JPEG: 3464 bytes, exif=342 bytes (contains GPS: true)
-mysql> SELECT storageKey FROM stored_objects WHERE assetId='4da7154a-088c-433a-869b-86f5246bd82f' AND kind='THUMBNAIL'
-{"storageKey":"orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/thumbnails/4da7154a-088c-433a-869b-86f5246bd82f/320/d913f38945589b11ce6be3be"}
+mysql> SELECT storageKey FROM stored_objects WHERE assetId='5e128708-2e2b-4066-8ea1-582b53fe9edc' AND kind='THUMBNAIL'
+{"storageKey":"orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/thumbnails/5e128708-2e2b-4066-8ea1-582b53fe9edc/320/a81eed4417816244df4e1231"}
 thumbnail: 718 bytes 320x240 exif=none

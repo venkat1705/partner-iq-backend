@@ -1,12 +1,12 @@
-# Scenario N — raw proof, run=1791106660677 (started 2026-10-04T09:37:50.727Z)
+# Scenario N — raw proof, run=1791110473528 (started 2026-10-04T10:42:17.304Z)
 > PATCH /admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit
 > body: {"limitBytes":10485760,"reason":"e2e test limit"}
-< HTTP 200 (11 ms)
+< HTTP 200 (9 ms)
 < {"success":true,"data":{"organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","previousLimitBytes":2097152,"limitBytes":10485760,"usedBytes":0}}
 
 ==== N0: API / DB / S3 ====
 > GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage/usage
-< HTTP 200 (9 ms)
+< HTTP 200 (8 ms)
 < {"limitBytes":10485760,"usedBytes":2097152,"reservedBytes":0,"availableBytes":8388608,"percentUsed":20,"overLimit":false,"activeUploads":0,"breakdown":{"filesBytes":2097152,"olderVersionsBytes":0,"trashBytes":0},"counts":{"files":1,"olderVersions":0,"trashedAssets":0}}
 mysql> SELECT limitBytes, usedBytes, reservedBytes, activeUploads FROM organization_storage WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
 {"limitBytes":10485760,"usedBytes":2097152,"reservedBytes":0,"activeUploads":0}
@@ -15,24 +15,24 @@ mysql> SELECT SUM(sizeBytes), COUNT(*) FROM stored_objects WHERE organizationId=
 S3 (MinIO, independent client) orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/: 1 objects, 2097152 bytes
 > POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/asset-bundles
 > body: {"name":"N one","visibility":"PRIVATE"}
-< HTTP 201 (16 ms)
-< {"success":true,"data":{"id":"88d76a90-587c-4935-8162-f47f456899bd","organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","name":"e2e-ast-1791100374195-Q N one","slug":"e2e-ast-1791100374195-q-n-one","status":"DRAFT","visibility":"PRIVATE","affiliateIds":[],"displayOrder":1000,"featured":false,"createdBy":"436de58a-082e-4b68-94b7-24e33d46358e","updatedBy":"436de58a-082e-4b68-94b7-24e33d46358e","createdAt":"2026-10-04T09:37:50.871Z","updatedAt":"2026-10-04T09:37:50.871Z","items":[],"assetCount":0,"availableAssetCount":0,"totalBytes":0}}
-> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/asset-bundles/88d76a90-587c-4935-8162-f47f456899bd/assets
-< HTTP 201 (24 ms)
+< HTTP 201 (12 ms)
+< {"success":true,"data":{"id":"3306b067-3602-4d38-ac6f-b66f46d4baad","organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","name":"e2e-ast-1791100374195-Q N one","slug":"e2e-ast-1791100374195-q-n-one","status":"DRAFT","visibility":"PRIVATE","affiliateIds":[],"displayOrder":1000,"featured":false,"createdBy":"436de58a-082e-4b68-94b7-24e33d46358e","updatedBy":"436de58a-082e-4b68-94b7-24e33d46358e","createdAt":"2026-10-04T10:42:17.427Z","updatedAt":"2026-10-04T10:42:17.427Z","items":[],"assetCount":0,"availableAssetCount":0,"totalBytes":0}}
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/asset-bundles/3306b067-3602-4d38-ac6f-b66f46d4baad/assets
+< HTTP 201 (21 ms)
 < {"status":201,"assetCount":1}
-GET …/asset-bundles/88d76a90-587c-4935-8162-f47f456899bd/zip -> HTTP 200, 2097280 bytes
+GET …/asset-bundles/3306b067-3602-4d38-ac6f-b66f46d4baad/zip -> HTTP 200, 2097280 bytes
 > POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/asset-bundles
 > body: {"name":"N two","visibility":"PRIVATE"}
-< HTTP 201 (21 ms)
-< {"success":true,"data":{"id":"ffe9198f-b68a-40e1-aee2-5801ea7eb13c","organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","name":"e2e-ast-1791100374195-Q N two","slug":"e2e-ast-1791100374195-q-n-two","status":"DRAFT","visibility":"PRIVATE","affiliateIds":[],"displayOrder":1000,"featured":false,"createdBy":"436de58a-082e-4b68-94b7-24e33d46358e","updatedBy":"436de58a-082e-4b68-94b7-24e33d46358e","createdAt":"2026-10-04T09:37:50.986Z","updatedAt":"2026-10-04T09:37:50.986Z","items":[],"assetCount":0,"availableAssetCount":0,"totalBytes":0}}
-> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/asset-bundles/ffe9198f-b68a-40e1-aee2-5801ea7eb13c/assets
-< HTTP 201 (21 ms)
+< HTTP 201 (13 ms)
+< {"success":true,"data":{"id":"b0447393-26ce-4069-ba78-0c923da6c406","organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","name":"e2e-ast-1791100374195-Q N two","slug":"e2e-ast-1791100374195-q-n-two","status":"DRAFT","visibility":"PRIVATE","affiliateIds":[],"displayOrder":1000,"featured":false,"createdBy":"436de58a-082e-4b68-94b7-24e33d46358e","updatedBy":"436de58a-082e-4b68-94b7-24e33d46358e","createdAt":"2026-10-04T10:42:17.481Z","updatedAt":"2026-10-04T10:42:17.481Z","items":[],"assetCount":0,"availableAssetCount":0,"totalBytes":0}}
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/asset-bundles/b0447393-26ce-4069-ba78-0c923da6c406/assets
+< HTTP 201 (22 ms)
 < {"status":201,"assetCount":1}
-GET …/asset-bundles/ffe9198f-b68a-40e1-aee2-5801ea7eb13c/zip -> HTTP 200, 2097280 bytes
+GET …/asset-bundles/b0447393-26ce-4069-ba78-0c923da6c406/zip -> HTTP 200, 2097280 bytes
 
 ==== N1 after two bundles and two ZIPs: API / DB / S3 ====
 > GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage/usage
-< HTTP 200 (8 ms)
+< HTTP 200 (7 ms)
 < {"limitBytes":10485760,"usedBytes":2097152,"reservedBytes":0,"availableBytes":8388608,"percentUsed":20,"overLimit":false,"activeUploads":0,"breakdown":{"filesBytes":2097152,"olderVersionsBytes":0,"trashBytes":0},"counts":{"files":1,"olderVersions":0,"trashedAssets":0}}
 mysql> SELECT limitBytes, usedBytes, reservedBytes, activeUploads FROM organization_storage WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
 {"limitBytes":10485760,"usedBytes":2097152,"reservedBytes":0,"activeUploads":0}

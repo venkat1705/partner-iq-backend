@@ -1,12 +1,12 @@
-# Scenario G — raw proof, run=1791106660677 (started 2026-10-04T09:37:41.765Z)
+# Scenario G — raw proof, run=1791110753075 (started 2026-10-04T10:45:55.422Z)
 > PATCH /admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit
 > body: {"limitBytes":10485760,"reason":"e2e test limit"}
-< HTTP 200 (20 ms)
-< {"success":true,"data":{"organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","previousLimitBytes":10485760,"limitBytes":10485760,"usedBytes":0}}
+< HTTP 200 (15 ms)
+< {"success":true,"data":{"organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","previousLimitBytes":3221225472,"limitBytes":10485760,"usedBytes":0}}
 
 ==== G1 after two uploads: API / DB / S3 ====
 > GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage/usage
-< HTTP 200 (14 ms)
+< HTTP 200 (11 ms)
 < {"limitBytes":10485760,"usedBytes":3145851,"reservedBytes":0,"availableBytes":7339909,"percentUsed":30,"overLimit":false,"activeUploads":0,"breakdown":{"filesBytes":3145851,"olderVersionsBytes":0,"trashBytes":0},"counts":{"files":2,"olderVersions":0,"trashedAssets":0}}
 mysql> SELECT limitBytes, usedBytes, reservedBytes, activeUploads FROM organization_storage WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
 {"limitBytes":10485760,"usedBytes":3145851,"reservedBytes":0,"activeUploads":0}
@@ -16,7 +16,7 @@ S3 (MinIO, independent client) orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/
 
 ==== G2 default limit for an organization that never had one ====
 > GET /organizations/4fdfcd98-641e-416d-99a9-3abe852856ac/storage/usage
-< HTTP 200 (11 ms)
-< {"limitBytes":3221225472,"usedBytes":0,"reservedBytes":0,"availableBytes":3221225472,"percentUsed":0,"overLimit":false,"activeUploads":0,"breakdown":{"filesBytes":0,"olderVersionsBytes":0,"trashBytes":0},"counts":{"files":0,"olderVersions":0,"trashedAssets":0}}
+< HTTP 200 (15 ms)
+< {"limitBytes":3221225472,"usedBytes":10472,"reservedBytes":0,"availableBytes":3221215000,"percentUsed":0,"overLimit":false,"activeUploads":0,"breakdown":{"filesBytes":10472,"olderVersionsBytes":0,"trashBytes":0},"counts":{"files":8,"olderVersions":0,"trashedAssets":0}}
 mysql> SELECT limitBytes FROM organization_storage WHERE organizationId='4fdfcd98-641e-416d-99a9-3abe852856ac'
 {"limitBytes":3221225472}

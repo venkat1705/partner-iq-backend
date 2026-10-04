@@ -1,4 +1,4 @@
-# Scenario B — raw proof, run=1791104006081 (started 2026-10-04T08:53:39.766Z)
+# Scenario B — raw proof, run=1791110473528 (started 2026-10-04T10:41:29.006Z)
 [missing bucket] env patch {} -> StorageConfigError: Invalid storage configuration — the backend cannot start:
   - STORAGE_BUCKET is required (name of the private bucket that holds every uploaded file)
 See .env.example (STORAGE_* variables) and docs/storage-setup.md. (exit 3)
@@ -37,7 +37,7 @@ See .env.example (STORAGE_* variables) and docs/storage-setup.md. (exit 3)
 ==== B2 the whole application refuses to start without a bucket (port 5099) ====
 $ PORT=5099 STORAGE_BUCKET= node dist/src/main.js
 exit=1 signal=null
-[31m[Nest] 21506  - [39m10/04/2026, 8:53:43 AM [31m  ERROR[39m [38;5;3m[ExceptionHandler] [39mStorageConfigError: Invalid storage configuration — the backend cannot start:
+[31m[Nest] 9456  - [39m10/04/2026, 10:41:33 AM [31m  ERROR[39m [38;5;3m[ExceptionHandler] [39mStorageConfigError: Invalid storage configuration — the backend cannot start:
   - STORAGE_BUCKET is required (name of the private bucket that holds every uploaded file)
 See .env.example (STORAGE_* variables) and docs/storage-setup.md.
     at loadStorageConfig [90m(/home/user/partner-iq-backend/[39mdist/src/common/storage/storage.config.js:144:15[90m)[39m

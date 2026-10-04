@@ -1,79 +1,79 @@
-# Scenario Z — raw proof, run=1791107160104 (started 2026-10-04T09:46:01.290Z)
+# Scenario Z — raw proof, run=1791110473528 (started 2026-10-04T10:42:22.491Z)
 
 ==== Z1 create ====
 > POST /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles
-> body: {"name":"e2e-ast-1791100374195-Bmutmyile Launch kit","description":"everything for launch","programId":"d32f1565-de41-4f53-8e61-3b6e5dccd822","visibility":"ALL_PROGRAM_AFFILIATES"}
-< HTTP 201 (11 ms)
-< {"success":true,"data":{"id":"301300d4-977f-4904-9d88-3580975fa31b","organizationId":"46967d5b-48bc-400f-98a6-2c702e4106f6","programId":"d32f1565-de41-4f53-8e61-3b6e5dccd822","name":"e2e-ast-1791100374195-Bmutmyile Launch kit","slug":"e2e-ast-1791100374195-bmutmyile-launch-kit","description":"everything for launch","status":"DRAFT","visibility":"ALL_PROGRAM_AFFILIATES","affiliateIds":[],"displayOrder":1000,"featured":false,"createdBy":"94f6e85e-6488-450c-924a-320504a705e5","updatedBy":"94f6e85e-6488-450c-924a-320504a705e5","createdAt":"2026-10-04T09:46:01.892Z","updatedAt":"2026-10-04T09:46:01.892Z","items":[],"assetCount":0,"availableAssetCount":0,"totalBytes":0}}
+> body: {"name":"e2e-ast-1791100374195-Bmutoyzkh Launch kit","description":"everything for launch","programId":"d32f1565-de41-4f53-8e61-3b6e5dccd822","visibility":"ALL_PROGRAM_AFFILIATES"}
+< HTTP 201 (10 ms)
+< {"success":true,"data":{"id":"d2c4285c-0cba-4409-b24b-7431353e3ba8","organizationId":"46967d5b-48bc-400f-98a6-2c702e4106f6","programId":"d32f1565-de41-4f53-8e61-3b6e5dccd822","name":"e2e-ast-1791100374195-Bmutoyzkh Launch kit","slug":"e2e-ast-1791100374195-bmutoyzkh-launch-kit","description":"everything for launch","status":"DRAFT","visibility":"ALL_PROGRAM_AFFILIATES","affiliateIds":[],"displayOrder":1000,"featured":false,"createdBy":"94f6e85e-6488-450c-924a-320504a705e5","updatedBy":"94f6e85e-6488-450c-924a-320504a705e5","createdAt":"2026-10-04T10:42:22.582Z","updatedAt":"2026-10-04T10:42:22.582Z","items":[],"assetCount":0,"availableAssetCount":0,"totalBytes":0}}
 
 ==== Z2 add three, reorder, remove one ====
-> POST (same file again) /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles/301300d4-977f-4904-9d88-3580975fa31b/assets
-< HTTP 409 (11 ms)
-< {"success":false,"statusCode":409,"code":"ASSET_ALREADY_IN_BUNDLE","message":"This file is already in the bundle.","error":{"code":"ASSET_ALREADY_IN_BUNDLE","message":"This file is already in the bundle.","requestId":"req_abef28f5effa583760b77fd6"},"correlationId":"req_abef28f5effa583760b77fd6","timestamp":"2026-10-04T09:46:01.992Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles/301300d4-977f-4904-9d88-3580975fa31b/assets"}
-> PATCH /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles/301300d4-977f-4904-9d88-3580975fa31b/reorder
-> body: {"assetIds":["bddb9326-7ab3-44ea-b771-cd4d61e544fa","69d8e164-087d-4979-bbda-1030b5001fd3","a5ba46b7-499c-49e9-83f8-f12215576663"]}
-< HTTP 200 (28 ms)
-< ["bddb9326-7ab3-44ea-b771-cd4d61e544fa","69d8e164-087d-4979-bbda-1030b5001fd3","a5ba46b7-499c-49e9-83f8-f12215576663"]
-> PATCH reorder with a missing item /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles/301300d4-977f-4904-9d88-3580975fa31b/reorder
-< HTTP 400 (15 ms)
-< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"assetIds must list every file of the bundle exactly once.","error":{"code":"VALIDATION_ERROR","message":"assetIds must list every file of the bundle exactly once.","requestId":"req_d6f155e254ef78112999bd4d"},"correlationId":"req_d6f155e254ef78112999bd4d","timestamp":"2026-10-04T09:46:02.041Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles/301300d4-977f-4904-9d88-3580975fa31b/reorder"}
+> POST (same file again) /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles/d2c4285c-0cba-4409-b24b-7431353e3ba8/assets
+< HTTP 409 (7 ms)
+< {"success":false,"statusCode":409,"code":"ASSET_ALREADY_IN_BUNDLE","message":"This file is already in the bundle.","error":{"code":"ASSET_ALREADY_IN_BUNDLE","message":"This file is already in the bundle.","requestId":"req_fb0b7550003c7b7d91cadd02"},"correlationId":"req_fb0b7550003c7b7d91cadd02","timestamp":"2026-10-04T10:42:22.654Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles/d2c4285c-0cba-4409-b24b-7431353e3ba8/assets"}
+> PATCH /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles/d2c4285c-0cba-4409-b24b-7431353e3ba8/reorder
+> body: {"assetIds":["69f16523-fee7-4dbf-8017-3f16ca0d079f","d1b4f35a-c7ac-434c-aa1d-5cfa47e41840","612dde7e-951d-4e14-907a-65e73ff4c3ba"]}
+< HTTP 200 (19 ms)
+< ["69f16523-fee7-4dbf-8017-3f16ca0d079f","d1b4f35a-c7ac-434c-aa1d-5cfa47e41840","612dde7e-951d-4e14-907a-65e73ff4c3ba"]
+> PATCH reorder with a missing item /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles/d2c4285c-0cba-4409-b24b-7431353e3ba8/reorder
+< HTTP 400 (6 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"assetIds must list every file of the bundle exactly once.","error":{"code":"VALIDATION_ERROR","message":"assetIds must list every file of the bundle exactly once.","requestId":"req_202754a4ee71f36817a281db"},"correlationId":"req_202754a4ee71f36817a281db","timestamp":"2026-10-04T10:42:22.681Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles/d2c4285c-0cba-4409-b24b-7431353e3ba8/reorder"}
 
 ==== Z3 edit ====
-> PATCH /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles/301300d4-977f-4904-9d88-3580975fa31b
-< HTTP 200 (36 ms)
-< {"name":"e2e-ast-1791100374195-Bmutmyile Launch kit v2","description":"updated"}
+> PATCH /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles/d2c4285c-0cba-4409-b24b-7431353e3ba8
+< HTTP 200 (16 ms)
+< {"name":"e2e-ast-1791100374195-Bmutoyzkh Launch kit v2","description":"updated"}
 
 ==== Z4 publish, then archive (hidden), then delete ====
-mysql> SELECT name, status, visibility, programId, deletedAt FROM asset_bundles WHERE id='301300d4-977f-4904-9d88-3580975fa31b'
-{"name":"e2e-ast-1791100374195-Bmutmyile Launch kit v2","status":"PUBLISHED","visibility":"ALL_PROGRAM_AFFILIATES","programId":"d32f1565-de41-4f53-8e61-3b6e5dccd822","deletedAt":null}
-mysql> SELECT assetId, displayOrder FROM asset_bundle_items WHERE assetBundleId='301300d4-977f-4904-9d88-3580975fa31b' ORDER BY displayOrder
-[{"assetId":"bddb9326-7ab3-44ea-b771-cd4d61e544fa","displayOrder":1},{"assetId":"69d8e164-087d-4979-bbda-1030b5001fd3","displayOrder":2}]
-> DELETE /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles/301300d4-977f-4904-9d88-3580975fa31b
-< HTTP 200 (11 ms)
+mysql> SELECT name, status, visibility, programId, deletedAt FROM asset_bundles WHERE id='d2c4285c-0cba-4409-b24b-7431353e3ba8'
+{"name":"e2e-ast-1791100374195-Bmutoyzkh Launch kit v2","status":"PUBLISHED","visibility":"ALL_PROGRAM_AFFILIATES","programId":"d32f1565-de41-4f53-8e61-3b6e5dccd822","deletedAt":null}
+mysql> SELECT assetId, displayOrder FROM asset_bundle_items WHERE assetBundleId='d2c4285c-0cba-4409-b24b-7431353e3ba8' ORDER BY displayOrder
+[{"assetId":"69f16523-fee7-4dbf-8017-3f16ca0d079f","displayOrder":1},{"assetId":"d1b4f35a-c7ac-434c-aa1d-5cfa47e41840","displayOrder":2}]
+> DELETE /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles/d2c4285c-0cba-4409-b24b-7431353e3ba8
+< HTTP 200 (9 ms)
 < {"success":true,"data":{"success":true}}
 mysql> files of the deleted bundle
-[{"id":"69d8e164-087d-4979-bbda-1030b5001fd3","deletedAt":null},{"id":"a5ba46b7-499c-49e9-83f8-f12215576663","deletedAt":null},{"id":"bddb9326-7ab3-44ea-b771-cd4d61e544fa","deletedAt":null}]
+[{"id":"612dde7e-951d-4e14-907a-65e73ff4c3ba","deletedAt":null},{"id":"69f16523-fee7-4dbf-8017-3f16ca0d079f","deletedAt":null},{"id":"d1b4f35a-c7ac-434c-aa1d-5cfa47e41840","deletedAt":null}]
 
 ==== Z5 a new bundle may reuse the deleted name ====
 
 ==== Z6 audit trail ====
-mysql> SELECT action FROM audit_logs WHERE resourceId='301300d4-977f-4904-9d88-3580975fa31b' ORDER BY createdAt
+mysql> SELECT action FROM audit_logs WHERE resourceId='d2c4285c-0cba-4409-b24b-7431353e3ba8' ORDER BY createdAt
 ["BUNDLE_CREATED","BUNDLE_ASSET_ADDED","BUNDLE_ASSET_ADDED","BUNDLE_ASSET_ADDED","BUNDLE_REORDERED","BUNDLE_ASSET_REMOVED","BUNDLE_UPDATED","BUNDLE_PUBLISHED","BUNDLE_DELETED"]
 
 ==== Z7 validation ====
 > POST (invalid) /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles
 > body: {"name":""}
-< HTTP 400 (5 ms)
-< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"name should not be empty","error":{"code":"VALIDATION_ERROR","message":"name should not be empty","requestId":"req_7024c875635d334570b9b006"},"correlationId":"req_7024c875635d334570b9b006","timestamp":"2026-10-04T09:46:02.205Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles"}
+< HTTP 400 (4 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"name should not be empty","error":{"code":"VALIDATION_ERROR","message":"name should not be empty","requestId":"req_d53135c44b944de0b6641a1c"},"correlationId":"req_d53135c44b944de0b6641a1c","timestamp":"2026-10-04T10:42:22.769Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles"}
 > POST (invalid) /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles
 > body: {"name":"x","visibility":"PARTNER_TIER","programId":"d32f1565-de41-4f53-8e61-3b6e5dccd822"}
 < HTTP 400 (6 ms)
-< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"Choose the minimum partner tier for a tier-locked bundle (partnerTierId).","error":{"code":"VALIDATION_ERROR","message":"Choose the minimum partner tier for a tier-locked bundle (partnerTierId).","requestId":"req_1ce11f447b6a990b13bf464f"},"correlationId":"req_1ce11f447b6a990b13bf464f","timestamp":"2026-10-04T09:46:02.212Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles"}
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"Choose the minimum partner tier for a tier-locked bundle (partnerTierId).","error":{"code":"VALIDATION_ERROR","message":"Choose the minimum partner tier for a tier-locked bundle (partnerTierId).","requestId":"req_ad0bf02b8dc1377660a25104"},"correlationId":"req_ad0bf02b8dc1377660a25104","timestamp":"2026-10-04T10:42:22.775Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles"}
 > POST (invalid) /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles
 > body: {"name":"x","visibility":"SPECIFIC_AFFILIATES","programId":"d32f1565-de41-4f53-8e61-3b6e5dccd822","affiliateIds":[]}
-< HTTP 400 (7 ms)
-< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"Choose at least one affiliate for a bundle shared with specific affiliates (affiliateIds).","error":{"code":"VALIDATION_ERROR","message":"Choose at least one affiliate for a bundle shared with specific affiliates (affiliateIds).","requestId":"req_1b88c95a5c0c74fdd7f5714e"},"correlationId":"req_1b88c95a5c0c74fdd7f5714e","timestamp":"2026-10-04T09:46:02.219Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles"}
+< HTTP 400 (6 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"Choose at least one affiliate for a bundle shared with specific affiliates (affiliateIds).","error":{"code":"VALIDATION_ERROR","message":"Choose at least one affiliate for a bundle shared with specific affiliates (affiliateIds).","requestId":"req_018dc373195bca1eb5349588"},"correlationId":"req_018dc373195bca1eb5349588","timestamp":"2026-10-04T10:42:22.782Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles"}
 > POST (invalid) /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles
 > body: {"name":"x","visibility":"AFFILIATE_SEGMENT"}
-< HTTP 400 (7 ms)
-< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"Affiliate segments are not available yet; choose another visibility.","error":{"code":"VALIDATION_ERROR","message":"Affiliate segments are not available yet; choose another visibility.","requestId":"req_966cff51efeff2561d58f51d"},"correlationId":"req_966cff51efeff2561d58f51d","timestamp":"2026-10-04T09:46:02.229Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles"}
+< HTTP 400 (5 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"Affiliate segments are not available yet; choose another visibility.","error":{"code":"VALIDATION_ERROR","message":"Affiliate segments are not available yet; choose another visibility.","requestId":"req_c37e1a6f9850ae5d6f464b7b"},"correlationId":"req_c37e1a6f9850ae5d6f464b7b","timestamp":"2026-10-04T10:42:22.789Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles"}
 > POST (invalid) /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles
 > body: {"name":"x","programId":"626ae5e6-8ab5-443d-bc6b-202668c98a10"}
-< HTTP 400 (6 ms)
-< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"Program does not belong to this organization","error":{"code":"VALIDATION_ERROR","message":"Program does not belong to this organization","requestId":"req_497855a51aee9f12a03d05a5"},"correlationId":"req_497855a51aee9f12a03d05a5","timestamp":"2026-10-04T09:46:02.236Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles"}
+< HTTP 400 (10 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"Program does not belong to this organization","error":{"code":"VALIDATION_ERROR","message":"Program does not belong to this organization","requestId":"req_e448b0a279501746bb9a52b7"},"correlationId":"req_e448b0a279501746bb9a52b7","timestamp":"2026-10-04T10:42:22.800Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles"}
 > POST (invalid) /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles
 > body: {"name":"x","visibility":"PARTNER_TIER","programId":"7dba0ea9-79e1-42f8-8084-60d51b5e78c0","partnerTierId":"a9323c3f-e676-445a-ab43-e8347be34c06"}
-< HTTP 400 (6 ms)
-< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"The tier belongs to a different program than the bundle.","error":{"code":"VALIDATION_ERROR","message":"The tier belongs to a different program than the bundle.","requestId":"req_57e82a711c42121d64bad29d"},"correlationId":"req_57e82a711c42121d64bad29d","timestamp":"2026-10-04T09:46:02.245Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles"}
+< HTTP 400 (5 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"The tier belongs to a different program than the bundle.","error":{"code":"VALIDATION_ERROR","message":"The tier belongs to a different program than the bundle.","requestId":"req_467ec2c7ff8e7f57e9f38636"},"correlationId":"req_467ec2c7ff8e7f57e9f38636","timestamp":"2026-10-04T10:42:22.805Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles"}
 > POST (invalid) /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles
 > body: {"name":"x","startDate":"2026-12-01","endDate":"2026-11-01"}
-< HTTP 400 (6 ms)
-< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"End date must be after start date","error":{"code":"VALIDATION_ERROR","message":"End date must be after start date","requestId":"req_6a35a4ed9e4c0cc16675949f"},"correlationId":"req_6a35a4ed9e4c0cc16675949f","timestamp":"2026-10-04T09:46:02.252Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles"}
+< HTTP 400 (8 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"End date must be after start date","error":{"code":"VALIDATION_ERROR","message":"End date must be after start date","requestId":"req_7025c6385e836471fe22a9e2"},"correlationId":"req_7025c6385e836471fe22a9e2","timestamp":"2026-10-04T10:42:22.815Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles"}
 > POST (invalid) /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles
 > body: {"name":"x","status":"PUBLISHED"}
-< HTTP 400 (7 ms)
-< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"status must be one of the following values: DRAFT","error":{"code":"VALIDATION_ERROR","message":"status must be one of the following values: DRAFT","requestId":"req_93fbdc6ac54e23e62791153d"},"correlationId":"req_93fbdc6ac54e23e62791153d","timestamp":"2026-10-04T09:46:02.259Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles"}
+< HTTP 400 (5 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"status must be one of the following values: DRAFT","error":{"code":"VALIDATION_ERROR","message":"status must be one of the following values: DRAFT","requestId":"req_560ec91911965db9a6eab920"},"correlationId":"req_560ec91911965db9a6eab920","timestamp":"2026-10-04T10:42:22.821Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles"}
 > POST (invalid) /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles
 > body: {"name":"x","organizationId":"4fdfcd98-641e-416d-99a9-3abe852856ac"}
-< HTTP 400 (6 ms)
-< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"property organizationId should not exist","error":{"code":"VALIDATION_ERROR","message":"property organizationId should not exist","requestId":"req_e9c56e837886cc52dd239662"},"correlationId":"req_e9c56e837886cc52dd239662","timestamp":"2026-10-04T09:46:02.267Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles"}
+< HTTP 400 (4 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"property organizationId should not exist","error":{"code":"VALIDATION_ERROR","message":"property organizationId should not exist","requestId":"req_0cee062bcec2c0511159babd"},"correlationId":"req_0cee062bcec2c0511159babd","timestamp":"2026-10-04T10:42:22.827Z","path":"/api/v1/organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles"}

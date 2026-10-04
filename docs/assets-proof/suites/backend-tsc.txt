@@ -1,0 +1,5 @@
+
+> project-iq-backend@0.0.0 lint
+> tsc --noEmit
+
+exit=0

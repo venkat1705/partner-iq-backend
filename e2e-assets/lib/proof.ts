@@ -26,7 +26,9 @@ export class Proof {
     }
   }
   private w(s: string) {
-    fs.appendFileSync(this.file, s + '\n');
+    // signed URLs must not end up in the repository: drop credential, signature and token query values
+    const redacted = s.replace(/(X-Amz-(?:Credential|Signature|Security-Token)=)[^&"\s\\]+/g, '$1REDACTED');
+    fs.appendFileSync(this.file, redacted + '\n');
   }
   h(title: string) {
     this.w(`\n==== ${title} ====`);

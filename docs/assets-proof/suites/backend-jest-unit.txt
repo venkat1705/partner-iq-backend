@@ -1,0 +1,7 @@
+FAIL unit test/unit/demo-bookings.spec.ts
+FAIL test/unit/demo-bookings.spec.ts
+Test Suites: 1 failed, 28 passed, 29 total
+Tests:       173 passed, 173 total
+Time:        16.768 s, estimated 26 s
+
+note: demo-bookings.spec.ts fails to compile on main as well (new DemoBookingsService() without its 2 constructor args); this branch does not touch src/modules/demo-bookings or that test (git diff main -- … is empty). Not fixed here (outside the audit).

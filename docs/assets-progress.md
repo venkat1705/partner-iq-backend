@@ -42,3 +42,12 @@ images/avatars/logos go to Cloudinary as base64 JSON; tax certificates store a c
   jobs, media off Cloudinary). Unit: asset-bundle-access 8/8, storage-architecture 5/5; npm test 19/19.
 - Next: admin UI (multipart upload with progress, storage bar/warnings/full state, trash, versions, bundles tab),
   portal (signed downloads, bundles, locked state, real ZIP), then scenario specs A–AN.
+
+## Scenarios and fixes (A–AN)
+
+- e2e-assets specs 01–08 written and run; 13 bugs fixed test-first (see assets-audit.md §7); final full run in
+  `docs/assets-proof/suites/e2e-assets-full-run.txt`.
+- Real 3 GB run done (H-3GB). 20k assets / 1k bundles done (AM).
+- Suites: backend tsc, lint:architecture, jest unit (1 pre-existing compile failure, demo-bookings), `npm test`
+  (19/19); frontend vitest 118/118 and tsc (249 = main, 0 in changed files); portal vitest 143/143 and tsc 0.
+- Report: `docs/assets-audit.md`.

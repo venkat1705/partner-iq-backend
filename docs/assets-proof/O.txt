@@ -1,16 +1,16 @@
-# Scenario O — raw proof, run=1791106660677 (started 2026-10-04T09:37:51.082Z)
+# Scenario O — raw proof, run=1791110473528 (started 2026-10-04T10:42:17.570Z)
 > PATCH /admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit
 > body: {"limitBytes":10485760,"reason":"e2e test limit"}
-< HTTP 200 (12 ms)
+< HTTP 200 (9 ms)
 < {"success":true,"data":{"organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","previousLimitBytes":10485760,"limitBytes":10485760,"usedBytes":0}}
 > PATCH /admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit
 > body: {"limitBytes":2097152,"reason":"downgrade test"}
-< HTTP 200 (11 ms)
+< HTTP 200 (9 ms)
 < {"success":true,"data":{"organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","previousLimitBytes":10485760,"limitBytes":2097152,"usedBytes":5242880}}
 
 ==== O1 limit lowered below usage: API / DB / S3 ====
 > GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage/usage
-< HTTP 200 (7 ms)
+< HTTP 200 (8 ms)
 < {"limitBytes":2097152,"usedBytes":5242880,"reservedBytes":0,"availableBytes":0,"percentUsed":250,"overLimit":true,"activeUploads":0,"breakdown":{"filesBytes":5242880,"olderVersionsBytes":0,"trashBytes":0},"counts":{"files":1,"olderVersions":0,"trashedAssets":0}}
 mysql> SELECT limitBytes, usedBytes, reservedBytes, activeUploads FROM organization_storage WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
 {"limitBytes":2097152,"usedBytes":5242880,"reservedBytes":0,"activeUploads":0}
@@ -18,24 +18,24 @@ mysql> SELECT SUM(sizeBytes), COUNT(*) FROM stored_objects WHERE organizationId=
 {"bytes":5242880,"count":1}
 S3 (MinIO, independent client) orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/: 1 objects, 5242880 bytes
 > POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"size":10}
-< HTTP 413 (8 ms, 524 body bytes sent)
-< {"success":false,"statusCode":413,"code":"STORAGE_LIMIT_REACHED","message":"Not enough storage space: this file needs 10 B but only 0 B of your 2.0 MB is left. Free space by emptying the trash or deleting older versions.","details":{"neededBytes":10,"availableBytes":0,"limitBytes":2097152,"usedBytes":5242880,"reservedBytes":0,"howToFree":["Empty the trash (files in the trash still count until they are permanently deleted).","Delete older versions of files you have replaced.","Delete files you no longer need."]},"error":{"code":"STORAGE_LIMIT_REACHED","message":"Not enough storage space: this file needs 10 B but only 0 B of your 2.0 MB is left. Free space by emptying the trash or deleting older versions.","requestId":"req_8c8ecaf3bcdb3710ef9feb22"},"correlationId":"req_8c8ecaf3bcdb3710ef9feb22","timestamp":"2026-10-04T09:37:51.284Z","path":"/api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload"}
-> GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/953a1e2f-23cc-45a7-95d4-06a1b10313ca/download
-< HTTP 200 (10 ms)
+< HTTP 413 (7 ms, 524 body bytes sent)
+< {"success":false,"statusCode":413,"code":"STORAGE_LIMIT_REACHED","message":"Not enough storage space: this file needs 10 B but only 0 B of your 2 MB is left. Free space by emptying the trash or deleting older versions.","details":{"neededBytes":10,"availableBytes":0,"limitBytes":2097152,"usedBytes":5242880,"reservedBytes":0,"howToFree":["Empty the trash (files in the trash still count until they are permanently deleted).","Delete older versions of files you have replaced.","Delete files you no longer need."]},"error":{"code":"STORAGE_LIMIT_REACHED","message":"Not enough storage space: this file needs 10 B but only 0 B of your 2 MB is left. Free space by emptying the trash or deleting older versions.","requestId":"req_8cb62822885e53491c3896c4"},"correlationId":"req_8cb62822885e53491c3896c4","timestamp":"2026-10-04T10:42:17.758Z","path":"/api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload"}
+> GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/06c00a8c-08b0-46a4-a404-ddd8342594bc/download
+< HTTP 200 (6 ms)
 < {"status":200}
-> PATCH /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/953a1e2f-23cc-45a7-95d4-06a1b10313ca
-< HTTP 200 (15 ms)
+> PATCH /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/06c00a8c-08b0-46a4-a404-ddd8342594bc
+< HTTP 200 (13 ms)
 < {"status":200}
 > POST /admin/storage/jobs/purge-trash/run
-< HTTP 200 (5 ms)
+< HTTP 200 (4 ms)
 < {"success":true,"data":{"expiredAssets":0,"deleted":0,"freedBytes":0,"organizations":0}}
 > POST /admin/storage/jobs/reconcile/run
-< HTTP 200 (23 ms)
-< {"success":true,"data":{"startedAt":"2026-10-04T09:37:51.321Z","finishedAt":"2026-10-04T09:37:51.339Z","objectsListed":38,"organizations":[{"organizationId":"46967d5b-48bc-400f-98a6-2c702e4106f6","counterBytes":4178210,"actualBytes":4178210,"inStorageBytes":4178210,"differenceBytes":0,"corrected":false},{"organizationId":"4fdfcd98-641e-416d-99a9-3abe852856ac","counterBytes":0,"actualBytes":0,"inStorageBytes":0,"differenceBytes":0,"corrected":false},{"organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","counterBytes":5242880,"actualBytes":5242880,"inStorageBytes":5242880,"differenceBytes":0,"corrected":false}],"objectsWithoutRecord":[],"recordsWithoutObject":[],"sizeMismatches":[]}}
+< HTTP 200 (126 ms)
+< {"success":true,"data":{"startedAt":"2026-10-04T10:42:17.788Z","finishedAt":"2026-10-04T10:42:17.909Z","objectsListed":636,"organizations":[{"organizationId":"46967d5b-48bc-400f-98a6-2c702e4106f6","counterBytes":6349477,"actualBytes":6349477,"inStorageBytes":6349477,"differenceBytes":0,"corrected":false},{"organizationId":"4fdfcd98-641e-416d-99a9-3abe852856ac","counterBytes":9163,"actualBytes":9163,"inStorageBytes":9163,"differenceBytes":0,"corrected":false},{"organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","counterBytes":5242880,"actualBytes":5242880,"inStorageBytes":5242880,"differenceBytes":0,"corrected":false}],"objectsWithoutRecord":[],"recordsWithoutObject":[],"sizeMismatches":[]}}
 
 ==== O3 after the jobs ran: nothing deleted automatically: API / DB / S3 ====
 > GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage/usage
-< HTTP 200 (9 ms)
+< HTTP 200 (10 ms)
 < {"limitBytes":2097152,"usedBytes":5242880,"reservedBytes":0,"availableBytes":0,"percentUsed":250,"overLimit":true,"activeUploads":0,"breakdown":{"filesBytes":5242880,"olderVersionsBytes":0,"trashBytes":0},"counts":{"files":1,"olderVersions":0,"trashedAssets":0}}
 mysql> SELECT limitBytes, usedBytes, reservedBytes, activeUploads FROM organization_storage WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
 {"limitBytes":2097152,"usedBytes":5242880,"reservedBytes":0,"activeUploads":0}
@@ -45,5 +45,5 @@ S3 (MinIO, independent client) orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/
 
 ==== O4 the owner frees space → uploads work again ====
 > POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"size":1048576}
-< HTTP 201 (43 ms, 1049090 body bytes sent)
-< {"success":true,"data":{"id":"01ca6921-3b67-40d5-a5c2-dac8c0e977a5","organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","environment":"LIVE","programId":null,"name":"e2e-ast-1791100374195-Q o-c","description":null,"assetType":"DOCUMENT","sourceType":"FILE","contentType":"text/plain; charset=utf-8","fileName":"o-c.txt","originalFileName":"o-c.txt","fileExtension":"txt","mimeType":"text/plain; charset=utf-8","fileSize":1048576,"storageProvider":"s3","textContent":null,"htmlContent":null,"externalUrl":null,"width":null,"height":null,"duration":null,"language":null,"country":null,"tags":[],"metadata":{"folderPath":"General"},"status":"PUBLISHED","isPublicToAffiliates":true,"isDownloadable":true,"isCopyable":true,"version":1,"checksum":"1c9de4e2ccb5bc92819c31e03edc7150dfcec5722ce8b05f6446a2fee5dfd24c","createdBy":"436de58a-082e-4b68-94b7-24e33d46358e","updatedBy":"436de58a-082e-4b68-94b7-24e33d46358e","createdAt":"2026-10-04T09:37:51.415Z","updatedAt":"2026-10-04T09:37:51.415Z","deletedAt":null,"folder":"General","hasFile":true,"legacyFileMissing":false,"inline":false,"usage":{"views":0,"previews":0,"downloads":0,"copies":0,"uniqueAffiliates":0},"associatedBundleCount":0}}
+< HTTP 201 (40 ms, 1049090 body bytes sent)
+< {"success":true,"data":{"id":"4e8e32c3-7b50-4b75-8ace-c67051fcb42d","organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","environment":"LIVE","programId":null,"name":"e2e-ast-1791100374195-Q o-c","description":null,"assetType":"DOCUMENT","sourceType":"FILE","contentType":"text/plain; charset=utf-8","fileName":"o-c.txt","originalFileName":"o-c.txt","fileExtension":"txt","mimeType":"text/plain; charset=utf-8","fileSize":1048576,"storageProvider":"s3","textContent":null,"htmlContent":null,"externalUrl":null,"width":null,"height":null,"duration":null,"language":null,"country":null,"tags":[],"metadata":{"folderPath":"General"},"status":"PUBLISHED","isPublicToAffiliates":true,"isDownloadable":true,"isCopyable":true,"version":1,"checksum":"1c9de4e2ccb5bc92819c31e03edc7150dfcec5722ce8b05f6446a2fee5dfd24c","createdBy":"436de58a-082e-4b68-94b7-24e33d46358e","updatedBy":"436de58a-082e-4b68-94b7-24e33d46358e","createdAt":"2026-10-04T10:42:17.991Z","updatedAt":"2026-10-04T10:42:17.991Z","deletedAt":null,"folder":"General","hasFile":true,"legacyFileMissing":false,"inline":false,"usage":{"views":0,"previews":0,"downloads":0,"copies":0,"uniqueAffiliates":0},"associatedBundleCount":0}}

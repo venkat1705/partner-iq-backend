@@ -1,26 +1,26 @@
-# Scenario Y — raw proof, run=1791106935902 (started 2026-10-04T09:42:21.554Z)
+# Scenario Y — raw proof, run=1791110473528 (started 2026-10-04T10:42:22.182Z)
 
 ==== Y1 trash: the response names the bundles; the bundles keep the item, shown as unavailable ====
-> DELETE /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/ae0e7fed-5a59-4dfc-87f1-19eb93232934
-< HTTP 200 (9 ms)
+> DELETE /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/0c400c6a-404f-4ead-b53e-f8ee6d8bd461
+< HTTP 200 (11 ms)
 < {"success":true,"data":{"success":true,"message":"Moved to trash. It is permanently deleted after 30 days unless restored."}}
-mysql> SELECT metadata FROM audit_logs WHERE resourceId='ae0e7fed-5a59-4dfc-87f1-19eb93232934' AND action='ASSET_TRASHED'
-{"metadata":"{\"inBundles\":[{\"id\":\"fdc03e0c-e25d-4f4f-88e9-70d7702517c5\",\"name\":\"e2e-ast-1791100374195-S Y one 1791106941658\"},{\"id\":\"254838ea-7152-4f9a-980e-2c679d26bd4a\",\"name\":\"e2e-ast-1791100374195-S Y two 1791106941706\"}],\"retentionDays\":30}"}
-> GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/asset-bundles/fdc03e0c-e25d-4f4f-88e9-70d7702517c5
-< HTTP 200 (10 ms)
-< {"assetCount":1,"availableAssetCount":0,"items":[{"assetId":"ae0e7fed-5a59-4dfc-87f1-19eb93232934","available":false,"unavailableReason":"File is in the trash"}]}
+mysql> SELECT metadata FROM audit_logs WHERE resourceId='0c400c6a-404f-4ead-b53e-f8ee6d8bd461' AND action='ASSET_TRASHED'
+{"metadata":"{\"inBundles\":[{\"id\":\"27280582-d2dd-4663-8361-7d09f39109f5\",\"name\":\"e2e-ast-1791100374195-S Y one 1791110542279\"},{\"id\":\"54e3230b-7853-45ce-824a-75b7d04096a9\",\"name\":\"e2e-ast-1791100374195-S Y two 1791110542312\"}],\"retentionDays\":30}"}
+> GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/asset-bundles/27280582-d2dd-4663-8361-7d09f39109f5
+< HTTP 200 (12 ms)
+< {"assetCount":1,"availableAssetCount":0,"items":[{"assetId":"0c400c6a-404f-4ead-b53e-f8ee6d8bd461","available":false,"unavailableReason":"File is in the trash"}]}
 
 ==== Y2 restore → available again ====
 
 ==== Y3 permanent delete removes it from both bundles; the bundles stay ====
-> DELETE /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/ae0e7fed-5a59-4dfc-87f1-19eb93232934/permanent
-< HTTP 200 (22 ms)
+> DELETE /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/0c400c6a-404f-4ead-b53e-f8ee6d8bd461/permanent
+< HTTP 200 (23 ms)
 < {"success":true,"data":{"deleted":1,"freedBytes":7639}}
-> GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/asset-bundles/fdc03e0c-e25d-4f4f-88e9-70d7702517c5
-< HTTP 200 (6 ms)
+> GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/asset-bundles/27280582-d2dd-4663-8361-7d09f39109f5
+< HTTP 200 (5 ms)
 < {"status":200,"assetCount":0,"items":0}
-> GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/asset-bundles/254838ea-7152-4f9a-980e-2c679d26bd4a
-< HTTP 200 (6 ms)
+> GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/asset-bundles/54e3230b-7853-45ce-824a-75b7d04096a9
+< HTTP 200 (5 ms)
 < {"status":200,"assetCount":0,"items":0}
-mysql> SELECT * FROM asset_bundle_items WHERE assetId='ae0e7fed-5a59-4dfc-87f1-19eb93232934'
+mysql> SELECT * FROM asset_bundle_items WHERE assetId='0c400c6a-404f-4ead-b53e-f8ee6d8bd461'
 []

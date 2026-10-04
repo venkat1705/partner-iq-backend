@@ -1,4 +1,4 @@
-# Scenario A — raw proof, run=1791104006081 (started 2026-10-04T08:53:26.976Z)
+# Scenario A — raw proof, run=1791110473528 (started 2026-10-04T10:41:14.783Z)
 
 ==== A1 architecture lint (ESLint no-restricted-imports / properties / syntax) ====
 $ npm run lint:architecture
@@ -8,19 +8,19 @@ exit=0
 ==== A2 architecture unit test ====
 $ npx jest storage-architecture
 exit=0
-◇ injected env (20) from .env.test // tip: ◈ secrets for agents [www.dotenvx.com]
+◇ injected env (20) from .env.test // tip: ⌁ auth for agents [www.vestauth.com]
 [2m[22m
 [2m      [2mat _log ([22m[2mnode_modules/dotenv/lib/main.js[2m:131:11)[22m[2m[22m
 
   [2mconsole.log[22m
-    ◇ injected env (20) from .env.test // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+    ◇ injected env (20) from .env.test // tip: ◈ encrypted .env [www.dotenvx.com]
 [2m[22m
 [2m      [2mat _log ([22m[2mnode_modules/dotenv/lib/main.js[2m:131:11)[22m[2m[22m
 
 [1mTest Suites: [22m[1m[32m1 passed[39m[22m, 1 total
 [1mTests:       [22m[1m[32m5 passed[39m[22m, 5 total
 [1mSnapshots:   [22m0 total
-[1mTime:[22m        4.197 s
+[1mTime:[22m        4.239 s, estimated 5 s
 [2mRan all test suites[22m[2m matching [22mstorage-architecture[2m.[22m
 [1mForce exiting Jest: [22mHave you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?
 

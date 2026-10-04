@@ -1,6 +1,6 @@
-# Scenario G-ui — raw proof, run=1791108400837 (started 2026-10-04T10:06:42.317Z)
+# Scenario G-ui — raw proof, run=1791110473528 (started 2026-10-04T10:43:08.313Z)
 UI: "3.5 MB of 10 MB used" | DB usedBytes=3670016 limitBytes=10485760 → expected "3.5 MB of 10 MB used"
-page ready in 1242 ms; organization API requests:
+page ready in 1250 ms; organization API requests:
 2× GET /api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046
 2× GET /api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/programs
 2× GET /api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/affiliates

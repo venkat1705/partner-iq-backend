@@ -1,4 +1,4 @@
-# Scenario AB — raw proof, run=1791107160104 (started 2026-10-04T09:46:07.130Z)
+# Scenario AB — raw proof, run=1791110473528 (started 2026-10-04T10:42:27.074Z)
 
 ==== AB1 affiliate 1 BRONZE, affiliate 2 GOLD ====
 AFFILIATE_1 (Bronze): {"locked":true,"items":0,"requiredTier":"e2e-ast-1791100374195 SILVER","lockReason":"Unlocks at e2e-ast-1791100374195 SILVER","detail":403,"detailCode":"BUNDLE_LOCKED","download":403,"listsFile":false,"zip":403}
@@ -15,7 +15,7 @@ AFFILIATE_3 sees: {"locked":true,"items":0,"requiredTier":{"id":"850e292d-ef57-4
 
 ==== AB5 tier reward: Bronze tier lists the bundle in rewardsConfig.assetBundleIds → Bronze affiliates unlock it ====
 > PATCH /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/partner-tiers/f73ba835-7e87-4f0d-b9ed-2f79ced58306
-> body: {"name":"e2e-ast-1791100374195 BRONZE","code":"E2E-AST-1791100374195-BRONZE","level":1,"programId":"d32f1565-de41-4f53-8e61-3b6e5dccd822","rewardsConfig":{"assetBundleIds":["6be3e567-c2b4-4269-b3aa-7f09beb25039"]}}
-< HTTP 200 (6 ms)
-< {"status":200,"rewardsConfig":{"assetBundleIds":["6be3e567-c2b4-4269-b3aa-7f09beb25039"]}}
+> body: {"name":"e2e-ast-1791100374195 BRONZE","code":"E2E-AST-1791100374195-BRONZE","level":1,"programId":"d32f1565-de41-4f53-8e61-3b6e5dccd822","rewardsConfig":{"assetBundleIds":["d5fda63b-c56d-476e-94ab-c3b72f9f31cb"]}}
+< HTTP 200 (8 ms)
+< {"status":200,"rewardsConfig":{"assetBundleIds":["d5fda63b-c56d-476e-94ab-c3b72f9f31cb"]}}
 AFFILIATE_1 (Bronze with reward): {"locked":false,"items":1,"detail":200,"download":200,"listsFile":true,"zip":200}

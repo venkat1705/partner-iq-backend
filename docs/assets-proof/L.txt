@@ -1,17 +1,17 @@
-# Scenario L — raw proof, run=1791106660677 (started 2026-10-04T09:37:49.659Z)
+# Scenario L — raw proof, run=1791110473528 (started 2026-10-04T10:42:16.388Z)
 > PATCH /admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit
 > body: {"limitBytes":10485760,"reason":"e2e test limit"}
-< HTTP 200 (11 ms)
+< HTTP 200 (13 ms)
 < {"success":true,"data":{"organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","previousLimitBytes":10485760,"limitBytes":10485760,"usedBytes":0}}
 
 ==== L1 move a to the trash ====
-> DELETE /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/647a7dc1-5a3c-4b22-a25f-1c665ad116c5
-< HTTP 200 (10 ms)
+> DELETE /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/a942b153-958a-4428-84ad-d27442f7214c
+< HTTP 200 (8 ms)
 < {"success":true,"data":{"success":true,"message":"Moved to trash. It is permanently deleted after 30 days unless restored."}}
 
 ==== L1: API / DB / S3 ====
 > GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage/usage
-< HTTP 200 (9 ms)
+< HTTP 200 (8 ms)
 < {"limitBytes":10485760,"usedBytes":5242880,"reservedBytes":0,"availableBytes":5242880,"percentUsed":50,"overLimit":false,"activeUploads":0,"breakdown":{"filesBytes":3145728,"olderVersionsBytes":0,"trashBytes":2097152},"counts":{"files":1,"olderVersions":0,"trashedAssets":1}}
 mysql> SELECT limitBytes, usedBytes, reservedBytes, activeUploads FROM organization_storage WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
 {"limitBytes":10485760,"usedBytes":5242880,"reservedBytes":0,"activeUploads":0}
@@ -19,17 +19,17 @@ mysql> SELECT SUM(sizeBytes), COUNT(*) FROM stored_objects WHERE organizationId=
 {"bytes":5242880,"count":2}
 S3 (MinIO, independent client) orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/: 2 objects, 5242880 bytes
 > GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/trash
-< HTTP 200 (10 ms)
-< [{"id":"647a7dc1-5a3c-4b22-a25f-1c665ad116c5","trashedAt":"2026-10-04T09:37:50.000Z","permanentDeleteAt":"2026-11-03T09:37:50.000Z"}]
+< HTTP 200 (9 ms)
+< [{"id":"a942b153-958a-4428-84ad-d27442f7214c","trashedAt":"2026-10-04T10:42:17.000Z","permanentDeleteAt":"2026-11-03T10:42:17.000Z"}]
 
 ==== L2 restore ====
-> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/647a7dc1-5a3c-4b22-a25f-1c665ad116c5/restore
-< HTTP 200 (15 ms)
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/a942b153-958a-4428-84ad-d27442f7214c/restore
+< HTTP 200 (13 ms)
 < {"status":200}
 
 ==== L2: API / DB / S3 ====
 > GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage/usage
-< HTTP 200 (8 ms)
+< HTTP 200 (11 ms)
 < {"limitBytes":10485760,"usedBytes":5242880,"reservedBytes":0,"availableBytes":5242880,"percentUsed":50,"overLimit":false,"activeUploads":0,"breakdown":{"filesBytes":5242880,"olderVersionsBytes":0,"trashBytes":0},"counts":{"files":2,"olderVersions":0,"trashedAssets":0}}
 mysql> SELECT limitBytes, usedBytes, reservedBytes, activeUploads FROM organization_storage WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
 {"limitBytes":10485760,"usedBytes":5242880,"reservedBytes":0,"activeUploads":0}
@@ -38,13 +38,13 @@ mysql> SELECT SUM(sizeBytes), COUNT(*) FROM stored_objects WHERE organizationId=
 S3 (MinIO, independent client) orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/: 2 objects, 5242880 bytes
 
 ==== L3 trash + permanent delete → space freed immediately, object gone from S3 ====
-> DELETE /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/647a7dc1-5a3c-4b22-a25f-1c665ad116c5/permanent
-< HTTP 200 (24 ms)
+> DELETE /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/a942b153-958a-4428-84ad-d27442f7214c/permanent
+< HTTP 200 (18 ms)
 < {"success":true,"data":{"deleted":1,"freedBytes":2097152}}
 
 ==== L3: API / DB / S3 ====
 > GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage/usage
-< HTTP 200 (9 ms)
+< HTTP 200 (7 ms)
 < {"limitBytes":10485760,"usedBytes":3145728,"reservedBytes":0,"availableBytes":7340032,"percentUsed":30,"overLimit":false,"activeUploads":0,"breakdown":{"filesBytes":3145728,"olderVersionsBytes":0,"trashBytes":0},"counts":{"files":1,"olderVersions":0,"trashedAssets":0}}
 mysql> SELECT limitBytes, usedBytes, reservedBytes, activeUploads FROM organization_storage WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
 {"limitBytes":10485760,"usedBytes":3145728,"reservedBytes":0,"activeUploads":0}
@@ -53,31 +53,31 @@ mysql> SELECT SUM(sizeBytes), COUNT(*) FROM stored_objects WHERE organizationId=
 S3 (MinIO, independent client) orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/: 1 objects, 3145728 bytes
 
 ==== L4 trashed 31 days ago → purge job deletes it ====
-mysql> UPDATE assets SET deletedAt = NOW() - INTERVAL 31 DAY WHERE id='40ae993c-ee86-4177-a9be-ee7675aaa212' (test data)
+mysql> UPDATE assets SET deletedAt = NOW() - INTERVAL 31 DAY WHERE id='4c256f06-1b38-47bf-bc28-681a847f371b' (test data)
 > POST /admin/storage/jobs/purge-trash/run
-< HTTP 200 (25 ms)
+< HTTP 200 (35 ms)
 < {"success":true,"data":{"expiredAssets":1,"deleted":1,"freedBytes":3145728,"organizations":1}}
 
 ==== L4: API / DB / S3 ====
 > GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage/usage
-< HTTP 200 (9 ms)
+< HTTP 200 (8 ms)
 < {"limitBytes":10485760,"usedBytes":0,"reservedBytes":0,"availableBytes":10485760,"percentUsed":0,"overLimit":false,"activeUploads":0,"breakdown":{"filesBytes":0,"olderVersionsBytes":0,"trashBytes":0},"counts":{"files":0,"olderVersions":0,"trashedAssets":0}}
 mysql> SELECT limitBytes, usedBytes, reservedBytes, activeUploads FROM organization_storage WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
 {"limitBytes":10485760,"usedBytes":0,"reservedBytes":0,"activeUploads":0}
 mysql> SELECT SUM(sizeBytes), COUNT(*) FROM stored_objects WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046' AND countsTowardQuota=1
 {"bytes":0,"count":0}
 S3 (MinIO, independent client) orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/: 0 objects, 0 bytes
-mysql> SELECT id, deletedAt FROM assets WHERE id='40ae993c-ee86-4177-a9be-ee7675aaa212'
+mysql> SELECT id, deletedAt FROM assets WHERE id='4c256f06-1b38-47bf-bc28-681a847f371b'
 "(row removed)"
 
 ==== L5 a trashed file younger than 30 days is kept by the job ====
 > POST /admin/storage/jobs/purge-trash/run
-< HTTP 200 (5 ms)
+< HTTP 200 (6 ms)
 < {"success":true,"data":{"expiredAssets":0,"deleted":0,"freedBytes":0,"organizations":0}}
 
 ==== L5: API / DB / S3 ====
 > GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage/usage
-< HTTP 200 (11 ms)
+< HTTP 200 (8 ms)
 < {"limitBytes":10485760,"usedBytes":1048576,"reservedBytes":0,"availableBytes":9437184,"percentUsed":10,"overLimit":false,"activeUploads":0,"breakdown":{"filesBytes":0,"olderVersionsBytes":0,"trashBytes":1048576},"counts":{"files":0,"olderVersions":0,"trashedAssets":1}}
 mysql> SELECT limitBytes, usedBytes, reservedBytes, activeUploads FROM organization_storage WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
 {"limitBytes":10485760,"usedBytes":1048576,"reservedBytes":0,"activeUploads":0}

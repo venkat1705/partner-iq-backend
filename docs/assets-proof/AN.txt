@@ -1,4 +1,4 @@
-# Scenario AN — raw proof, run=1791108400837 (started 2026-10-04T10:07:23.470Z)
+# Scenario AN — raw proof, run=1791110473528 (started 2026-10-04T10:44:01.107Z)
 CHECK PASS admin "overview" tab does not claim "Managed CDN": actual=false expected=false
 CHECK PASS admin "overview" tab does not claim "Enterprise Plan": actual=false expected=false
 CHECK PASS admin "overview" tab does not claim "50 GB": actual=false expected=false
@@ -13,14 +13,14 @@ VIEWER navigation: OVERVIEW Dashboard PARTNER MANAGEMENT Programs Affiliates Dea
 
 ==== AN3 portal: real download, locked bundle text, real ZIP; no fake "brand kit" toast, no "Copy Asset URL" ====
 > PATCH (test affiliate profile) /affiliate/me/profile
-< HTTP 200 (11 ms)
+< HTTP 200 (16 ms)
 < {"status":200}
 avatar upload (multipart → storage): HTTP 201
 > PATCH (test affiliate profile) /affiliate/me/tax-profile
-< HTTP 200 (11 ms)
+< HTTP 200 (15 ms)
 < {"status":200}
 CHECK PASS portal has no "Download Brand Kit (.ZIP)" button: actual=false expected=false
 CHECK PASS portal has no "Copy Asset URL": actual=false expected=false
 portal download started: suggested file name "ai.png"
 portal ZIP download: "e2e-ast-1791100374195-bmutmx84d-aa-all-org.zip"
-locked bundle texts (AFFILIATE_2 at Bronze): ["Unlocks at e2e-ast-1791100374195 SILVER · 1 file(s)","Unlocks at e2e-ast-1791100374195 SILVER · 1 file(s)","Unlocks at e2e-ast-1791100374195 SILVER · 1 file(s)","Unlocks at e2e-ast-1791100374195 SILVER · 1 file(s)","Unlocks at e2e-ast-1791100374195 SILVER · 1 file(s)"]
+locked bundle texts (AFFILIATE_2 at Bronze): ["Unlocks at e2e-ast-1791100374195 SILVER · 1 file(s)","Unlocks at e2e-ast-1791100374195 SILVER · 1 file(s)","Unlocks at e2e-ast-1791100374195 SILVER · 1 file(s)","Unlocks at e2e-ast-1791100374195 SILVER · 1 file(s)","Unlocks at e2e-ast-1791100374195 SILVER · 1 file(s)","Unlocks at e2e-ast-1791100374195 SILVER · 1 file(s)","Unlocks at e2e-ast-1791100374195 SILVER · 1 file(s)","Unlocks at e2e-ast-1791100374195 SILVER · 1 file(s)","Unlocks at e2e-ast-1791100374195 SILVER · 1 file(s)","Unlocks at e2e-ast-1791100374195 SILVER · 1 file(s)","Unlocks at e2e-ast-1791100374195 SILVER · 1 file(s)","Unlocks at e2e-ast-1791100374195 SILVER · 1 file(s)","Unlocks at e2e-ast-1791100374195 SILVER · 1 file(s)","Unlocks at e2e-ast-1791100374195 SILVER · 1 file(s)","Unlocks at e2e-ast-1791100374195 SILVER · 1 file(s)"]

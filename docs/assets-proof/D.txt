@@ -1,14 +1,14 @@
-# Scenario D — raw proof, run=1791104006081 (started 2026-10-04T08:53:44.593Z)
+# Scenario D — raw proof, run=1791110473528 (started 2026-10-04T10:41:34.870Z)
 > PATCH /admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit
 > body: {"limitBytes":3221225472,"reason":"e2e test limit"}
-< HTTP 200 (14 ms)
+< HTTP 200 (11 ms)
 < {"success":true,"data":{"organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","previousLimitBytes":3221225472,"limitBytes":3221225472,"usedBytes":0}}
 > POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"size":208666624}
-< HTTP 201 (1371 ms, 208667146 body bytes sent)
-< {"success":true,"data":{"id":"e3840c0a-b505-48b9-8b6d-f5a11457b93a","organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","environment":"LIVE","programId":null,"name":"e2e-ast-1791100374195-D 199MB","description":null,"assetType":"DOCUMENT","sourceType":"FILE","contentType":"text/plain; charset=utf-8","fileName":"big-199mb.txt","originalFileName":"big-199mb.txt","fileExtension":"txt","mimeType":"text/plain; charset=utf-8","fileSize":208666624,"storageProvider":"s3","textContent":null,"htmlContent":null,"externalUrl":null,"width":null,"height":null,"duration":null,"language":null,"country":null,"tags":[],"metadata":{"folderPath":"General"},"status":"PUBLISHED","isPublicToAffiliates":true,"isDownloadable":true,"isCopyable":true,"version":1,"checksum":"8a433310c45c672cd0c0667b5e7586d1303d186bfe536b121d528792054e3685","createdBy":"436de58a-082e-4b68-94b7-24e33d46358e","updatedBy":"436de58a-082e-4b68-94b7-24e33d46358e","createdAt":"2026-10-04T08:53:46.348Z","updatedAt":"2026-10-04T08:53:46.348Z","deletedAt":null,"folder":"General","hasFile":true,"legacyFileMissing":false,"inline":false,"usage":{"views":0,"previews":0,"downloads":0,"copies":0,"uniqueAffiliates":0},"associatedBundleCount":0}}
-RSS before=189.8 MB, peak during upload=252.7 MB, growth=62.9 MB, samples=6, duration=1.4 s, throughput=145.1 MB/s
-RSS samples (MB): 238 253 242 242 250 234
-S3: [{"key":"orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e3840c0a-b505-48b9-8b6d-f5a11457b93a/v1/4407d946216a9196d11b1ac1","size":208666624}]
+< HTTP 201 (1513 ms, 208667146 body bytes sent)
+< {"success":true,"data":{"id":"c98fb5d5-66bf-4bb1-8591-120f01207a2f","organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","environment":"LIVE","programId":null,"name":"e2e-ast-1791100374195-D 199MB","description":null,"assetType":"DOCUMENT","sourceType":"FILE","contentType":"text/plain; charset=utf-8","fileName":"big-199mb.txt","originalFileName":"big-199mb.txt","fileExtension":"txt","mimeType":"text/plain; charset=utf-8","fileSize":208666624,"storageProvider":"s3","textContent":null,"htmlContent":null,"externalUrl":null,"width":null,"height":null,"duration":null,"language":null,"country":null,"tags":[],"metadata":{"folderPath":"General"},"status":"PUBLISHED","isPublicToAffiliates":true,"isDownloadable":true,"isCopyable":true,"version":1,"checksum":"8a433310c45c672cd0c0667b5e7586d1303d186bfe536b121d528792054e3685","createdBy":"436de58a-082e-4b68-94b7-24e33d46358e","updatedBy":"436de58a-082e-4b68-94b7-24e33d46358e","createdAt":"2026-10-04T10:41:36.820Z","updatedAt":"2026-10-04T10:41:36.820Z","deletedAt":null,"folder":"General","hasFile":true,"legacyFileMissing":false,"inline":false,"usage":{"views":0,"previews":0,"downloads":0,"copies":0,"uniqueAffiliates":0},"associatedBundleCount":0}}
+RSS before=443.1 MB, peak during upload=507.4 MB, growth=64.3 MB, samples=7, duration=1.5 s, throughput=131.5 MB/s
+RSS samples (MB): 459 483 491 499 499 499 507
+S3: [{"key":"orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/c98fb5d5-66bf-4bb1-8591-120f01207a2f/v1/0eae102c241f783bd5da6874","size":208666624}]
 mysql> SELECT * FROM organization_storage WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
 {"limitBytes":3221225472,"usedBytes":208666624,"reservedBytes":0,"activeUploads":0}
 CHECK PASS memory growth < 120 MB for a 199 MB file: actual=true expected=true

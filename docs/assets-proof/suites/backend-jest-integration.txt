@@ -1,0 +1,11 @@
+Running one project: integration
+No tests found, exiting with code 1
+Run with `--passWithNoTests` to exit with code 0
+In /home/user/partner-iq-backend
+  897 files checked.
+  testMatch: /home/user/partner-iq-backend/test/integration/**/*.int.spec.ts - 0 matches
+  testPathIgnorePatterns: /node_modules/ - 897 matches
+  testRegex:  - 0 matches
+Pattern:  - 0 matches
+exit=1
+note: the integration project has no test files on main either (test/integration/**/*.int.spec.ts: 0 matches).

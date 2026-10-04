@@ -1,0 +1,12 @@
+ ✓ src/components/common/TrafficSourcesChart.test.tsx (9 tests) 341ms
+ ✓ src/tests/OnboardingRouteGuard.test.tsx (2 tests) 203ms
+ ✓ src/tests/JoinApplicationRouteGuard.test.tsx (7 tests) 196ms
+ ✓ src/components/common/MetricCard.test.tsx (7 tests) 155ms
+ ✓ src/lib/utils/payout-schedule.test.ts (16 tests) 8ms
+ ✓ src/lib/validation/schemas.test.ts (49 tests) 44ms
+
+ Test Files  14 passed (14)
+      Tests  143 passed (143)
+   Start at  10:20:49
+   Duration  10.41s (transform 2.24s, setup 1.17s, collect 9.13s, tests 7.40s, environment 7.25s, prepare 1.76s)
+

@@ -1,39 +1,39 @@
-# Scenario AA — raw proof, run=1791107160104 (started 2026-10-04T09:46:02.288Z)
+# Scenario AA — raw proof, run=1791110473528 (started 2026-10-04T10:42:22.840Z)
 > GET (as AFFILIATE_1) /affiliate/me/asset-bundles?organizationId=46967d5b-48bc-400f-98a6-2c702e4106f6
-< HTTP 200 (18 ms)
+< HTTP 200 (48 ms)
 < ["AA all A1","AA all org"]
 > GET (as AFFILIATE_2) /affiliate/me/asset-bundles?organizationId=46967d5b-48bc-400f-98a6-2c702e4106f6
-< HTTP 200 (18 ms)
+< HTTP 200 (31 ms)
 < ["AA all A1","AA all org","AA only aff2"]
 > GET (as AFFILIATE_3) /affiliate/me/asset-bundles?organizationId=46967d5b-48bc-400f-98a6-2c702e4106f6
 < HTTP 200 (19 ms)
 < ["AA all org"]
 > GET (as AFFILIATE_B1, other organization) /affiliate/me/asset-bundles?organizationId=46967d5b-48bc-400f-98a6-2c702e4106f6
-< HTTP 200 (6 ms)
+< HTTP 200 (5 ms)
 < []
 
 ==== AA2 the admin sees all of them with their status ====
 > GET (admin) /organizations/46967d5b-48bc-400f-98a6-2c702e4106f6/asset-bundles
-< HTTP 200 (126 ms)
+< HTTP 200 (10 ms)
 < [["AA ended","PUBLISHED","ALL_PROGRAM_AFFILIATES"],["AA future","SCHEDULED","ALL_PROGRAM_AFFILIATES"],["AA draft","DRAFT","ALL_PROGRAM_AFFILIATES"],["AA private","PUBLISHED","PRIVATE"],["AA only aff2","PUBLISHED","SPECIFIC_AFFILIATES"],["AA all org","PUBLISHED","ALL_PROGRAM_AFFILIATES"],["AA all A1","PUBLISHED","ALL_PROGRAM_AFFILIATES"],["Launch kit v2","DRAFT","PRIVATE"]]
 
 ==== AA3 detail of a bundle the affiliate cannot see → 404 (no existence leak) ====
-> GET (as AFFILIATE_1) /affiliate/me/asset-bundles/d6fb2d8a-8a9c-4f58-ad04-67ce57a73405
-< HTTP 404 (18 ms)
-< {"success":false,"statusCode":404,"code":"Not Found","message":"ASSET_BUNDLE_NOT_FOUND","error":{"code":"Not Found","message":"ASSET_BUNDLE_NOT_FOUND","requestId":"req_15629225780e109f4369467a"},"correlationId":"req_15629225780e109f4369467a","timestamp":"2026-10-04T09:46:06.923Z","path":"/api/v1/affiliate/me/asset-bundles/d6fb2d8a-8a9c-4f58-ad04-67ce57a73405"}
-> GET (as AFFILIATE_1) /affiliate/me/asset-bundles/879838b6-272c-44bb-8932-8f970b687c44
-< HTTP 404 (20 ms)
-< {"success":false,"statusCode":404,"code":"Not Found","message":"ASSET_BUNDLE_NOT_FOUND","error":{"code":"Not Found","message":"ASSET_BUNDLE_NOT_FOUND","requestId":"req_9104576b7e3023a0f723309e"},"correlationId":"req_9104576b7e3023a0f723309e","timestamp":"2026-10-04T09:46:06.944Z","path":"/api/v1/affiliate/me/asset-bundles/879838b6-272c-44bb-8932-8f970b687c44"}
-> GET (as AFFILIATE_1) /affiliate/me/asset-bundles/d8aa6491-5f15-442c-a460-c40a258dbdc8
-< HTTP 404 (24 ms)
-< {"success":false,"statusCode":404,"code":"Not Found","message":"ASSET_BUNDLE_NOT_FOUND","error":{"code":"Not Found","message":"ASSET_BUNDLE_NOT_FOUND","requestId":"req_a049b20fc61360d4e2f0331b"},"correlationId":"req_a049b20fc61360d4e2f0331b","timestamp":"2026-10-04T09:46:06.970Z","path":"/api/v1/affiliate/me/asset-bundles/d8aa6491-5f15-442c-a460-c40a258dbdc8"}
+> GET (as AFFILIATE_1) /affiliate/me/asset-bundles/a69b05f8-5895-4449-b81e-87bd8310e2ac
+< HTTP 404 (35 ms)
+< {"success":false,"statusCode":404,"code":"Not Found","message":"ASSET_BUNDLE_NOT_FOUND","error":{"code":"Not Found","message":"ASSET_BUNDLE_NOT_FOUND","requestId":"req_311d27c596f5222646886049"},"correlationId":"req_311d27c596f5222646886049","timestamp":"2026-10-04T10:42:26.831Z","path":"/api/v1/affiliate/me/asset-bundles/a69b05f8-5895-4449-b81e-87bd8310e2ac"}
+> GET (as AFFILIATE_1) /affiliate/me/asset-bundles/fbea07ae-c079-4495-84fb-c605bea948e6
+< HTTP 404 (41 ms)
+< {"success":false,"statusCode":404,"code":"Not Found","message":"ASSET_BUNDLE_NOT_FOUND","error":{"code":"Not Found","message":"ASSET_BUNDLE_NOT_FOUND","requestId":"req_1f8a3ac1d415bd0add572aec"},"correlationId":"req_1f8a3ac1d415bd0add572aec","timestamp":"2026-10-04T10:42:26.873Z","path":"/api/v1/affiliate/me/asset-bundles/fbea07ae-c079-4495-84fb-c605bea948e6"}
+> GET (as AFFILIATE_1) /affiliate/me/asset-bundles/6b3db658-5908-4c12-89b8-2a284464d23d
+< HTTP 404 (39 ms)
+< {"success":false,"statusCode":404,"code":"Not Found","message":"ASSET_BUNDLE_NOT_FOUND","error":{"code":"Not Found","message":"ASSET_BUNDLE_NOT_FOUND","requestId":"req_874fbd634aa5289cf18732b2"},"correlationId":"req_874fbd634aa5289cf18732b2","timestamp":"2026-10-04T10:42:26.913Z","path":"/api/v1/affiliate/me/asset-bundles/6b3db658-5908-4c12-89b8-2a284464d23d"}
 
 ==== AA4 a non-public file is downloadable through a visible bundle; private-only file is not ====
-> GET (as AFFILIATE_1) /affiliate/me/assets/a0d73145-dfdf-4c4a-991d-4399d3f53128/download
-< HTTP 200 (12 ms)
-< {"status":200,"expiresAt":"2026-10-04T09:51:06.982Z"}
-> GET (as AFFILIATE_1) /affiliate/me/assets/9bd2b9fa-72a6-42e0-aa1f-3a76f85a9589/download
-< HTTP 403 (8 ms)
-< {"success":false,"statusCode":403,"code":"ASSET_ACCESS_DENIED","message":"This file is part of a locked bundle.","error":{"code":"ASSET_ACCESS_DENIED","message":"This file is part of a locked bundle.","requestId":"req_fcfb49e33453b4acf30fd588"},"correlationId":"req_fcfb49e33453b4acf30fd588","timestamp":"2026-10-04T09:46:07.090Z","path":"/api/v1/affiliate/me/assets/9bd2b9fa-72a6-42e0-aa1f-3a76f85a9589/download"}
+> GET (as AFFILIATE_1) /affiliate/me/assets/6689e4ff-8efd-4353-9860-d757a3d8adff/download
+< HTTP 200 (19 ms)
+< {"status":200,"expiresAt":"2026-10-04T10:47:26.930Z"}
+> GET (as AFFILIATE_1) /affiliate/me/assets/d764a5ab-1c97-49cb-bf11-8d258a6ae647/download
+< HTTP 403 (11 ms)
+< {"success":false,"statusCode":403,"code":"ASSET_ACCESS_DENIED","message":"This file is part of a locked bundle.","error":{"code":"ASSET_ACCESS_DENIED","message":"This file is part of a locked bundle.","requestId":"req_dccc49f91456fb62e1fed440"},"correlationId":"req_dccc49f91456fb62e1fed440","timestamp":"2026-10-04T10:42:27.022Z","path":"/api/v1/affiliate/me/assets/d764a5ab-1c97-49cb-bf11-8d258a6ae647/download"}
 
 ==== AA5 archive → disappears for affiliates ====

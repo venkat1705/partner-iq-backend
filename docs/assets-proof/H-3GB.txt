@@ -1,16 +1,16 @@
-# Scenario H-3GB — raw proof, run=1791109127711 (started 2026-10-04T10:18:48.883Z)
+# Scenario H-3GB — raw proof, run=1791110473528 (started 2026-10-04T10:44:29.207Z)
 > PATCH /admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit
 > body: {"limitBytes":3221225472,"reason":"back to the default for the 3 GB run"}
-< HTTP 200 (19 ms)
-< {"success":true,"data":{"organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","previousLimitBytes":3221225472,"limitBytes":3221225472,"usedBytes":0}}
+< HTTP 200 (12 ms)
+< {"success":true,"data":{"organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","previousLimitBytes":104857600,"limitBytes":3221225472,"usedBytes":0}}
 plan: 15 × 209715200 + 1 × 75497472 = 3221225472 bytes (= 3 GB), then 1 byte
 > POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"size":75497472}
-< HTTP 201 (603 ms, 75497994 body bytes sent)
+< HTTP 201 (578 ms, 75497994 body bytes sent)
 < {"fileSize":75497472}
-after 24.202 s: {"usedBytes":3221225472,"limitBytes":3221225472,"availableBytes":0,"percentUsed":100}
+after 23.148 s: {"usedBytes":3221225472,"limitBytes":3221225472,"availableBytes":0,"percentUsed":100}
 > POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"size":1}
-< HTTP 413 (13 ms, 495 body bytes sent)
-< {"success":false,"statusCode":413,"code":"STORAGE_LIMIT_REACHED","message":"Not enough storage space: this file needs 1 B but only 0 B of your 3 GB is left. Free space by emptying the trash or deleting older versions.","details":{"neededBytes":1,"availableBytes":0,"limitBytes":3221225472,"usedBytes":3221225472,"reservedBytes":0,"howToFree":["Empty the trash (files in the trash still count until they are permanently deleted).","Delete older versions of files you have replaced.","Delete files you no longer need."]},"error":{"code":"STORAGE_LIMIT_REACHED","message":"Not enough storage space: this file needs 1 B but only 0 B of your 3 GB is left. Free space by emptying the trash or deleting older versions.","requestId":"req_4d6b49a929f49f5737185b00"},"correlationId":"req_4d6b49a929f49f5737185b00","timestamp":"2026-10-04T10:19:14.106Z","path":"/api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload"}
+< HTTP 413 (7 ms, 495 body bytes sent)
+< {"success":false,"statusCode":413,"code":"STORAGE_LIMIT_REACHED","message":"Not enough storage space: this file needs 1 B but only 0 B of your 3 GB is left. Free space by emptying the trash or deleting older versions.","details":{"neededBytes":1,"availableBytes":0,"limitBytes":3221225472,"usedBytes":3221225472,"reservedBytes":0,"howToFree":["Empty the trash (files in the trash still count until they are permanently deleted).","Delete older versions of files you have replaced.","Delete files you no longer need."]},"error":{"code":"STORAGE_LIMIT_REACHED","message":"Not enough storage space: this file needs 1 B but only 0 B of your 3 GB is left. Free space by emptying the trash or deleting older versions.","requestId":"req_aaeb2269a56a3468b72bc6a4"},"correlationId":"req_aaeb2269a56a3468b72bc6a4","timestamp":"2026-10-04T10:44:52.428Z","path":"/api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload"}
 mysql> SELECT * FROM organization_storage WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
 {"limitBytes":3221225472,"usedBytes":3221225472,"reservedBytes":0,"activeUploads":0}
 S3: 16 objects, 3221225472 bytes

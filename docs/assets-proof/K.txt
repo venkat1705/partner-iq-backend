@@ -1,13 +1,13 @@
-# Scenario K — raw proof, run=1791106660677 (started 2026-10-04T09:37:45.126Z)
+# Scenario K — raw proof, run=1791110473528 (started 2026-10-04T10:42:11.899Z)
 > PATCH /admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit
 > body: {"limitBytes":10485760,"reason":"e2e test limit"}
-< HTTP 200 (14 ms)
+< HTTP 200 (9 ms)
 < {"success":true,"data":{"organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","previousLimitBytes":10485760,"limitBytes":10485760,"usedBytes":0}}
 mysql> SELECT activeUploads, reservedBytes FROM organization_storage WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046' (during)
 {"limitBytes":10485760,"usedBytes":0,"reservedBytes":5242880,"activeUploads":5}
 > POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"size":1000}
-< HTTP 429 (10 ms, 1514 body bytes sent)
-< {"success":false,"statusCode":429,"code":"TOO_MANY_CONCURRENT_UPLOADS","message":"Your organization already has 5 uploads in progress. Wait for one to finish, then try again.","details":{"maxConcurrentUploads":5},"error":{"code":"TOO_MANY_CONCURRENT_UPLOADS","message":"Your organization already has 5 uploads in progress. Wait for one to finish, then try again.","requestId":"req_79ccfdad8ebc1dfdaee38cab"},"correlationId":"req_79ccfdad8ebc1dfdaee38cab","timestamp":"2026-10-04T09:37:46.744Z","path":"/api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload"}
+< HTTP 429 (11 ms, 1514 body bytes sent)
+< {"success":false,"statusCode":429,"code":"TOO_MANY_CONCURRENT_UPLOADS","message":"Your organization already has 5 uploads in progress. Wait for one to finish, then try again.","details":{"maxConcurrentUploads":5},"error":{"code":"TOO_MANY_CONCURRENT_UPLOADS","message":"Your organization already has 5 uploads in progress. Wait for one to finish, then try again.","requestId":"req_1d32d360f984e9a9ae86152e"},"correlationId":"req_1d32d360f984e9a9ae86152e","timestamp":"2026-10-04T10:42:13.496Z","path":"/api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload"}
 the five slow uploads: 201,201,201,201,201
 mysql> SELECT * FROM organization_storage WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046' (after)
 {"limitBytes":10485760,"usedBytes":5242880,"reservedBytes":0,"activeUploads":0}

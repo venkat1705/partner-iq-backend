@@ -1,17 +1,17 @@
-# Scenario W — raw proof, run=1791106935902 (started 2026-10-04T09:42:20.826Z)
+# Scenario W — raw proof, run=1791110473528 (started 2026-10-04T10:42:21.518Z)
 
 ==== W0 folders are flat names (decision A23): a "/" is refused with a clear message ====
 > POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"folderPath":"A/B"}
-< HTTP 400 (5 ms, 599 body bytes sent)
-< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"folderPath may not contain / \\ < > : \" | ? * or control characters","error":{"code":"VALIDATION_ERROR","message":"folderPath may not contain / \\ < > : \" | ? * or control characters","requestId":"req_34af64e43c84123b8e5f33b4"},"correlationId":"req_34af64e43c84123b8e5f33b4","timestamp":"2026-10-04T09:42:21.061Z","path":"/api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload"}
+< HTTP 400 (4 ms, 599 body bytes sent)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"folderPath may not contain / \\ < > : \" | ? * or control characters","error":{"code":"VALIDATION_ERROR","message":"folderPath may not contain / \\ < > : \" | ? * or control characters","requestId":"req_93df76e30392d9d81505bdee"},"correlationId":"req_93df76e30392d9d81505bdee","timestamp":"2026-10-04T10:42:21.718Z","path":"/api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload"}
 > GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets?search=banner
-< HTTP 200 (10 ms)
+< HTTP 200 (9 ms)
 < {"names":["Winter banner","Summer banner"],"meta":{"page":1,"limit":24,"total":2,"sortBy":"updatedAt","sortDir":"desc"}}
 > GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets?search=100%25
-< HTTP 200 (9 ms)
+< HTTP 200 (7 ms)
 < {"names":["Brand guide 100%"],"meta":{"page":1,"limit":24,"total":1,"sortBy":"updatedAt","sortDir":"desc"}}
 > GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets?search=under_score
-< HTTP 200 (8 ms)
+< HTTP 200 (7 ms)
 < {"names":["under_score file"],"meta":{"page":1,"limit":24,"total":1,"sortBy":"updatedAt","sortDir":"desc"}}
 > GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets?search=%25
 < HTTP 200 (8 ms)
@@ -23,42 +23,42 @@
 < HTTP 200 (8 ms)
 < {"names":["under_score file","Brand guide 100%"],"meta":{"page":1,"limit":24,"total":2,"sortBy":"updatedAt","sortDir":"desc"}}
 > GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets?tag=winter
-< HTTP 200 (8 ms)
+< HTTP 200 (7 ms)
 < {"names":["Winter banner"],"meta":{"page":1,"limit":24,"total":1,"sortBy":"updatedAt","sortDir":"desc"}}
 > GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets?sortBy=fileSize&sortDir=desc
-< HTTP 200 (8 ms)
+< HTTP 200 (7 ms)
 < {"names":["Brand guide 100%","Summer banner","under_score file","Winter banner"],"meta":{"page":1,"limit":24,"total":4,"sortBy":"fileSize","sortDir":"desc"}}
 > GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets?sortBy=name&sortDir=asc
 < HTTP 200 (8 ms)
 < {"names":["Brand guide 100%","Summer banner","under_score file","Winter banner"],"meta":{"page":1,"limit":24,"total":4,"sortBy":"name","sortDir":"asc"}}
 > GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets?sortBy=name&sortDir=asc&limit=3&page=1
-< HTTP 200 (8 ms)
+< HTTP 200 (9 ms)
 < {"names":["Brand guide 100%","Summer banner","under_score file"],"meta":{"page":1,"limit":3,"total":4,"sortBy":"name","sortDir":"asc"}}
 > GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets?sortBy=name&sortDir=asc&limit=3&page=2
-< HTTP 200 (10 ms)
+< HTTP 200 (7 ms)
 < {"names":["Winter banner"],"meta":{"page":2,"limit":3,"total":4,"sortBy":"name","sortDir":"asc"}}
 > GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets?page=99&limit=3
 < HTTP 200 (5 ms)
 < {"names":[],"meta":{"page":99,"limit":3,"total":4,"sortBy":"updatedAt","sortDir":"desc"}}
 > GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets?sortBy=storageKey
-< HTTP 400 (5 ms)
-< {"names":[]}
-> GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets?sortDir=sideways
-< HTTP 400 (6 ms)
-< {"names":[]}
-> GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets?limit=0
-< HTTP 400 (5 ms)
-< {"names":[]}
-> GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets?page=-1
 < HTTP 400 (4 ms)
 < {"names":[]}
-> GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets?assetType=NOPE
+> GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets?sortDir=sideways
+< HTTP 400 (4 ms)
+< {"names":[]}
+> GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets?limit=0
+< HTTP 400 (4 ms)
+< {"names":[]}
+> GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets?page=-1
 < HTTP 400 (5 ms)
 < {"names":[]}
+> GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets?assetType=NOPE
+< HTTP 400 (6 ms)
+< {"names":[]}
 > GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets?search=' OR 1=1 --
-< HTTP 200 (6 ms)
+< HTTP 200 (7 ms)
 < {"names":[],"meta":{"page":1,"limit":24,"total":0,"sortBy":"updatedAt","sortDir":"desc"}}
 > GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/folders
-< HTTP 200 (5 ms)
-< {"success":true,"data":[{"folder":"Brand","assetCount":2,"totalBytes":7000,"lastModified":"2026-10-04T09:42:21.042Z"},{"folder":"Campaigns Summer","assetCount":1,"totalBytes":3000,"lastModified":"2026-10-04T09:42:20.941Z"},{"folder":"Campaigns Winter","assetCount":1,"totalBytes":1000,"lastModified":"2026-10-04T09:42:20.975Z"},{"folder":"Ad Creatives","assetCount":0,"totalBytes":0,"lastModified":null},{"folder":"Brand Assets","assetCount":0,"totalBytes":0,"lastModified":null},{"folder":"Email Copies","assetCount":0,"totalBytes":0,"lastModified":null},{"folder":"General","assetCount":0,"totalBytes":0,"lastModified":null},{"folder":"Product Kits","assetCount":0,"totalBytes":0,"lastModified":null}]}
+< HTTP 200 (6 ms)
+< {"success":true,"data":[{"folder":"Brand","assetCount":2,"totalBytes":7000,"lastModified":"2026-10-04T10:42:21.704Z"},{"folder":"Campaigns Summer","assetCount":1,"totalBytes":3000,"lastModified":"2026-10-04T10:42:21.611Z"},{"folder":"Campaigns Winter","assetCount":1,"totalBytes":1000,"lastModified":"2026-10-04T10:42:21.645Z"},{"folder":"Ad Creatives","assetCount":0,"totalBytes":0,"lastModified":null},{"folder":"Brand Assets","assetCount":0,"totalBytes":0,"lastModified":null},{"folder":"Email Copies","assetCount":0,"totalBytes":0,"lastModified":null},{"folder":"General","assetCount":0,"totalBytes":0,"lastModified":null},{"folder":"Product Kits","assetCount":0,"totalBytes":0,"lastModified":null}]}
 folders with files: [["Brand",2],["Campaigns Summer",1],["Campaigns Winter",1]]; suggested empty folders: Ad Creatives, Brand Assets, Email Copies, General, Product Kits

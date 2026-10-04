@@ -1,19 +1,19 @@
-# Scenario Q — raw proof, run=1791106660677 (started 2026-10-04T09:37:52.761Z)
+# Scenario Q — raw proof, run=1791110473528 (started 2026-10-04T10:42:18.844Z)
 > PATCH /admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit
 > body: {"limitBytes":10485760,"reason":"e2e test limit"}
-< HTTP 200 (12 ms)
+< HTTP 200 (9 ms)
 < {"success":true,"data":{"organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","previousLimitBytes":20971520,"limitBytes":10485760,"usedBytes":0}}
 
 ==== Q1 break things on purpose (test org only) ====
 mysql> UPDATE organization_storage SET usedBytes = 7777777 WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
-S3 put (no database record): orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/0c94004c-763a-40ef-ab7d-5ecd81963b20/v1/orphan1791106672917 (4096 bytes)
-mc rm orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/2c2434a3-4792-4ded-a1e5-ca7bc0fbf07a/v1/a0c814bfe41151a15f9f260b (record without object)
+S3 put (no database record): orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/b9192272-eb9d-4885-ae7a-16658c59d5d0/v1/orphan1791110538976 (4096 bytes)
+mc rm orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/949838db-9236-45b8-a7ab-49adeabd2e00/v1/147036048688202edc037b55 (record without object)
 > POST /admin/storage/jobs/reconcile/run
-< HTTP 200 (25 ms)
-< {"success":true,"data":{"startedAt":"2026-10-04T09:37:52.974Z","finishedAt":"2026-10-04T09:37:52.994Z","objectsListed":39,"organizations":[{"organizationId":"46967d5b-48bc-400f-98a6-2c702e4106f6","counterBytes":4178210,"actualBytes":4178210,"inStorageBytes":4178210,"differenceBytes":0,"corrected":false},{"organizationId":"4fdfcd98-641e-416d-99a9-3abe852856ac","counterBytes":0,"actualBytes":0,"inStorageBytes":0,"differenceBytes":0,"corrected":false},{"organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","counterBytes":7777777,"actualBytes":3145728,"inStorageBytes":1048576,"differenceBytes":-4632049,"corrected":true}],"objectsWithoutRecord":[{"key":"orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/0c94004c-763a-40ef-ab7d-5ecd81963b20/v1/orphan1791106672917","sizeBytes":4096,"organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","uploadInProgress":false}],"recordsWithoutObject":[{"id":"1d4d2da5-89af-4691-ae9b-d38756307cb6","key":"orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/2c2434a3-4792-4ded-a1e5-ca7bc0fbf07a/v1/a0c814bfe41151a15f9f260b","organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","assetId":"2c2434a3-4792-4ded-a1e5-ca7bc0fbf07a","sizeBytes":2097152}],"sizeMismatches":[]}}
+< HTTP 200 (87 ms)
+< {"success":true,"data":{"startedAt":"2026-10-04T10:42:19.031Z","finishedAt":"2026-10-04T10:42:19.112Z","objectsListed":637,"organizations":[{"organizationId":"46967d5b-48bc-400f-98a6-2c702e4106f6","counterBytes":6349477,"actualBytes":6349477,"inStorageBytes":6349477,"differenceBytes":0,"corrected":false},{"organizationId":"4fdfcd98-641e-416d-99a9-3abe852856ac","counterBytes":9163,"actualBytes":9163,"inStorageBytes":9163,"differenceBytes":0,"corrected":false},{"organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","counterBytes":7777777,"actualBytes":3145728,"inStorageBytes":1048576,"differenceBytes":-4632049,"corrected":true}],"objectsWithoutRecord":[{"key":"orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/b9192272-eb9d-4885-ae7a-16658c59d5d0/v1/orphan1791110538976","sizeBytes":4096,"organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","uploadInProgress":false}],"recordsWithoutObject":[{"id":"946bbc4e-1b26-49df-8078-7a2cd512ef4a","key":"orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/949838db-9236-45b8-a7ab-49adeabd2e00/v1/147036048688202edc037b55","organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","assetId":"949838db-9236-45b8-a7ab-49adeabd2e00","sizeBytes":2097152}],"sizeMismatches":[]}}
 organization entry: {"organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","counterBytes":7777777,"actualBytes":3145728,"inStorageBytes":1048576,"differenceBytes":-4632049,"corrected":true}
-objectsWithoutRecord (this org): [{"key":"orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/0c94004c-763a-40ef-ab7d-5ecd81963b20/v1/orphan1791106672917","sizeBytes":4096,"organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","uploadInProgress":false}]
-recordsWithoutObject (this org): [{"id":"1d4d2da5-89af-4691-ae9b-d38756307cb6","key":"orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/2c2434a3-4792-4ded-a1e5-ca7bc0fbf07a/v1/a0c814bfe41151a15f9f260b","organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","assetId":"2c2434a3-4792-4ded-a1e5-ca7bc0fbf07a","sizeBytes":2097152}]
+objectsWithoutRecord (this org): [{"key":"orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/b9192272-eb9d-4885-ae7a-16658c59d5d0/v1/orphan1791110538976","sizeBytes":4096,"organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","uploadInProgress":false}]
+recordsWithoutObject (this org): [{"id":"946bbc4e-1b26-49df-8078-7a2cd512ef4a","key":"orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/949838db-9236-45b8-a7ab-49adeabd2e00/v1/147036048688202edc037b55","organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","assetId":"949838db-9236-45b8-a7ab-49adeabd2e00","sizeBytes":2097152}]
 mysql> SELECT * FROM organization_storage WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
 {"limitBytes":10485760,"usedBytes":3145728,"reservedBytes":0,"activeUploads":0}
 mysql> SELECT action, beforeState, afterState FROM audit_logs WHERE resourceId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046' AND action='STORAGE_USAGE_RECONCILED' …
