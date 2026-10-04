@@ -1,0 +1,59 @@
+# Scenario P — raw proof, run=1791106660677 (started 2026-10-04T09:37:51.441Z)
+> PATCH /admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit
+> body: {"limitBytes":10485760,"reason":"e2e test limit"}
+< HTTP 200 (10 ms)
+< {"success":true,"data":{"organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","previousLimitBytes":2097152,"limitBytes":10485760,"usedBytes":0}}
+> PATCH (as ORG_EMPTY_OWNER) /admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit
+> body: {"limitBytes":53687091200}
+< HTTP 403 (4 ms)
+< {"success":false,"statusCode":403,"code":"PERMISSION_DENIED","message":"Super admin access is required","error":{"code":"PERMISSION_DENIED","message":"Super admin access is required","requestId":"req_bc1a9c9a58f36724f6654398"},"correlationId":"req_bc1a9c9a58f36724f6654398","timestamp":"2026-10-04T09:37:51.515Z","path":"/api/v1/admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit"}
+> PATCH (as ORG_A_OWNER) /admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit
+> body: {"limitBytes":53687091200}
+< HTTP 403 (4 ms)
+< {"success":false,"statusCode":403,"code":"PERMISSION_DENIED","message":"Super admin access is required","error":{"code":"PERMISSION_DENIED","message":"Super admin access is required","requestId":"req_23779f60eec674c48f6f08ff"},"correlationId":"req_23779f60eec674c48f6f08ff","timestamp":"2026-10-04T09:37:51.885Z","path":"/api/v1/admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit"}
+> PATCH (as ORG_A_ADMIN) /admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit
+> body: {"limitBytes":53687091200}
+< HTTP 403 (5 ms)
+< {"success":false,"statusCode":403,"code":"PERMISSION_DENIED","message":"Super admin access is required","error":{"code":"PERMISSION_DENIED","message":"Super admin access is required","requestId":"req_f2ffd6ba86aef179ca3aebc2"},"correlationId":"req_f2ffd6ba86aef179ca3aebc2","timestamp":"2026-10-04T09:37:52.273Z","path":"/api/v1/admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit"}
+> PATCH (as AFFILIATE_1) /admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit
+> body: {"limitBytes":53687091200}
+< HTTP 403 (6 ms)
+< {"success":false,"statusCode":403,"code":"PERMISSION_DENIED","message":"Super admin access is required","error":{"code":"PERMISSION_DENIED","message":"Super admin access is required","requestId":"req_b717807cadc81dd1e188ec9b"},"correlationId":"req_b717807cadc81dd1e188ec9b","timestamp":"2026-10-04T09:37:52.660Z","path":"/api/v1/admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit"}
+> PATCH (as owner) /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage/usage
+> body: {"limitBytes":1}
+< HTTP 404 (9 ms)
+< {"success":false,"statusCode":404,"code":"Not Found","message":"Cannot PATCH /api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage/usage","error":{"code":"Not Found","message":"Cannot PATCH /api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage/usage","requestId":"req_3fd7acaa68da90a94d86eb4e"},"correlationId":"req_3fd7acaa68da90a94d86eb4e","timestamp":"2026-10-04T09:37:52.670Z","path":"/api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage/usage"}
+> PATCH (as owner) /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage
+> body: {"limitBytes":1}
+< HTTP 404 (6 ms)
+< {"success":false,"statusCode":404,"code":"Not Found","message":"Cannot PATCH /api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage","error":{"code":"Not Found","message":"Cannot PATCH /api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage","requestId":"req_62d3af4822dd889dc5e1c2c4"},"correlationId":"req_62d3af4822dd889dc5e1c2c4","timestamp":"2026-10-04T09:37:52.677Z","path":"/api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage"}
+> POST (as owner) /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage/limit
+> body: {"limitBytes":1}
+< HTTP 404 (2 ms)
+< {"success":false,"statusCode":404,"code":"Not Found","message":"Cannot POST /api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage/limit","error":{"code":"Not Found","message":"Cannot POST /api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage/limit","requestId":"req_f420a4605a1648d8ba4db261"},"correlationId":"req_f420a4605a1648d8ba4db261","timestamp":"2026-10-04T09:37:52.680Z","path":"/api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage/limit"}
+> PATCH (platform admin, invalid) /admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit
+> body: {"limitBytes":-1}
+< HTTP 400 (10 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"limitBytes must not be less than 0","error":{"code":"VALIDATION_ERROR","message":"limitBytes must not be less than 0","requestId":"req_f53ea5f30b083004087b26da"},"correlationId":"req_f53ea5f30b083004087b26da","timestamp":"2026-10-04T09:37:52.691Z","path":"/api/v1/admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit"}
+> PATCH (platform admin, invalid) /admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit
+> body: {"limitBytes":"lots"}
+< HTTP 400 (6 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"limitBytes must not be greater than 9007199254740991; limitBytes must not be less than 0; limitBytes must be an integer number","error":{"code":"VALIDATION_ERROR","message":"limitBytes must not be greater than 9007199254740991; limitBytes must not be less than 0; limitBytes must be an integer number","requestId":"req_7091e5434f953465372ac0f4"},"correlationId":"req_7091e5434f953465372ac0f4","timestamp":"2026-10-04T09:37:52.698Z","path":"/api/v1/admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit"}
+> PATCH (platform admin, invalid) /admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit
+> body: {"limitBytes":1.5}
+< HTTP 400 (8 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"limitBytes must be an integer number","error":{"code":"VALIDATION_ERROR","message":"limitBytes must be an integer number","requestId":"req_5c6ff9e75e9e99c029674c28"},"correlationId":"req_5c6ff9e75e9e99c029674c28","timestamp":"2026-10-04T09:37:52.707Z","path":"/api/v1/admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit"}
+> PATCH (platform admin, invalid) /admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit
+> body: {"limitBytes":null}
+< HTTP 400 (6 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"limitBytes must not be greater than 9007199254740991; limitBytes must not be less than 0; limitBytes must be an integer number","error":{"code":"VALIDATION_ERROR","message":"limitBytes must not be greater than 9007199254740991; limitBytes must not be less than 0; limitBytes must be an integer number","requestId":"req_83be462957f07680ecd0ebfe"},"correlationId":"req_83be462957f07680ecd0ebfe","timestamp":"2026-10-04T09:37:52.714Z","path":"/api/v1/admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit"}
+> PATCH (platform admin, extra field) /admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit
+> body: {"limitBytes":10485760,"usedBytes":0}
+< HTTP 400 (6 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"property usedBytes should not exist","error":{"code":"VALIDATION_ERROR","message":"property usedBytes should not exist","requestId":"req_94e1d26b6e39405141a07860"},"correlationId":"req_94e1d26b6e39405141a07860","timestamp":"2026-10-04T09:37:52.721Z","path":"/api/v1/admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit"}
+> PATCH /admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit
+> body: {"limitBytes":20971520,"reason":"customer bought more"}
+< HTTP 200 (11 ms)
+< {"success":true,"data":{"organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","previousLimitBytes":10485760,"limitBytes":20971520,"usedBytes":0}}
+mysql> SELECT action, actorId, beforeState, afterState FROM audit_logs WHERE resourceId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046' AND action='STORAGE_LIMIT_CHANGED' ORDER BY createdAt DESC LIMIT 1
+[{"action":"STORAGE_LIMIT_CHANGED","actorId":"0d68c3b8-983d-4c76-8e21-40acbc4b72e8","beforeState":"{\"limitBytes\":10485760}","afterState":"{\"limitBytes\":20971520}"}]

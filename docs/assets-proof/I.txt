@@ -1,0 +1,43 @@
+# Scenario I — raw proof, run=1791106660677 (started 2026-10-04T09:37:44.234Z)
+> PATCH /admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit
+> body: {"limitBytes":10485760,"reason":"e2e test limit"}
+< HTTP 200 (14 ms)
+< {"success":true,"data":{"organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","previousLimitBytes":10485760,"limitBytes":10485760,"usedBytes":0}}
+
+==== I1 four 3 MB uploads at the same time into 10 MB ====
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"size":3145728}
+< HTTP 201 (197 ms, 3146242 body bytes sent)
+< {"success":true,"data":{"id":"9b12b510-f2be-4434-8ec7-c15e25908a3e","organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","environment":"LIVE","programId":null,"name":"e2e-ast-1791100374195-Q i-1","description":null,"assetType":"DOCUMENT","sourceType":"FILE","contentType":"text/plain; charset=utf-8","fileName":"i-1.txt","originalFileName":"i-1.txt","fileExtension":"txt","mimeType":"text/plain; charset=utf-8","fileSize":3145728,"storageProvider":"s3","textContent":null,"htmlContent":null,"externalUrl":null,"width":null,"height":null,"duration":null,"language":null,"country":null,"tags":[],"metadata":{"folderPath":"General"},"status":"PUBLISHED","isPublicToAffiliates":true,"isDownloadable":true,"isCopyable":true,"version":1,"checksum":"fc70998d5716f39aa3885c7d2b1a8161c5cd5ac8bd6d7e3ced2a30b7ea3f7d22","createdBy":"436de58a-082e-4b68-94b7-24e33d46358e","updatedBy":"436de58a-082e-4b68-94b7-24e33d46358e","createdAt":"2026-10-04T09:37:44.460Z","updatedAt":"2026-10-04T09:37:44.460Z","deletedAt":null,"folder":"General","hasFile":true,"legacyFileMissing":false,"inline":false,"usage":{"views":0,"previews":0,"downloads":0,"copies":0,"uniqueAffiliates":0},"associatedBundleCount":0}}
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"size":3145728}
+< HTTP 201 (205 ms, 3146242 body bytes sent)
+< {"success":true,"data":{"id":"85832298-2e6d-49c9-843b-ff6774f85aa7","organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","environment":"LIVE","programId":null,"name":"e2e-ast-1791100374195-Q i-2","description":null,"assetType":"DOCUMENT","sourceType":"FILE","contentType":"text/plain; charset=utf-8","fileName":"i-2.txt","originalFileName":"i-2.txt","fileExtension":"txt","mimeType":"text/plain; charset=utf-8","fileSize":3145728,"storageProvider":"s3","textContent":null,"htmlContent":null,"externalUrl":null,"width":null,"height":null,"duration":null,"language":null,"country":null,"tags":[],"metadata":{"folderPath":"General"},"status":"PUBLISHED","isPublicToAffiliates":true,"isDownloadable":true,"isCopyable":true,"version":1,"checksum":"98cc148e74d5bbdfc1aac80515d2b85f5e49d4cc1e3544ba56d5f6d8e24b6cdd","createdBy":"436de58a-082e-4b68-94b7-24e33d46358e","updatedBy":"436de58a-082e-4b68-94b7-24e33d46358e","createdAt":"2026-10-04T09:37:44.471Z","updatedAt":"2026-10-04T09:37:44.471Z","deletedAt":null,"folder":"General","hasFile":true,"legacyFileMissing":false,"inline":false,"usage":{"views":0,"previews":0,"downloads":0,"copies":0,"uniqueAffiliates":0},"associatedBundleCount":0}}
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"size":3145728}
+< HTTP 201 (185 ms, 3146242 body bytes sent)
+< {"success":true,"data":{"id":"ca8750a4-b65a-4a32-884f-7e670ff4b754","organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","environment":"LIVE","programId":null,"name":"e2e-ast-1791100374195-Q i-3","description":null,"assetType":"DOCUMENT","sourceType":"FILE","contentType":"text/plain; charset=utf-8","fileName":"i-3.txt","originalFileName":"i-3.txt","fileExtension":"txt","mimeType":"text/plain; charset=utf-8","fileSize":3145728,"storageProvider":"s3","textContent":null,"htmlContent":null,"externalUrl":null,"width":null,"height":null,"duration":null,"language":null,"country":null,"tags":[],"metadata":{"folderPath":"General"},"status":"PUBLISHED","isPublicToAffiliates":true,"isDownloadable":true,"isCopyable":true,"version":1,"checksum":"1510f95c8133dfa7cc77d91b0db4946c6b74de11e110db211a98ca4dfc7e4568","createdBy":"436de58a-082e-4b68-94b7-24e33d46358e","updatedBy":"436de58a-082e-4b68-94b7-24e33d46358e","createdAt":"2026-10-04T09:37:44.452Z","updatedAt":"2026-10-04T09:37:44.452Z","deletedAt":null,"folder":"General","hasFile":true,"legacyFileMissing":false,"inline":false,"usage":{"views":0,"previews":0,"downloads":0,"copies":0,"uniqueAffiliates":0},"associatedBundleCount":0}}
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload multipart {"size":3145728}
+< HTTP 413 (43 ms, 1114581 body bytes sent)
+< {"success":false,"statusCode":413,"code":"STORAGE_LIMIT_REACHED","message":"Not enough storage space: this file needs 3.0 MB but only 1.0 MB of your 10.0 MB is left. Free space by emptying the trash or deleting older versions.","details":{"neededBytes":3145728,"availableBytes":1048576,"limitBytes":10485760,"usedBytes":0,"reservedBytes":9437184,"howToFree":["Empty the trash (files in the trash still count until they are permanently deleted).","Delete older versions of files you have replaced.","Delete files you no longer need."]},"error":{"code":"STORAGE_LIMIT_REACHED","message":"Not enough storage space: this file needs 3.0 MB but only 1.0 MB of your 10.0 MB is left. Free space by emptying the trash or deleting older versions.","requestId":"req_af70c6124e4810267b0fc586"},"correlationId":"req_af70c6124e4810267b0fc586","timestamp":"2026-10-04T09:37:44.325Z","path":"/api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/upload"}
+201: 3, 413: 1
+
+==== I1 after: API / DB / S3 ====
+> GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage/usage
+< HTTP 200 (8 ms)
+< {"limitBytes":10485760,"usedBytes":9437184,"reservedBytes":0,"availableBytes":1048576,"percentUsed":90,"overLimit":false,"activeUploads":0,"breakdown":{"filesBytes":9437184,"olderVersionsBytes":0,"trashBytes":0},"counts":{"files":3,"olderVersions":0,"trashedAssets":0}}
+mysql> SELECT limitBytes, usedBytes, reservedBytes, activeUploads FROM organization_storage WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
+{"limitBytes":10485760,"usedBytes":9437184,"reservedBytes":0,"activeUploads":0}
+mysql> SELECT SUM(sizeBytes), COUNT(*) FROM stored_objects WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046' AND countsTowardQuota=1
+{"bytes":9437184,"count":3}
+S3 (MinIO, independent client) orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/: 3 objects, 9437184 bytes
+
+==== I2 twenty 1 MB uploads racing for the last 1 MB (limit 10 MB, 9 MB used) — five at a time ====
+statuses: 201,413,413,413,413,413,413,413,413,413,413,413,413,413,413,413,413,413,413,413
+
+==== I2 after: API / DB / S3 ====
+> GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage/usage
+< HTTP 200 (9 ms)
+< {"limitBytes":10485760,"usedBytes":10485760,"reservedBytes":0,"availableBytes":0,"percentUsed":100,"overLimit":true,"activeUploads":0,"breakdown":{"filesBytes":10485760,"olderVersionsBytes":0,"trashBytes":0},"counts":{"files":4,"olderVersions":0,"trashedAssets":0}}
+mysql> SELECT limitBytes, usedBytes, reservedBytes, activeUploads FROM organization_storage WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
+{"limitBytes":10485760,"usedBytes":10485760,"reservedBytes":0,"activeUploads":0}
+mysql> SELECT SUM(sizeBytes), COUNT(*) FROM stored_objects WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046' AND countsTowardQuota=1
+{"bytes":10485760,"count":4}
+S3 (MinIO, independent client) orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/: 4 objects, 10485760 bytes

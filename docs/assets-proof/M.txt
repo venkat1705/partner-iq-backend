@@ -1,0 +1,83 @@
+# Scenario M — raw proof, run=1791106660677 (started 2026-10-04T09:37:50.274Z)
+> PATCH /admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit
+> body: {"limitBytes":10485760,"reason":"e2e test limit"}
+< HTTP 200 (11 ms)
+< {"success":true,"data":{"organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","previousLimitBytes":10485760,"limitBytes":10485760,"usedBytes":0}}
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e0ddb910-38f2-4174-9a0e-4954792bc875/versions/upload multipart {"size":2097152}
+< HTTP 201 (68 ms, 2097449 body bytes sent)
+< {"success":true,"data":{"id":"e0ddb910-38f2-4174-9a0e-4954792bc875","organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","environment":"LIVE","programId":null,"name":"e2e-ast-1791100374195-Q m-v1","description":null,"assetType":"DOCUMENT","sourceType":"FILE","contentType":"text/plain; charset=utf-8","fileName":"m-v2.txt","originalFileName":"m-v2.txt","fileExtension":"txt","mimeType":"text/plain; charset=utf-8","fileSize":2097152,"storageProvider":"s3","textContent":null,"htmlContent":null,"externalUrl":null,"width":null,"height":null,"duration":null,"language":null,"country":null,"tags":[],"metadata":{"folderPath":"General"},"status":"PUBLISHED","isPublicToAffiliates":true,"isDownloadable":true,"isCopyable":true,"version":2,"checksum":"0092293d7c28fb475773cacd22f30f4c238b46925f14d7d22f659739e50dddd8","createdBy":"436de58a-082e-4b68-94b7-24e33d46358e","updatedBy":"436de58a-082e-4b68-94b7-24e33d46358e","createdAt":"2026-10-04T09:37:50.362Z","updatedAt":"2026-10-04T09:37:50.427Z","deletedAt":null,"folder":"General","hasFile":true,"legacyFileMissing":false,"inline":false,"usage":{"views":0,"previews":0,"downloads":0,"copies":0,"uniqueAffiliates":0},"associatedBundleCount":0}}
+
+==== M1 after v2: API / DB / S3 ====
+> GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage/usage
+< HTTP 200 (10 ms)
+< {"limitBytes":10485760,"usedBytes":3145728,"reservedBytes":0,"availableBytes":7340032,"percentUsed":30,"overLimit":false,"activeUploads":0,"breakdown":{"filesBytes":2097152,"olderVersionsBytes":1048576,"trashBytes":0},"counts":{"files":1,"olderVersions":1,"trashedAssets":0}}
+mysql> SELECT limitBytes, usedBytes, reservedBytes, activeUploads FROM organization_storage WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
+{"limitBytes":10485760,"usedBytes":3145728,"reservedBytes":0,"activeUploads":0}
+mysql> SELECT SUM(sizeBytes), COUNT(*) FROM stored_objects WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046' AND countsTowardQuota=1
+{"bytes":3145728,"count":2}
+S3 (MinIO, independent client) orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/: 2 objects, 3145728 bytes
+> GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e0ddb910-38f2-4174-9a0e-4954792bc875/versions
+< HTTP 200 (8 ms)
+< {"success":true,"data":[{"id":"ed547d90-9d52-45c4-b6aa-75952619bf6e","assetId":"e0ddb910-38f2-4174-9a0e-4954792bc875","versionNumber":2,"fileName":"m-v2.txt","mimeType":"text/plain; charset=utf-8","fileSize":2097152,"checksum":"0092293d7c28fb475773cacd22f30f4c238b46925f14d7d22f659739e50dddd8","createdBy":"436de58a-082e-4b68-94b7-24e33d46358e","createdAt":"2026-10-04T09:37:50.427Z","changeNotes":"second","isCurrent":true,"hasFile":true},{"id":"c2c9cae1-9821-4dcd-83a9-aedfd1871f54","assetId":"e0ddb910-38f2-4174-9a0e-4954792bc875","versionNumber":1,"fileName":"m-v1.txt","mimeType":"text/plain; charset=utf-8","fileSize":1048576,"checksum":"299cdfc596d8676b9a58081b33528c834f3ad972b1d0e4f670a61b25c47dedb9","createdBy":"436de58a-082e-4b68-94b7-24e33d46358e","createdAt":"2026-10-04T09:37:50.362Z","changeNotes":"Initial upload","isCurrent":false,"hasFile":true}]}
+
+==== M2 a version with a different file type is refused ====
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e0ddb910-38f2-4174-9a0e-4954792bc875/versions/upload multipart {"fileName":"m.png"}
+< HTTP 415 (10 ms, 1498 body bytes sent)
+< {"success":false,"statusCode":415,"code":"VERSION_FILE_TYPE_MISMATCH","message":"A new version must be a .txt file like the current one (got .png). Upload a different file type as a new asset.","error":{"code":"VERSION_FILE_TYPE_MISMATCH","message":"A new version must be a .txt file like the current one (got .png). Upload a different file type as a new asset.","requestId":"req_4b28e5270e35ba04c0919adc"},"correlationId":"req_4b28e5270e35ba04c0919adc","timestamp":"2026-10-04T09:37:50.549Z","path":"/api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e0ddb910-38f2-4174-9a0e-4954792bc875/versions/upload"}
+status 415 (a .txt asset getting a .png version)
+
+==== M3 restore v1: a new current version v3 pointing at v1's object (no copy, no extra space) ====
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e0ddb910-38f2-4174-9a0e-4954792bc875/restore/c2c9cae1-9821-4dcd-83a9-aedfd1871f54
+< HTTP 200 (23 ms)
+< {"status":200,"version":3,"fileSize":1048576}
+
+==== M3: API / DB / S3 ====
+> GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage/usage
+< HTTP 200 (8 ms)
+< {"limitBytes":10485760,"usedBytes":3145728,"reservedBytes":0,"availableBytes":7340032,"percentUsed":30,"overLimit":false,"activeUploads":0,"breakdown":{"filesBytes":1048576,"olderVersionsBytes":2097152,"trashBytes":0},"counts":{"files":1,"olderVersions":1,"trashedAssets":0}}
+mysql> SELECT limitBytes, usedBytes, reservedBytes, activeUploads FROM organization_storage WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
+{"limitBytes":10485760,"usedBytes":3145728,"reservedBytes":0,"activeUploads":0}
+mysql> SELECT SUM(sizeBytes), COUNT(*) FROM stored_objects WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046' AND countsTowardQuota=1
+{"bytes":3145728,"count":2}
+S3 (MinIO, independent client) orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/: 2 objects, 3145728 bytes
+> GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e0ddb910-38f2-4174-9a0e-4954792bc875/versions
+< HTTP 200 (8 ms)
+< [{"v":3,"isCurrent":true,"fileSize":1048576,"notes":"Restored from v1"},{"v":2,"isCurrent":false,"fileSize":2097152,"notes":"second"},{"v":1,"isCurrent":false,"fileSize":1048576,"notes":"Initial upload"}]
+
+==== M4 deleting the current version is refused ====
+> DELETE /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e0ddb910-38f2-4174-9a0e-4954792bc875/versions/29b220ab-de03-4f92-ab0e-a8a99efa24dd
+< HTTP 400 (9 ms)
+< {"success":false,"statusCode":400,"code":"VALIDATION_ERROR","message":"The current version cannot be deleted. Restore another version first, or delete the file.","error":{"code":"VALIDATION_ERROR","message":"The current version cannot be deleted. Restore another version first, or delete the file.","requestId":"req_9757d8dec3c5c2ae3805fca6"},"correlationId":"req_9757d8dec3c5c2ae3805fca6","timestamp":"2026-10-04T09:37:50.611Z","path":"/api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e0ddb910-38f2-4174-9a0e-4954792bc875/versions/29b220ab-de03-4f92-ab0e-a8a99efa24dd"}
+
+==== M5 deleting v1 frees nothing (its object is the current file); deleting v2 frees 2 MB and its object ====
+> DELETE /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e0ddb910-38f2-4174-9a0e-4954792bc875/versions/c2c9cae1-9821-4dcd-83a9-aedfd1871f54
+< HTTP 200 (15 ms)
+< {"success":true,"data":{"success":true,"freedBytes":0}}
+> DELETE /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e0ddb910-38f2-4174-9a0e-4954792bc875/versions/ed547d90-9d52-45c4-b6aa-75952619bf6e
+< HTTP 200 (19 ms)
+< {"success":true,"data":{"success":true,"freedBytes":2097152}}
+
+==== M5: API / DB / S3 ====
+> GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage/usage
+< HTTP 200 (8 ms)
+< {"limitBytes":10485760,"usedBytes":1048576,"reservedBytes":0,"availableBytes":9437184,"percentUsed":10,"overLimit":false,"activeUploads":0,"breakdown":{"filesBytes":1048576,"olderVersionsBytes":0,"trashBytes":0},"counts":{"files":1,"olderVersions":0,"trashedAssets":0}}
+mysql> SELECT limitBytes, usedBytes, reservedBytes, activeUploads FROM organization_storage WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
+{"limitBytes":10485760,"usedBytes":1048576,"reservedBytes":0,"activeUploads":0}
+mysql> SELECT SUM(sizeBytes), COUNT(*) FROM stored_objects WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046' AND countsTowardQuota=1
+{"bytes":1048576,"count":1}
+S3 (MinIO, independent client) orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/: 1 objects, 1048576 bytes
+
+==== M6 a new version that does not fit is refused, the old file stays ====
+> POST /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e0ddb910-38f2-4174-9a0e-4954792bc875/versions/upload multipart {"size":1048577}
+< HTTP 413 (11 ms, 1048771 body bytes sent)
+< {"success":false,"statusCode":413,"code":"STORAGE_LIMIT_REACHED","message":"Not enough storage space: this file needs 1.0 MB but only 1.0 MB of your 2.0 MB is left. Free space by emptying the trash or deleting older versions.","details":{"neededBytes":1048577,"availableBytes":1048576,"limitBytes":2097152,"usedBytes":1048576,"reservedBytes":0,"howToFree":["Empty the trash (files in the trash still count until they are permanently deleted).","Delete older versions of files you have replaced.","Delete files you no longer need."]},"error":{"code":"STORAGE_LIMIT_REACHED","message":"Not enough storage space: this file needs 1.0 MB but only 1.0 MB of your 2.0 MB is left. Free space by emptying the trash or deleting older versions.","requestId":"req_32827e0b124d763ce175f500"},"correlationId":"req_32827e0b124d763ce175f500","timestamp":"2026-10-04T09:37:50.696Z","path":"/api/v1/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/e0ddb910-38f2-4174-9a0e-4954792bc875/versions/upload"}
+
+==== M6: API / DB / S3 ====
+> GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage/usage
+< HTTP 200 (9 ms)
+< {"limitBytes":2097152,"usedBytes":1048576,"reservedBytes":0,"availableBytes":1048576,"percentUsed":50,"overLimit":false,"activeUploads":0,"breakdown":{"filesBytes":1048576,"olderVersionsBytes":0,"trashBytes":0},"counts":{"files":1,"olderVersions":0,"trashedAssets":0}}
+mysql> SELECT limitBytes, usedBytes, reservedBytes, activeUploads FROM organization_storage WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
+{"limitBytes":2097152,"usedBytes":1048576,"reservedBytes":0,"activeUploads":0}
+mysql> SELECT SUM(sizeBytes), COUNT(*) FROM stored_objects WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046' AND countsTowardQuota=1
+{"bytes":1048576,"count":1}
+S3 (MinIO, independent client) orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/: 1 objects, 1048576 bytes

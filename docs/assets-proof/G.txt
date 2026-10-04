@@ -1,0 +1,22 @@
+# Scenario G — raw proof, run=1791106660677 (started 2026-10-04T09:37:41.765Z)
+> PATCH /admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit
+> body: {"limitBytes":10485760,"reason":"e2e test limit"}
+< HTTP 200 (20 ms)
+< {"success":true,"data":{"organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","previousLimitBytes":10485760,"limitBytes":10485760,"usedBytes":0}}
+
+==== G1 after two uploads: API / DB / S3 ====
+> GET /organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/storage/usage
+< HTTP 200 (14 ms)
+< {"limitBytes":10485760,"usedBytes":3145851,"reservedBytes":0,"availableBytes":7339909,"percentUsed":30,"overLimit":false,"activeUploads":0,"breakdown":{"filesBytes":3145851,"olderVersionsBytes":0,"trashBytes":0},"counts":{"files":2,"olderVersions":0,"trashedAssets":0}}
+mysql> SELECT limitBytes, usedBytes, reservedBytes, activeUploads FROM organization_storage WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
+{"limitBytes":10485760,"usedBytes":3145851,"reservedBytes":0,"activeUploads":0}
+mysql> SELECT SUM(sizeBytes), COUNT(*) FROM stored_objects WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046' AND countsTowardQuota=1
+{"bytes":3145851,"count":2}
+S3 (MinIO, independent client) orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/: 2 objects, 3145851 bytes
+
+==== G2 default limit for an organization that never had one ====
+> GET /organizations/4fdfcd98-641e-416d-99a9-3abe852856ac/storage/usage
+< HTTP 200 (11 ms)
+< {"limitBytes":3221225472,"usedBytes":0,"reservedBytes":0,"availableBytes":3221225472,"percentUsed":0,"overLimit":false,"activeUploads":0,"breakdown":{"filesBytes":0,"olderVersionsBytes":0,"trashBytes":0},"counts":{"files":0,"olderVersions":0,"trashedAssets":0}}
+mysql> SELECT limitBytes FROM organization_storage WHERE organizationId='4fdfcd98-641e-416d-99a9-3abe852856ac'
+{"limitBytes":3221225472}
