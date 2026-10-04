@@ -34,6 +34,7 @@
     "test:invitations": "cross-env DATABASE_PORT=59999 DATABASE_URL= tsx src/tests/affiliate-invitation-flow.test.ts",
     "storage:setup": "node dist/src/common/storage/cli/setup-bucket.js",
     "storage:describe": "node dist/src/common/storage/cli/setup-bucket.js --describe",
+    "storage:migrate-legacy": "node dist/src/modules/storage-quota/cli/migrate-legacy-files.js",
     "lint:architecture": "eslint \"src/**/*.ts\" server.ts"
   },
   "dependencies": {
