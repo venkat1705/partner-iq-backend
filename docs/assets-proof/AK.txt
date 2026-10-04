@@ -1,18 +1,19 @@
-# Scenario AK — raw proof, run=1791109453806 (started 2026-10-04T10:24:15.227Z)
+# Scenario AK — raw proof, run=1791110008674 (started 2026-10-04T10:33:30.117Z)
 
 ==== AK1 empty state ====
 
 ==== T-ui upload a PNG through the dialog ====
 mysql> newest asset
-{"id":"d4c30368-b882-43f5-ba95-16fb80fb97c2","fileSize":180578,"fileName":"ui-banner.png"}
+{"id":"4427e022-fb32-492c-a120-b80f30858f7e","fileSize":180578,"fileName":"ui-banner.png"}
 
-==== AK2 cancel a slow upload: CDP throttles the upload to 1 MB/s, cancel after the progress bar appears ====
-mysql> during the upload
+==== AK2 cancel a slow upload: the admin app is opened through a proxy that really limits uploads to 1 MB/s ====
+mysql> during the upload (≈3 MB of 20 MB sent)
 {"limitBytes":104857600,"usedBytes":180578,"reservedBytes":20971520,"activeUploads":1}
 mysql> after cancel
 {"limitBytes":104857600,"usedBytes":180578,"reservedBytes":0,"activeUploads":0}
 mysql> open reservations
 []
+storage bar after cancel: 176.3 KB of 100 MB used
 
 ==== AK3 Escape closes the dialog; reopening starts clean ====
 
@@ -23,15 +24,16 @@ error state: Simulated failure Try again
 
 ==== T-ui upload a PNG through the dialog ====
 mysql> newest asset
-{"id":"010fe623-05c7-496a-8ebf-e5bbe5639002","fileSize":180578,"fileName":"ui-banner.png"}
+{"id":"6eea2f6c-b344-4de9-81ff-ba1f5a967e1f","fileSize":180578,"fileName":"ui-banner.png"}
 
-==== AK2 cancel a slow upload: CDP throttles the upload to 1 MB/s, cancel after the progress bar appears ====
-mysql> during the upload
+==== AK2 cancel a slow upload: the admin app is opened through a proxy that really limits uploads to 1 MB/s ====
+mysql> during the upload (≈3 MB of 20 MB sent)
 {"limitBytes":104857600,"usedBytes":180578,"reservedBytes":20971520,"activeUploads":1}
 mysql> after cancel
 {"limitBytes":104857600,"usedBytes":180578,"reservedBytes":0,"activeUploads":0}
 mysql> open reservations
 []
+storage bar after cancel: 176.3 KB of 100 MB used
 
 ==== AK3 Escape closes the dialog; reopening starts clean ====
 
@@ -42,15 +44,16 @@ error state: Simulated failure Try again
 
 ==== T-ui upload a PNG through the dialog ====
 mysql> newest asset
-{"id":"2a74a23d-334e-406d-a3cc-01ab80095b36","fileSize":180578,"fileName":"ui-banner.png"}
+{"id":"80df7f57-84e3-4532-a4f3-6c5d2c5b27c8","fileSize":180578,"fileName":"ui-banner.png"}
 
-==== AK2 cancel a slow upload: CDP throttles the upload to 1 MB/s, cancel after the progress bar appears ====
-mysql> during the upload
+==== AK2 cancel a slow upload: the admin app is opened through a proxy that really limits uploads to 1 MB/s ====
+mysql> during the upload (≈3 MB of 20 MB sent)
 {"limitBytes":104857600,"usedBytes":180578,"reservedBytes":20971520,"activeUploads":1}
 mysql> after cancel
 {"limitBytes":104857600,"usedBytes":180578,"reservedBytes":0,"activeUploads":0}
 mysql> open reservations
 []
+storage bar after cancel: 176.3 KB of 100 MB used
 
 ==== AK3 Escape closes the dialog; reopening starts clean ====
 

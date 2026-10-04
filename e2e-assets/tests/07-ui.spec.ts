@@ -8,6 +8,7 @@ import { as } from '../lib/session';
 import { adminLogin, consoleErrors, dismissPricing, acceptCookies, recordApi, recoverFromAuthRace, refreshPage } from '../lib/ui';
 import { MB, dbStorage, listData, openReservations, orgPath, setLimit, uploadAsset, usage, wipeOrg } from '../lib/assets';
 import { makePng, makeText, upload } from '../lib/upload';
+import { startSlowProxy } from '../lib/slow-proxy';
 
 /**
  * UI scenarios against production builds: admin app (vite preview :3001, /api proxied to the backend) and the
@@ -138,7 +139,7 @@ test('G/O (UI). warnings at 80 % and 95 %, storage-full state disables uploads; 
   expect(d!.usedBytes).toBe(10 * MB);
 });
 
-test('T/K/AK (UI). upload through the dialog, progress, cancel mid-way leaves nothing, empty and error states', async ({ page }) => {
+test('T/K/AK (UI). upload through the dialog, progress, cancel mid-way leaves nothing, empty and error states', async ({ page, browser }) => {
   test.setTimeout(180_000);
   const proof = new Proof('AK');
   await wipeOrg(org, ROLE);
@@ -160,27 +161,39 @@ test('T/K/AK (UI). upload through the dialog, progress, cancel mid-way leaves no
   expect(await storageText(page)).toBe(`${fmt(png.length)} of 100 MB used`);
   await refreshPage(page);
   await expect(page.getByText('Ui banner').first()).toBeVisible();
-  proof.h('AK2 cancel a slow upload: CDP throttles the upload to 1 MB/s, cancel after the progress bar appears');
-  const cdp = await page.context().newCDPSession(page);
-  await cdp.send('Network.enable');
-  await cdp.send('Network.emulateNetworkConditions', { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: 1024 * 1024 });
-  await page.getByTestId('open-upload').click();
-  await page.getByTestId('asset-file-input').setInputFiles({ name: 'slow.txt', mimeType: 'text/plain', buffer: makeText(20 * MB, 'slow') });
-  await page.getByTestId('upload-submit').click();
-  await expect(page.getByTestId('upload-progress')).toBeVisible();
-  await page.waitForTimeout(2500);
-  const mid = await dbStorage(org);
-  proof.sql('during the upload', mid);
-  await page.getByTestId('upload-cancel').click();
-  await cdp.send('Network.emulateNetworkConditions', { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
-  await page.waitForTimeout(3000);
-  const after = await dbStorage(org);
-  proof.sql('after cancel', after);
-  proof.sql('open reservations', await openReservations(org));
-  expect(mid!.activeUploads).toBe(1);
-  expect(after).toMatchObject({ usedBytes: png.length, reservedBytes: 0, activeUploads: 0 });
-  const slow = await sqlOne<any>(`SELECT COUNT(*) n FROM assets WHERE organizationId=? AND fileName='slow.txt'`, [org]);
-  expect(Number(slow.n)).toBe(0);
+  proof.h('AK2 cancel a slow upload: the admin app is opened through a proxy that really limits uploads to 1 MB/s');
+  // (Chrome DevTools throttling only delays what the page sees; the body still reaches the server at full speed)
+  const slowProxy = await startSlowProxy(3011, { host: 'localhost', port: 3001 }, 1024 * 1024);
+  const fastUi = ENV.ADMIN_UI;
+  const slowCtx = await browser.newContext();
+  const sp = await slowCtx.newPage();
+  try {
+    (ENV as any).ADMIN_UI = 'http://127.0.0.1:3011';
+    await adminLogin(sp, ROLE);
+    await openAssets(sp, org, 'assets');
+    await sp.getByTestId('open-upload').click();
+    await sp.getByTestId('asset-file-input').setInputFiles({ name: 'slow.txt', mimeType: 'text/plain', buffer: makeText(20 * MB, 'slow') });
+    await sp.getByTestId('upload-submit').click();
+    await expect(sp.getByTestId('upload-progress')).toBeVisible();
+    await sp.waitForTimeout(3000);
+    const mid = await dbStorage(org);
+    proof.sql('during the upload (≈3 MB of 20 MB sent)', mid);
+    await sp.getByTestId('upload-cancel').click();
+    await sp.waitForTimeout(3000);
+    const after = await dbStorage(org);
+    proof.sql('after cancel', after);
+    proof.sql('open reservations', await openReservations(org));
+    expect(mid!.activeUploads).toBe(1);
+    expect(after).toMatchObject({ usedBytes: png.length, reservedBytes: 0, activeUploads: 0 });
+    const slow = await sqlOne<any>(`SELECT COUNT(*) n FROM assets WHERE organizationId=? AND fileName='slow.txt'`, [org]);
+    expect(Number(slow.n)).toBe(0);
+    proof.note(`storage bar after cancel: ${await sp.getByTestId('storage-usage-text').innerText()}`);
+    expect(await sp.getByTestId('storage-usage-text').innerText()).toBe(`${fmt(png.length)} of 100 MB used`);
+  } finally {
+    (ENV as any).ADMIN_UI = fastUi;
+    await slowCtx.close();
+    await slowProxy.close();
+  }
   proof.h('AK3 Escape closes the dialog; reopening starts clean');
   if (await page.getByTestId('asset-upload-form').isVisible()) await page.keyboard.press('Escape');
   await page.getByTestId('open-upload').click();
