@@ -5,7 +5,7 @@
  */
 import { BadRequestException, HttpException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { In, IsNull } from 'typeorm';
+import { EntityManager, In, IsNull } from 'typeorm';
 import { AssetBundleStatus, AssetBundleVisibility, AssetSourceType, AssetStatus } from '../../common/enums';
 import { StorageService, createZipStream } from '../../common/storage';
 import { dbStore } from '../../database/store';
@@ -111,8 +111,7 @@ export class AssetBundlesService {
     await this.validate(organizationId, bundle);
     await inTx(async (m) => {
       const r = await repos(m);
-      const dup = await r.bundles.findOne({ where: { organizationId, slug: bundle.slug } });
-      if (dup) throw new HttpException({ statusCode: 409, code: 'ASSET_BUNDLE_SLUG_EXISTS', message: 'A bundle with this name/slug already exists.' }, 409);
+      if (await this.slugTaken(m, organizationId, bundle.slug)) throw new HttpException({ statusCode: 409, code: 'ASSET_BUNDLE_SLUG_EXISTS', message: 'A bundle with this name/slug already exists.' }, 409);
       await r.bundles.insert(bundle);
       await writeAudit(m, { organizationId, actorId, action: 'BUNDLE_CREATED', resourceType: 'asset_bundle', resourceId: bundle.id, targetName: bundle.name, after: pick(bundle, BUNDLE_AUDIT_FIELDS) });
     });
@@ -138,7 +137,7 @@ export class AssetBundlesService {
       const r = await repos(m);
       const [lock] = await m.query(`SELECT id FROM asset_bundles WHERE id = ? AND organizationId = ? AND deletedAt IS NULL FOR UPDATE`, [bundleId, organizationId]);
       if (!lock) throw new NotFoundException('ASSET_BUNDLE_NOT_FOUND');
-      if (next.slug !== current.slug && (await r.bundles.findOne({ where: { organizationId, slug: next.slug } }))) {
+      if (next.slug !== current.slug && (await this.slugTaken(m, organizationId, next.slug))) {
         throw new HttpException({ statusCode: 409, code: 'ASSET_BUNDLE_SLUG_EXISTS', message: 'A bundle with this slug already exists.' }, 409);
       }
       const d = diff(current, next, BUNDLE_AUDIT_FIELDS);
@@ -154,18 +153,34 @@ export class AssetBundlesService {
     return this.view(after);
   }
 
+  /**
+   * true when a live bundle uses the slug. A deleted bundle that still holds it (deleted before slugs were released
+   * on delete) gives it up here, so a deleted bundle's name can always be reused.
+   */
+  private async slugTaken(m: EntityManager, organizationId: string, slug: string) {
+    const [row] = await m.query(`SELECT id, deletedAt FROM asset_bundles WHERE organizationId = ? AND slug = ? FOR UPDATE`, [organizationId, slug]);
+    if (!row) return false;
+    if (!row.deletedAt) return true;
+    await m.query(`UPDATE asset_bundles SET slug = ? WHERE id = ?`, [`${slug.slice(0, 100)}--deleted-${String(row.id).slice(0, 8)}`, row.id]);
+    return false;
+  }
+
   private async transition(organizationId: string, bundleId: string, actorId: string, to: AssetBundleStatus, action: string) {
     const after = await inTx(async (m) => {
       const r = await repos(m);
-      const [lock] = await m.query(`SELECT id, status, name, startDate FROM asset_bundles WHERE id = ? AND organizationId = ? AND deletedAt IS NULL FOR UPDATE`, [bundleId, organizationId]);
+      const [lock] = await m.query(`SELECT id, status, name, slug, startDate FROM asset_bundles WHERE id = ? AND organizationId = ? AND deletedAt IS NULL FOR UPDATE`, [bundleId, organizationId]);
       if (!lock) throw new NotFoundException('ASSET_BUNDLE_NOT_FOUND');
       let target = to;
       if (to === AssetBundleStatus.PUBLISHED && lock.startDate && new Date(lock.startDate) > new Date()) target = AssetBundleStatus.SCHEDULED;
       if (!TRANSITIONS[lock.status]?.includes(target)) throw new BadRequestException(`A ${lock.status.toLowerCase()} bundle cannot become ${target.toLowerCase()}.`);
       const changes: Record<string, unknown> = { status: target, updatedBy: actorId, updatedAt: new Date() };
-      if (target === AssetBundleStatus.ARCHIVED) changes.deletedAt = new Date();
+      if (target === AssetBundleStatus.ARCHIVED) {
+        changes.deletedAt = new Date();
+        // (organizationId, slug) is unique and includes deleted rows: release the name so a new bundle can use it
+        changes.slug = `${String(lock.slug).slice(0, 100)}--deleted-${bundleId.slice(0, 8)}`;
+      }
       await r.bundles.update({ id: bundleId }, changes as any);
-      await writeAudit(m, { organizationId, actorId, action, resourceType: 'asset_bundle', resourceId: bundleId, targetName: lock.name, before: { status: lock.status }, after: { status: target, ...(changes.deletedAt ? { deletedAt: changes.deletedAt } : {}) } });
+      await writeAudit(m, { organizationId, actorId, action, resourceType: 'asset_bundle', resourceId: bundleId, targetName: lock.name, before: { status: lock.status }, after: { status: target, ...(changes.deletedAt ? { deletedAt: changes.deletedAt, slug: changes.slug } : {}) } });
       return r.bundles.findOneByOrFail({ id: bundleId });
     });
     return after;
