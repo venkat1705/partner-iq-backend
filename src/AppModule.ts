@@ -24,6 +24,7 @@ import { MediaModule } from './modules/media/media.module';
 import { DeveloperPlatformModule } from './modules/developer-platform/developer-platform.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AssetManagementModule } from './modules/asset-management/asset-management.module';
+import { StorageModule } from './common/storage';
 import { PartnerDealsModule } from './modules/partner-deals/partner-deals.module';
 import { GamificationModule } from './modules/gamification/gamification.module';
 import { AutomationsModule } from './modules/automations/automations.module';
@@ -43,6 +44,7 @@ import { PlatformGovernanceModule } from './modules/admin/governance/governance.
 
 @Module({
   imports: [
+    StorageModule,
     ThrottlerModule.forRoot([
       {
         name: 'default',

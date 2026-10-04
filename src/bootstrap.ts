@@ -6,6 +6,7 @@ import express from 'express';
 import helmet from 'helmet';
 import { randomBytes } from 'crypto';
 import { AppModule } from './AppModule';
+import { StorageService } from './common/storage';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
@@ -157,6 +158,13 @@ export async function listen() {
 
   const dealsGateway = app.get(DealsGateway);
   dealsGateway.attachServer(app.getHttpServer());
+
+  // Large uploads stream through the API: Node's default 5-minute request timeout would cut them off. The limit comes
+  // from the storage config (STORAGE_UPLOAD_TIMEOUT_MS) plus a margin for the database step after the upload.
+  const server = app.getHttpServer();
+  const uploadTimeoutMs = app.get(StorageService).settings.uploadTimeoutMs;
+  server.requestTimeout = uploadTimeoutMs + 60_000;
+  server.headersTimeout = 65_000;
 
   await app.listen(appConfig.port, '0.0.0.0');
   logger.log(`PartnerIQ API running on port ${appConfig.port}`);

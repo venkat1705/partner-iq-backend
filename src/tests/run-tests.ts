@@ -36,6 +36,10 @@ import { WebhooksService } from '../modules/webhooks/webhooks.service';
 import { runSeed } from './helpers/test-seed';
 import { SecurityUtils } from '../common/utils/security.utils';
 import { AssetManagementService } from '../modules/asset-management/asset-management.service';
+import { AssetBundlesService } from '../modules/asset-management/asset-bundles.service';
+import { AffiliateAssetsService } from '../modules/asset-management/affiliate-assets.service';
+import { StorageQuotaService } from '../modules/storage-quota/storage-quota.service';
+import { createStorageService } from '../common/storage';
 import { dbStore } from '../database/store';
 import { AffiliateAssetActivityType, AssetBundleVisibility, AssetSourceType, AssetStatus, AssetType, AttributionModel, Role } from '../common/enums';
 import { MembershipStatus } from '../common/enums/rbac';
@@ -171,7 +175,17 @@ async function runTestSuite() {
   }
 
   // 4b. Asset Library Tenant Isolation, Versioning, Publishing, Personalization & Analytics
-  const assetService = new AssetManagementService();
+  // storage: the real StorageService when STORAGE_* is configured; these steps use text assets only, so a stub that
+  // owns no keys is enough otherwise
+  let storage: any;
+  try {
+    storage = createStorageService();
+  } catch {
+    storage = { settings: { trashRetentionDays: 30, maxFileBytes: 0, allowedExtensions: [], allowedFileTypes: [], defaultOrganizationLimitBytes: 3221225472, maxConcurrentUploadsPerOrganization: 5 }, keyBelongsToOrganization: () => false };
+  }
+  const assetService = new AssetManagementService(storage, new StorageQuotaService(storage));
+  const bundleService = new AssetBundlesService(storage, assetService);
+  const affiliateAssets = new AffiliateAssetsService(storage);
   const launchCopy = await assetService.createAsset(org.id, admin.id, {
     name: 'HR Mentor Pro Launch LinkedIn Post',
     assetType: AssetType.SOCIAL_COPY,
@@ -190,24 +204,24 @@ async function runTestSuite() {
   const versions = await assetService.listVersions(org.id, launchCopy.id);
   assert(versions.length === 2 && versions[0].isCurrent, 'Asset Version History Tracks Current Version');
 
-  const bundle = await assetService.createBundle(org.id, admin.id, {
+  const bundle = await bundleService.createBundle(org.id, admin.id, {
     name: 'HR Mentor Pro Launch Kit',
     programId: seedPrograms[0].id,
     visibility: AssetBundleVisibility.ALL_PROGRAM_AFFILIATES,
   });
-  await assetService.addBundleAsset(org.id, bundle.id, admin.id, { assetId: launchCopy.id, displayOrder: 1 });
-  const publishedBundle = await assetService.publishBundle(org.id, bundle.id, admin.id);
+  await bundleService.addBundleAsset(org.id, bundle.id, admin.id, { assetId: launchCopy.id, displayOrder: 1 });
+  const publishedBundle = await bundleService.publishBundle(org.id, bundle.id, admin.id);
   assert(publishedBundle.status === 'PUBLISHED' && publishedBundle.items.length === 1, 'Asset Bundle Published with Reusable Asset');
 
-  const affiliateBundles = await assetService.listAffiliateBundles(org.id, affiliate.id);
+  const affiliateBundles = await affiliateAssets.listBundles({ email: affiliate.email, userId: affiliate.userId }, org.id);
   assert(affiliateBundles.some((item) => item.id === bundle.id), 'Affiliate Sees Authorized Published Bundle');
 
-  await assetService.recordActivity(org.id, affiliate.id, launchCopy.id, {
+  await affiliateAssets.recordActivity({ email: affiliate.email, userId: affiliate.userId }, launchCopy.id, {
     activityType: AffiliateAssetActivityType.COPY,
     bundleId: bundle.id,
     idempotencyKey: 'asset-copy-test-1',
   });
-  await assetService.recordActivity(org.id, affiliate.id, launchCopy.id, {
+  await affiliateAssets.recordActivity({ email: affiliate.email, userId: affiliate.userId }, launchCopy.id, {
     activityType: AffiliateAssetActivityType.COPY,
     bundleId: bundle.id,
     idempotencyKey: 'asset-copy-test-1',

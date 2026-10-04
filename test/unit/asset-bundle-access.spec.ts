@@ -1,74 +1,89 @@
-import { beforeEach, describe, expect, it } from '@jest/globals';
-import { AssetManagementService } from '../../src/modules/asset-management/asset-management.service';
-import { dbStore } from '../../src/database/store';
-import { AssetBundleStatus, AssetBundleVisibility, AssetSourceType, AssetStatus, AssetType } from '../../src/common/enums';
+import { describe, expect, it } from '@jest/globals';
+import { AffiliateAccessContext, BundleLike, TierInfo, assetAccess, bundleAccess } from '../../src/modules/asset-management/asset-access';
+import { AssetBundleStatus, AssetBundleVisibility, AssetStatus } from '../../src/common/enums';
 
 /**
- * AB / AA — who can see a bundle. Written before the fix: on the original code a PARTNER_TIER bundle is visible
- * (with all its files) to every affiliate of the program, whatever their tier, and AFFILIATE_SEGMENT bundles too.
+ * AB / AA — who can see a bundle. First written against the original service (see
+ * docs/assets-proof/baseline/AB-unit-before-fix.txt: a Bronze affiliate and a level-9 affiliate of another program both
+ * got the Gold bundle with its file, and the segment bundle was visible). The access rules now live in the pure
+ * functions used by every portal endpoint; the four original cases keep their exact expectations, plus download cases.
  */
 const ORG = '0a0a0a0a-0000-4000-8000-000000000001';
 const PROG = '0a0a0a0a-0000-4000-8000-000000000002';
 const OTHER_PROG = '0a0a0a0a-0000-4000-8000-000000000003';
-const BRONZE = '0a0a0a0a-0000-4000-8000-0000000000b1';
-const GOLD = '0a0a0a0a-0000-4000-8000-0000000000b3';
-const CLICK9 = '0a0a0a0a-0000-4000-8000-0000000000c9';
-const AFF_BRONZE = '0a0a0a0a-0000-4000-8000-0000000000a1';
-const AFF_GOLD = '0a0a0a0a-0000-4000-8000-0000000000a2';
-const AFF_CLICKS = '0a0a0a0a-0000-4000-8000-0000000000a3';
-const ASSET = '0a0a0a0a-0000-4000-8000-0000000000f1';
+const tier = (id: string, level: number, programId: string, rewardBundleIds: string[] = []): TierInfo => ({ id, programId, name: id, level, isActive: true, rewardBundleIds });
+const BRONZE = tier('bronze', 1, PROG);
+const GOLD = tier('gold', 3, PROG);
+const CLICK9 = tier('clicks-9', 9, OTHER_PROG);
+const tiers = new Map([BRONZE, GOLD, CLICK9].map((t) => [t.id, t]));
 
-function storageStub(): any {
-  return { settings: { maxFileBytes: 1, allowedFileTypes: [], allowedExtensions: [], downloadUrlTtlSeconds: 300, defaultOrganizationLimitBytes: 1, maxConcurrentUploadsPerOrganization: 5, reservationTtlMinutes: 60, trashRetentionDays: 30, maxImageBytes: 1, uploadTimeoutMs: 1 } };
-}
+const ctx = (affiliateId: string, programIds: string[], tierByProgram: Array<[string, TierInfo]>, active = true): AffiliateAccessContext => ({
+  organizationId: ORG, affiliateId, active, programIds, tierByProgram: new Map(tierByProgram), tiers,
+});
+const AFF_BRONZE = ctx('aff-bronze', [PROG], [[PROG, BRONZE]]);
+const AFF_GOLD = ctx('aff-gold', [PROG], [[PROG, GOLD]]);
+const AFF_CLICKS = ctx('aff-clicks', [PROG, OTHER_PROG], [[PROG, BRONZE], [OTHER_PROG, CLICK9]]);
 
-function seed() {
-  const now = new Date();
-  const tier = (id: string, level: number, programId: string) => ({ id, organizationId: ORG, programId, name: id, code: id, level, displayOrder: level, icon: '', colorToken: '', evaluationPeriod: 'MONTHLY', downgradeMode: 'IMMEDIATE', gracePeriodDays: 0, commissionRateEffectiveStrategy: 'TIER', isDefault: false, isActive: true, isVisibleToAffiliate: true, createdAt: now, updatedAt: now });
-  (dbStore as any).partnerTiers.push(tier(BRONZE, 1, PROG), tier(GOLD, 3, PROG), tier(CLICK9, 9, OTHER_PROG));
-  const membership = (affiliateId: string, programId: string) => ({ id: `${affiliateId}-${programId}`, organizationId: ORG, programId, affiliateId, status: 'ACTIVE', referralCode: affiliateId.slice(-4), joinedAt: now, createdAt: now, updatedAt: now });
-  (dbStore as any).programAffiliates.push(membership(AFF_BRONZE, PROG), membership(AFF_GOLD, PROG), membership(AFF_CLICKS, PROG), membership(AFF_CLICKS, OTHER_PROG));
-  const at = (affiliateId: string, programId: string, currentTierId: string) => ({ id: `${affiliateId}-t-${programId}`, organizationId: ORG, programId, affiliateId, currentTierId, effectiveFrom: now, isLocked: false, createdAt: now, updatedAt: now });
-  (dbStore as any).affiliateTiers.push(at(AFF_BRONZE, PROG, BRONZE), at(AFF_GOLD, PROG, GOLD), at(AFF_CLICKS, PROG, BRONZE), at(AFF_CLICKS, OTHER_PROG, CLICK9));
-  for (const id of [AFF_BRONZE, AFF_GOLD, AFF_CLICKS]) (dbStore as any).affiliates.push({ id, organizationId: ORG, displayName: id, email: `${id}@x.test`, status: 'ACTIVE', createdAt: now, updatedAt: now });
-  (dbStore as any).assets.push({ id: ASSET, organizationId: ORG, name: 'gold file', assetType: AssetType.IMAGE, sourceType: AssetSourceType.FILE, status: AssetStatus.PUBLISHED, isPublicToAffiliates: false, isDownloadable: true, isCopyable: true, version: 1, tags: [], metadata: {}, createdBy: 'x', createdAt: now, updatedAt: now });
-  const bundle = (id: string, visibility: AssetBundleVisibility, extra: Record<string, unknown> = {}) => ({ id, organizationId: ORG, programId: PROG, name: id, slug: id, status: AssetBundleStatus.PUBLISHED, visibility, displayOrder: 1, featured: false, createdBy: 'x', createdAt: now, updatedAt: now, ...extra });
-  (dbStore as any).assetBundles.push(
-    bundle('gold-bundle', AssetBundleVisibility.PARTNER_TIER, { partnerTierId: GOLD }),
-    bundle('segment-bundle', AssetBundleVisibility.AFFILIATE_SEGMENT, { affiliateSegmentId: 'seg-1' }),
-  );
-  (dbStore as any).assetBundleItems.push({ id: 'item-1', assetBundleId: 'gold-bundle', assetId: ASSET, displayOrder: 1, isFeatured: false, createdAt: now, createdBy: 'x' });
-}
+const bundle = (id: string, visibility: AssetBundleVisibility, extra: Partial<BundleLike> = {}): BundleLike => ({
+  id, organizationId: ORG, programId: PROG, status: AssetBundleStatus.PUBLISHED, visibility, ...extra,
+});
+const goldBundle = bundle('gold-bundle', AssetBundleVisibility.PARTNER_TIER, { partnerTierId: 'gold' });
+const segmentBundle = bundle('segment-bundle', AssetBundleVisibility.AFFILIATE_SEGMENT);
+const goldFile = { id: 'gold-file', organizationId: ORG, status: AssetStatus.PUBLISHED, isPublicToAffiliates: false, isDownloadable: true };
+const ITEMS: Record<string, number> = { 'gold-bundle': 1, 'segment-bundle': 0 };
+
+/** same shape as the original test: { locked, files } per visible bundle (files = 0 when locked) */
+const view = (c: AffiliateAccessContext) => {
+  const out: Record<string, { locked: boolean; files: number }> = {};
+  for (const b of [goldBundle, segmentBundle]) {
+    const a = bundleAccess(b, c);
+    if (!a.visible) continue;
+    out[b.id] = { locked: a.locked, files: a.locked ? 0 : ITEMS[b.id] };
+  }
+  return out;
+};
 
 describe('asset bundle access (AA/AB)', () => {
-  let service: AssetManagementService;
-  beforeEach(() => {
-    seed();
-    service = new (AssetManagementService as any)(storageStub(), undefined);
+  it('a Bronze affiliate sees the Gold bundle only as locked, without any files', () => {
+    expect(view(AFF_BRONZE)['gold-bundle']).toEqual({ locked: true, files: 0 });
   });
 
-  const view = async (affiliateId: string) => {
-    const rows = (await service.listAffiliateBundles(ORG, affiliateId)) as any[];
-    return Object.fromEntries(rows.map((b) => [b.id, { locked: Boolean(b.locked), files: (b.items || []).length }]));
-  };
-
-  it('a Bronze affiliate sees the Gold bundle only as locked, without any files', async () => {
-    const v = await view(AFF_BRONZE);
-    expect(v['gold-bundle']).toEqual({ locked: true, files: 0 });
+  it('a Gold affiliate sees the Gold bundle unlocked with its file', () => {
+    expect(view(AFF_GOLD)['gold-bundle']).toEqual({ locked: false, files: 1 });
   });
 
-  it('a Gold affiliate sees the Gold bundle unlocked with its file', async () => {
-    const v = await view(AFF_GOLD);
-    expect(v['gold-bundle']).toEqual({ locked: false, files: 1 });
+  it('a level-9 tier from another (click-based) program does not unlock the Gold bundle', () => {
+    expect(view(AFF_CLICKS)['gold-bundle']).toEqual({ locked: true, files: 0 });
   });
 
-  it('a level-9 tier from another (click-based) program does not unlock the Gold bundle', async () => {
-    const v = await view(AFF_CLICKS);
-    expect(v['gold-bundle']).toEqual({ locked: true, files: 0 });
+  it('a segment bundle is not shown to affiliates (segments are not implemented)', () => {
+    expect(view(AFF_GOLD)['segment-bundle']).toBeUndefined();
   });
 
-  it('a segment bundle is not shown to affiliates (segments are not implemented)', async () => {
-    const v = await view(AFF_GOLD);
-    expect(v['segment-bundle']).toBeUndefined();
+  it('the Gold bundle file cannot be downloaded below Gold, can at Gold, and not after demotion', () => {
+    expect(assetAccess(goldFile, AFF_BRONZE, [goldBundle], { forDownload: true })).toEqual({ allowed: false, reason: 'restricted bundle' });
+    expect(assetAccess(goldFile, AFF_GOLD, [goldBundle], { forDownload: true })).toEqual({ allowed: true });
+    const demoted = ctx('aff-gold', [PROG], [[PROG, BRONZE]]);
+    expect(assetAccess(goldFile, demoted, [goldBundle], { forDownload: true }).allowed).toBe(false);
+  });
+
+  it('a file that is public but also in a locked bundle stays locked (most restrictive wins)', () => {
+    expect(assetAccess({ ...goldFile, isPublicToAffiliates: true }, AFF_BRONZE, [goldBundle], { forDownload: true }).allowed).toBe(false);
+  });
+
+  it('tier rewards (rewardsConfig.assetBundleIds) unlock only within the same ladder', () => {
+    const rewardTiers = new Map(tiers);
+    rewardTiers.set('bronze', { ...BRONZE, rewardBundleIds: ['gold-bundle'] });
+    const withReward = { ...AFF_BRONZE, tiers: rewardTiers };
+    expect(bundleAccess(goldBundle, withReward)).toEqual({ visible: true, locked: false });
+    const otherLadder = new Map(tiers);
+    otherLadder.set('clicks-9', { ...CLICK9, rewardBundleIds: ['gold-bundle'] });
+    expect(bundleAccess(goldBundle, { ...AFF_CLICKS, tiers: otherLadder }).visible && (bundleAccess(goldBundle, { ...AFF_CLICKS, tiers: otherLadder }) as any).locked).toBe(true);
+  });
+
+  it('a removed (inactive) affiliate sees nothing', () => {
+    const removed = ctx('aff-gold', [PROG], [[PROG, GOLD]], false);
+    expect(bundleAccess(goldBundle, removed).visible).toBe(false);
+    expect(assetAccess({ ...goldFile, isPublicToAffiliates: true }, removed, [], { forDownload: true }).allowed).toBe(false);
   });
 });

@@ -47,6 +47,8 @@ export interface StorageConfig {
   /** Multipart part size used for large uploads (bytes); memory per upload ≈ partSize × queueSize. */
   multipartPartBytes: number;
   multipartQueueSize: number;
+  /** Run the storage maintenance jobs (reservation cleanup, trash purge, reconciliation) inside this process. */
+  jobsEnabled: boolean;
 }
 
 export class StorageConfigError extends Error {
@@ -170,6 +172,7 @@ export function loadStorageConfig(env: NodeJS.ProcessEnv = process.env): Storage
     trashRetentionDays: intVar(env, 'STORAGE_TRASH_RETENTION_DAYS', DEFAULTS.trashRetentionDays, 1, 3650, problems),
     multipartPartBytes: intVar(env, 'STORAGE_MULTIPART_PART_BYTES', DEFAULTS.multipartPartBytes, 5 * MB, 512 * MB, problems),
     multipartQueueSize: intVar(env, 'STORAGE_MULTIPART_QUEUE_SIZE', DEFAULTS.multipartQueueSize, 1, 16, problems),
+    jobsEnabled: (env.STORAGE_JOBS_ENABLED || 'true').trim() !== 'false',
   };
   if (config.maxImageBytes > config.maxFileBytes) problems.push('STORAGE_MAX_IMAGE_BYTES must not be larger than STORAGE_MAX_FILE_BYTES');
 
@@ -189,6 +192,7 @@ export interface PublicStorageSettings {
   reservationTtlMinutes: number;
   trashRetentionDays: number;
   uploadTimeoutMs: number;
+  jobsEnabled: boolean;
 }
 
 export function publicSettings(config: StorageConfig): PublicStorageSettings {
@@ -203,5 +207,6 @@ export function publicSettings(config: StorageConfig): PublicStorageSettings {
     reservationTtlMinutes: config.reservationTtlMinutes,
     trashRetentionDays: config.trashRetentionDays,
     uploadTimeoutMs: config.uploadTimeoutMs,
+    jobsEnabled: config.jobsEnabled,
   };
 }

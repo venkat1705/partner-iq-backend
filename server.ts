@@ -7,6 +7,7 @@ import helmet from 'helmet';
 import express from 'express';
 import { randomBytes } from 'crypto';
 import { AppModule } from './src/AppModule';
+import { StorageService } from './src/common/storage';
 import { GlobalExceptionFilter } from './src/common/filters/global-exception.filter';
 import { TransformInterceptor } from './src/common/interceptors/transform.interceptor';
 import { LoggingInterceptor } from './src/common/interceptors/logging.interceptor';
@@ -154,6 +155,10 @@ async function bootstrap() {
   });
 
   const port = appConfig.port;
+  // streamed uploads: request timeout from the storage config (see src/bootstrap.ts)
+  const httpServer = app.getHttpServer();
+  httpServer.requestTimeout = app.get(StorageService).settings.uploadTimeoutMs + 60_000;
+  httpServer.headersTimeout = 65_000;
   await app.listen(port, '0.0.0.0');
   logger.log(`🚀 PartnerIQ Server running at http://0.0.0.0:${port}`);
   logger.log(`📖 Swagger Documentation available at http://0.0.0.0:${port}/api/docs`);

@@ -28,7 +28,6 @@ import { dbStore, IdempotencyKeyEntity } from '../../database/store';
 import { AffiliateStatus, TrackingLinkStatus, EnvironmentType, PayoutStatus, ProgramStatus, ConversionStatus, CommissionType, AuditAction } from '../../common/enums';
 import { PLATFORM_CURRENCY } from '../../common/constants/currency';
 import { MediaService } from '../media/media.service';
-import { UploadImageDto } from '../media/dto/media.dto';
 import { SecurityUtils } from '../../common/utils/security.utils';
 import {
   PAYOUT_SCHEDULE_TIMEZONE,
@@ -396,8 +395,8 @@ export class AffiliatePortalController {
   @Post('api/v1/affiliate/me/avatar')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Upload a profile photo for the current affiliate' })
-  async uploadAvatar(@Req() req: any, @Body() body: UploadImageDto) {
+  @ApiOperation({ summary: 'Upload a profile photo for the current affiliate (multipart "file" part)' })
+  async uploadAvatar(@Req() req: any) {
     if (!this.mediaService) {
       throw new BadRequestException('Image uploads are not available on this deployment.');
     }
@@ -405,17 +404,14 @@ export class AffiliatePortalController {
     const { user } = await this.resolveAffiliateProfile(req);
     const { users } = await this.repositories();
 
-    // Scoped to the partner's own user id, so one partner's uploads can never
-    // land in another's folder. Size and MIME checks live in MediaService.
-    const uploaded = await this.mediaService.uploadImage(user.id, {
-      ...body,
-      purpose: 'affiliate-avatar',
-    });
+    // Stored under users/{userId}/avatars/… so one partner's uploads can never land in another's folder.
+    // Size and type checks (magic bytes) live in StorageService.
+    const uploaded = await this.mediaService.uploadImage(req, () => ({ kind: 'user', userId: user.id, purpose: 'affiliate-avatar' }), user.id);
 
-    user.avatarUrl = uploaded.secureUrl;
+    user.avatarUrl = uploaded.url;
     await users.save(user);
     const stored = dbStore.users.find((item) => item.id === user.id);
-    if (stored) stored.avatarUrl = uploaded.secureUrl;
+    if (stored) stored.avatarUrl = uploaded.url;
 
     const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || req.connection?.remoteAddress;
     const clientUserAgent = req.headers['user-agent'];
@@ -429,11 +425,12 @@ export class AffiliatePortalController {
       ipAddress: clientIp,
       userAgent: clientUserAgent,
       metadata: {
-        avatarUrl: uploaded.secureUrl,
+        avatarUrl: uploaded.url,
+        mediaId: uploaded.mediaId,
       },
     });
 
-    return { avatarUrl: uploaded.secureUrl };
+    return { avatarUrl: uploaded.url };
   }
 
   @Patch('api/v1/affiliate/me/profile')
@@ -1880,43 +1877,7 @@ export class AffiliatePortalController {
     });
   }
 
-  // ----------------------------------------------------
-  // Marketing Assets
-  // ----------------------------------------------------
-  @Get('api/v1/affiliate/me/assets')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'List marketing assets for current affiliate' })
-  async getAssets(@Req() req: any, @Query('organizationId') organizationId?: string) {
-    const email = this.resolveAffiliateEmail(req);
-    const userId = req.user?.userId || req.user?.id || req.user?.sub;
-    const affiliates = await this.resolveAffiliatesForUser(email, userId);
-    const orgIds = affiliates.map((a) => a.organizationId);
-    if (orgIds.length === 0) return [];
-
-    const scopedOrgIds = organizationId ? orgIds.filter((id) => id === organizationId) : orgIds;
-    if (scopedOrgIds.length === 0) return [];
-
-    const { assets } = await this.repositories();
-    const assetList = await assets.find({
-      where: { organizationId: In(scopedOrgIds) },
-    });
-
-    return assetList.map((a: any) => ({
-      id: a.id,
-      organizationId: a.organizationId,
-      programId: a.programId,
-      title: a.name || a.title || 'Marketing Asset',
-      type: a.type || 'BANNER',
-      fileSize: (a as any).fileSize || (a as any).sizeBytes,
-      dimensions: (a as any).dimensions,
-      previewUrl: a.previewUrl || a.fileUrl || '',
-      downloadUrl: a.fileUrl || '',
-      copyContent: (a as any).copyContent || (a as any).bodyContent || null,
-      tags: (a as any).tags || [],
-      createdAt: a.createdAt,
-    }));
-  }
+  // Marketing assets and bundles moved to asset-management/affiliate-assets.controller.ts (access checks, signed links).
 
   // ----------------------------------------------------
   // Conversions

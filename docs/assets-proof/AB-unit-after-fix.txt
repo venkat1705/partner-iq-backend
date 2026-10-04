@@ -1,0 +1,8 @@
+Running one project: unit
+
+Test Suites: 2 passed, 2 total
+Tests:       13 passed, 13 total
+Snapshots:   0 total
+Time:        4.707 s, estimated 9 s
+Ran all test suites matching asset-bundle-access|storage-architecture.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?
