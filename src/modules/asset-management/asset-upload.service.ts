@@ -19,7 +19,7 @@ import { randomUUID } from 'crypto';
 import type { Request, Response } from 'express';
 import type { Readable } from 'stream';
 import { AssetSourceType, AssetStatus } from '../../common/enums';
-import { ALLOWED_FILE_TYPES, StorageService, StorageTooLargeError, StoredObjectInfo, extensionOf } from '../../common/storage';
+import { ALLOWED_FILE_TYPES, StorageService, StorageTooLargeError, StorageUploadAbortedError, StoredObjectInfo, extensionOf } from '../../common/storage';
 import { dbStore } from '../../database/store';
 import { Asset, AssetVersion, StoredObject } from '../../database/schema';
 import { StorageQuotaService } from '../storage-quota/storage-quota.service';
@@ -114,6 +114,11 @@ export class AssetUploadService {
     let finished = false;
     req.on('close', () => {
       if (!finished && !req.complete) abort.abort();
+    });
+    // the client may cancel after its whole body was received (the browser hands the body to the network stack
+    // before the server has stored it): a closed response before we answered also means "cancelled"
+    res.on('close', () => {
+      if (!res.writableFinished) abort.abort();
     });
 
     // on an early rejection the rest of a large body is not read: close the connection after answering
@@ -224,6 +229,9 @@ export class AssetUploadService {
         signal,
       });
       const info = stored;
+      // cancelled while the file was being stored: do not save it (the catch below deletes the object and releases
+      // the reservation), so what the user sees ("cancelled") is what the database holds
+      if (signal.aborted) throw new StorageUploadAbortedError();
       const result = await inTx(async (m) => {
         await this.quota.commit(m, reservation, info.sizeBytes);
         const now = new Date();

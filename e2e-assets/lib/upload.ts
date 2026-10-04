@@ -18,6 +18,8 @@ export interface UploadOptions {
   contentLength?: 'auto' | 'none';
   /** destroy the socket after this many body bytes were written */
   killAfterBytes?: number;
+  /** send the whole body, then drop the connection this many ms later without waiting for the answer */
+  destroyAfterBodyMs?: number;
   /** pause this many ms between 64 KiB chunks (slow connection) */
   throttleMs?: number;
   onProgress?: (sent: number, total: number) => void;
@@ -119,6 +121,10 @@ export function upload(path: string, opts: UploadOptions): Promise<UploadResult>
         if (settled) return; // server already answered (early rejection)
       }
       req.end();
+      if (opts.destroyAfterBodyMs !== undefined) {
+        await new Promise((r) => setTimeout(r, opts.destroyAfterBodyMs));
+        if (!settled) req.destroy(new Error('connection closed by test after the full body'));
+      }
     })().catch((e) => finish({ status: 0, body: undefined, data: undefined, error: String(e?.message || e) }));
   });
 }

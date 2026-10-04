@@ -1,0 +1,15 @@
+# Scenario AK — raw proof, run=1791109164940 (started 2026-10-04T10:21:41.955Z)
+
+==== AK1 empty state ====
+
+==== T-ui upload a PNG through the dialog ====
+mysql> newest asset
+{"id":"9458d780-28ef-4d89-b42f-5ec404fa3fe4","fileSize":180578,"fileName":"ui-banner.png"}
+
+==== AK2 cancel a slow upload: CDP throttles the upload to 1 MB/s, cancel after the progress bar appears ====
+mysql> during the upload
+{"limitBytes":104857600,"usedBytes":180578,"reservedBytes":20971520,"activeUploads":1}
+mysql> after cancel
+{"limitBytes":104857600,"usedBytes":21152098,"reservedBytes":0,"activeUploads":0}
+mysql> open reservations
+[]

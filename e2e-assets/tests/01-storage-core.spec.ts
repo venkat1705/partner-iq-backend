@@ -221,6 +221,19 @@ test('E. failures leave nothing behind: killed connection, storage down, databas
   proof.note(`incomplete multipart uploads after the cleanup job: ${mpu2.trim() || '(none)'}`);
   expect((await listKeys(`orgs/${org}/`)).length).toBe(objectsBefore);
 
+  proof.h('E4 the client hangs up after sending the whole body, before the answer (cancel at the last moment)');
+  const late = await uploadAsset(org, ROLE, { fileName: 'late-cancel.txt', content: { size: 40 * MB }, destroyAfterBodyMs: 30, assetType: 'DOCUMENT', name: 'late cancel' });
+  proofUpload(proof, 'E4', orgPath(org, '/assets/upload'), late, { size: 40 * MB, destroyAfterBodyMs: 30 });
+  await new Promise((r) => setTimeout(r, 3000));
+  d = await dbStorage(org);
+  proof.sql(`SELECT * FROM organization_storage WHERE organizationId='${org}'`, d);
+  const lateRow = await sqlOne<any>(`SELECT COUNT(*) n FROM assets WHERE organizationId=? AND fileName='late-cancel.txt'`, [org]);
+  proof.sql(`SELECT COUNT(*) FROM assets WHERE fileName='late-cancel.txt'`, lateRow);
+  expect(late.status).toBe(0); // no answer reached the client
+  expect(d).toMatchObject({ usedBytes: 0, reservedBytes: 0, activeUploads: 0 });
+  expect(Number(lateRow.n)).toBe(0);
+  expect((await listKeys(`orgs/${org}/`)).length).toBe(objectsBefore);
+
   proof.h('E3 database write blocked (assets table locked by another session) when the upload commits');
   const conn = await db().getConnection();
   await conn.query('LOCK TABLES assets WRITE');
