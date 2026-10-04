@@ -22,7 +22,7 @@ export interface ReconcileReport {
   startedAt: string;
   finishedAt: string;
   objectsListed: number;
-  organizations: Array<{ organizationId: string; counterBytes: number; actualBytes: number; differenceBytes: number; corrected: boolean }>;
+  organizations: Array<{ organizationId: string; counterBytes: number; actualBytes: number; inStorageBytes: number; differenceBytes: number; corrected: boolean }>;
   objectsWithoutRecord: Array<{ key: string; sizeBytes: number; organizationId?: string; uploadInProgress: boolean }>;
   recordsWithoutObject: Array<{ id: string; key: string; organizationId: string | null; assetId: string | null; sizeBytes: number }>;
   sizeMismatches: Array<{ key: string; recordBytes: number; storedBytes: number }>;
@@ -165,12 +165,16 @@ export class StorageJobsService implements OnModuleInit, OnModuleDestroy {
       const result = await inTx(async (m) => {
         await this.quota.ensureRow(m, organizationId);
         const [row] = await m.query(`SELECT usedBytes FROM organization_storage WHERE organizationId = ? FOR UPDATE`, [organizationId]);
-        // real usage = counted objects that really exist in storage, measured by storage's own size
+        // the counter must equal the sum of the counted records: every later delete subtracts a record's size, so a
+        // counter set from the bucket listing would drift below zero once a record whose object is missing is deleted
+        // (decision A27). Objects without records, records without objects and size mismatches are reported for a
+        // person to resolve — never fixed by guessing.
         const counted: Array<{ storageKey: string; sizeBytes: string }> = await m.query(
           `SELECT storageKey, sizeBytes FROM stored_objects WHERE organizationId = ? AND countsTowardQuota = 1 FOR UPDATE`,
           [organizationId],
         );
-        const actual = counted.reduce((s, o) => s + (listed.has(o.storageKey) ? listed.get(o.storageKey)! : 0), 0);
+        const actual = counted.reduce((s, o) => s + Number(o.sizeBytes), 0);
+        const inStorage = counted.reduce((s, o) => s + (listed.get(o.storageKey) ?? 0), 0);
         const counter = Number(row.usedBytes);
         const corrected = counter !== actual;
         if (corrected) {
@@ -182,7 +186,7 @@ export class StorageJobsService implements OnModuleInit, OnModuleDestroy {
           );
           this.logger.warn(`reconcile org=${organizationId} counter=${counter} actual=${actual} difference=${actual - counter} -> corrected`);
         }
-        return { organizationId, counterBytes: counter, actualBytes: actual, differenceBytes: actual - counter, corrected };
+        return { organizationId, counterBytes: counter, actualBytes: actual, inStorageBytes: inStorage, differenceBytes: actual - counter, corrected };
       });
       organizations.push(result);
     }

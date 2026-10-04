@@ -1,0 +1,16 @@
+# Scenario Q — raw proof, run=1791106369208 (started 2026-10-04T09:33:04.503Z)
+> PATCH /admin/storage/organizations/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/limit
+> body: {"limitBytes":10485760,"reason":"e2e test limit"}
+< HTTP 200 (10 ms)
+< {"success":true,"data":{"organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","previousLimitBytes":20971520,"limitBytes":10485760,"usedBytes":0}}
+
+==== Q1 break things on purpose (test org only) ====
+mysql> UPDATE organization_storage SET usedBytes = 7777777 WHERE organizationId='aef2cbcd-2473-47f3-ae0b-9fb7546ec046'
+S3 put (no database record): orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/842ee3ac-1b64-4310-b65b-bef742d08a83/v1/orphan1791106384634 (4096 bytes)
+mc rm orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/7608b1ec-662e-4985-9fc3-71487ac13f4a/v1/37ec1db642b135c32d82ffde (record without object)
+> POST /admin/storage/jobs/reconcile/run
+< HTTP 200 (29 ms)
+< {"success":true,"data":{"startedAt":"2026-10-04T09:33:04.730Z","finishedAt":"2026-10-04T09:33:04.752Z","objectsListed":39,"organizations":[{"organizationId":"46967d5b-48bc-400f-98a6-2c702e4106f6","counterBytes":4178210,"actualBytes":4178210,"differenceBytes":0,"corrected":false},{"organizationId":"4fdfcd98-641e-416d-99a9-3abe852856ac","counterBytes":0,"actualBytes":0,"differenceBytes":0,"corrected":false},{"organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","counterBytes":7777777,"actualBytes":1048576,"differenceBytes":-6729201,"corrected":true}],"objectsWithoutRecord":[{"key":"orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/842ee3ac-1b64-4310-b65b-bef742d08a83/v1/orphan1791106384634","sizeBytes":4096,"organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","uploadInProgress":false}],"recordsWithoutObject":[{"id":"fd795dfa-5b40-4f5d-8316-df619f144752","key":"orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/7608b1ec-662e-4985-9fc3-71487ac13f4a/v1/37ec1db642b135c32d82ffde","organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","assetId":"7608b1ec-662e-4985-9fc3-71487ac13f4a","sizeBytes":2097152}],"sizeMismatches":[]}}
+organization entry: {"organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","counterBytes":7777777,"actualBytes":1048576,"differenceBytes":-6729201,"corrected":true}
+objectsWithoutRecord (this org): [{"key":"orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/842ee3ac-1b64-4310-b65b-bef742d08a83/v1/orphan1791106384634","sizeBytes":4096,"organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","uploadInProgress":false}]
+recordsWithoutObject (this org): [{"id":"fd795dfa-5b40-4f5d-8316-df619f144752","key":"orgs/aef2cbcd-2473-47f3-ae0b-9fb7546ec046/assets/7608b1ec-662e-4985-9fc3-71487ac13f4a/v1/37ec1db642b135c32d82ffde","organizationId":"aef2cbcd-2473-47f3-ae0b-9fb7546ec046","assetId":"7608b1ec-662e-4985-9fc3-71487ac13f4a","sizeBytes":2097152}]
