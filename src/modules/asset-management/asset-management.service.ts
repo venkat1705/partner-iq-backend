@@ -349,7 +349,7 @@ export class AssetManagementService {
     await this.findAsset(organizationId, assetId, { includeTrashed: true });
     const { versions } = await repos();
     const rows = await versions.find({ where: { assetId }, order: { versionNumber: 'DESC' } });
-    return rows.map(({ storageKey, storageUrl: _u, ...v }) => ({ ...v, fileSize: v.fileSize !== undefined && v.fileSize !== null ? Number(v.fileSize) : undefined, hasFile: Boolean(storageKey) }));
+    return rows.map(({ storageKey, storageUrl: _u, ...v }) => ({ ...v, fileSize: v.fileSize !== undefined && v.fileSize !== null ? Number(v.fileSize) : undefined, hasFile: Boolean(storageKey && this.storage.keyBelongsToOrganization(storageKey, organizationId)) }));
   }
 
   /** New version of a text / HTML / link asset (content + change notes). File assets: upload the new file instead. */
