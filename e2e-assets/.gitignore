@@ -1,0 +1,5 @@
+.fixtures.json
+proof/raw/
+test-results/
+playwright-report/
+.run-id

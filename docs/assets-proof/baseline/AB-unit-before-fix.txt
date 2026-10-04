@@ -1,0 +1,248 @@
+Running one project: unit
+FAIL unit test/unit/asset-bundle-access.spec.ts
+  ● Console
+
+    console.log
+      ◇ injected env (20) from .env.test // tip: ◈ secrets for agents [www.dotenvx.com]
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+    console.log
+      ◇ injected env (20) from .env.test // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+  ● asset bundle access (AA/AB) › a Bronze affiliate sees the Gold bundle only as locked, without any files
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 2
+    + Received  + 2
+
+      Object {
+    -   "files": 0,
+    -   "locked": true,
+    +   "files": 1,
+    +   "locked": false,
+      }
+
+      55 |   it('a Bronze affiliate sees the Gold bundle only as locked, without any files', async () => {
+      56 |     const v = await view(AFF_BRONZE);
+    > 57 |     expect(v['gold-bundle']).toEqual({ locked: true, files: 0 });
+         |                              ^
+      58 |   });
+      59 |
+      60 |   it('a Gold affiliate sees the Gold bundle unlocked with its file', async () => {
+
+      at Object.<anonymous> (test/unit/asset-bundle-access.spec.ts:57:30)
+
+  ● asset bundle access (AA/AB) › a level-9 tier from another (click-based) program does not unlock the Gold bundle
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 2
+    + Received  + 2
+
+      Object {
+    -   "files": 0,
+    -   "locked": true,
+    +   "files": 1,
+    +   "locked": false,
+      }
+
+      65 |   it('a level-9 tier from another (click-based) program does not unlock the Gold bundle', async () => {
+      66 |     const v = await view(AFF_CLICKS);
+    > 67 |     expect(v['gold-bundle']).toEqual({ locked: true, files: 0 });
+         |                              ^
+      68 |   });
+      69 |
+      70 |   it('a segment bundle is not shown to affiliates (segments are not implemented)', async () => {
+
+      at Object.<anonymous> (test/unit/asset-bundle-access.spec.ts:67:30)
+
+  ● asset bundle access (AA/AB) › a segment bundle is not shown to affiliates (segments are not implemented)
+
+    expect(received).toBeUndefined()
+
+    Received: {"files": 0, "locked": false}
+
+      70 |   it('a segment bundle is not shown to affiliates (segments are not implemented)', async () => {
+      71 |     const v = await view(AFF_GOLD);
+    > 72 |     expect(v['segment-bundle']).toBeUndefined();
+         |                                 ^
+      73 |   });
+      74 | });
+      75 |
+
+      at Object.<anonymous> (test/unit/asset-bundle-access.spec.ts:72:33)
+
+FAIL unit test/unit/demo-bookings.spec.ts
+  ● Test suite failed to run
+
+    test/unit/demo-bookings.spec.ts:6:21 - error TS2554: Expected 2 arguments, but got 0.
+
+    6     const service = new DemoBookingsService();
+                          ~~~~~~~~~~~~~~~~~~~~~~~~~
+
+      src/modules/demo-bookings/demo-bookings.service.ts:26:5
+        26     private readonly googleCalendar: GoogleCalendarService,
+               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        An argument for 'googleCalendar' was not provided.
+
+[Nest] 11558  - 10/04/2026, 7:58:55 AM     LOG [AdminWebhooksService] Webhook event-type catalog registered.
+[Nest] 11558  - 10/04/2026, 7:58:55 AM     LOG [AdminWebhooksService] Webhook dev fixture telemetry seeded (local dev/test only).
+[Nest] 11558  - 10/04/2026, 7:58:55 AM     LOG [AdminWebhooksService] Webhook event-type catalog registered.
+[Nest] 11558  - 10/04/2026, 7:58:55 AM     LOG [AdminWebhooksService] Webhook dev fixture telemetry seeded (local dev/test only).
+[Nest] 11558  - 10/04/2026, 7:58:55 AM     LOG [AdminWebhooksService] Webhook event-type catalog registered.
+[Nest] 11558  - 10/04/2026, 7:58:56 AM     LOG [AdminWebhooksService] Webhook dev fixture telemetry seeded (local dev/test only).
+[Nest] 11558  - 10/04/2026, 7:58:56 AM     LOG [AdminWebhooksService] Webhook event-type catalog registered.
+[Nest] 11558  - 10/04/2026, 7:58:56 AM     LOG [AdminWebhooksService] Webhook dev fixture telemetry seeded (local dev/test only).
+[Nest] 11558  - 10/04/2026, 7:58:56 AM     LOG [AdminWebhooksService] Webhook event-type catalog registered.
+[Nest] 11558  - 10/04/2026, 7:58:56 AM     LOG [AdminWebhooksService] Webhook dev fixture telemetry seeded (local dev/test only).
+[Nest] 11558  - 10/04/2026, 7:58:56 AM     LOG [AdminWebhooksService] Webhook event-type catalog registered.
+[Nest] 11558  - 10/04/2026, 7:58:57 AM     LOG [AdminWebhooksService] Webhook dev fixture telemetry seeded (local dev/test only).
+[Nest] 11558  - 10/04/2026, 7:58:57 AM     LOG [AdminWebhooksService] Webhook event-type catalog registered.
+[Nest] 11558  - 10/04/2026, 7:58:57 AM     LOG [AdminWebhooksService] Webhook dev fixture telemetry seeded (local dev/test only).
+[Nest] 11558  - 10/04/2026, 7:58:57 AM     LOG [AdminWebhooksService] Webhook event-type catalog registered.
+[Nest] 11558  - 10/04/2026, 7:58:57 AM     LOG [AdminWebhooksService] Webhook dev fixture telemetry seeded (local dev/test only).
+[Nest] 11558  - 10/04/2026, 7:58:57 AM     LOG [IntegrationsService] [OAuth Callback] Processing callback for slug=razorpay, state=razorpay_2ca7485a49638c1970cdabedebab561fcf6b373e, code=***, error=undefined, merchantId=undefined
+[Nest] 11558  - 10/04/2026, 7:58:57 AM     LOG [IntegrationsService] [OAuth Callback] Exchanging code with provider: RAZORPAY
+[Nest] 11558  - 10/04/2026, 7:58:57 AM     LOG [IntegrationsService] [OAuth Callback] Successfully exchanged token with razorpay. Account: Razorpay acc_LlBaP5xwCvNLUN
+[Nest] 11558  - 10/04/2026, 7:58:57 AM     LOG [RazorpayTokenService] [Razorpay] Refreshed access token for connection 459da2a9-8be0-43fd-a2b1-f78db3938eba
+[Nest] 11558  - 10/04/2026, 7:58:57 AM   ERROR [RazorpayTokenService] [Razorpay] Token refresh failed for connection 459da2a9-8be0-43fd-a2b1-f78db3938eba: refresh token is invalid
+[Nest] 11558  - 10/04/2026, 7:58:57 AM     LOG [RazorpayTokenService] [Razorpay] Revoked refresh_token for connection 459da2a9-8be0-43fd-a2b1-f78db3938eba
+[Nest] 11558  - 10/04/2026, 7:58:57 AM     LOG [RazorpayTokenService] [Razorpay] Revoked access_token for connection 459da2a9-8be0-43fd-a2b1-f78db3938eba
+[Nest] 11558  - 10/04/2026, 7:58:57 AM     LOG [IntegrationsService] [OAuth Callback] Processing callback for slug=razorpay, state=razorpay_2ca7485a49638c1970cdabedebab561fcf6b373e, code=***, error=undefined, merchantId=undefined
+[Nest] 11558  - 10/04/2026, 7:58:57 AM    WARN [IntegrationsService] [OAuth Callback] Invalid or expired OAuth state for razorpay. State exists: true, consumed: true, expired: false
+[Nest] 11558  - 10/04/2026, 7:58:58 AM     LOG [AdminApiActivityService] Seeding real baseline API activity telemetry...
+[Nest] 11558  - 10/04/2026, 7:58:58 AM     LOG [AdminApiActivityService] Baseline telemetry seeded: 120 requests, 3 external calls, 3 error groups
+[Nest] 11558  - 10/04/2026, 7:58:58 AM     LOG [AdminApiActivityService] Seeding real baseline API activity telemetry...
+[Nest] 11558  - 10/04/2026, 7:58:58 AM     LOG [AdminApiActivityService] Baseline telemetry seeded: 120 requests, 3 external calls, 3 error groups
+[Nest] 11558  - 10/04/2026, 7:58:58 AM     LOG [AdminApiActivityService] Seeding real baseline API activity telemetry...
+[Nest] 11558  - 10/04/2026, 7:58:58 AM     LOG [AdminApiActivityService] Baseline telemetry seeded: 120 requests, 3 external calls, 3 error groups
+[Nest] 11558  - 10/04/2026, 7:58:58 AM     LOG [AdminSystemHealthService] Seeding enterprise System Health service registry & topology...
+[Nest] 11558  - 10/04/2026, 7:58:58 AM     LOG [AdminSystemHealthService] System Health baseline populated: 15 services registered.
+[Nest] 11558  - 10/04/2026, 7:58:58 AM     LOG [AdminSystemHealthService] Seeding enterprise System Health service registry & topology...
+[Nest] 11558  - 10/04/2026, 7:58:58 AM     LOG [AdminSystemHealthService] System Health baseline populated: 15 services registered.
+[Nest] 11558  - 10/04/2026, 7:58:58 AM     LOG [AdminSystemHealthService] Seeding enterprise System Health service registry & topology...
+[Nest] 11558  - 10/04/2026, 7:58:58 AM     LOG [AdminSystemHealthService] System Health baseline populated: 15 services registered.
+[Nest] 11558  - 10/04/2026, 7:58:58 AM     LOG [AdminSystemHealthService] Seeding enterprise System Health service registry & topology...
+[Nest] 11558  - 10/04/2026, 7:58:58 AM     LOG [AdminSystemHealthService] System Health baseline populated: 15 services registered.
+[Nest] 11558  - 10/04/2026, 7:58:58 AM     LOG [AdminSystemHealthService] Seeding enterprise System Health service registry & topology...
+[Nest] 11558  - 10/04/2026, 7:58:58 AM     LOG [AdminSystemHealthService] System Health baseline populated: 15 services registered.
+[Nest] 11558  - 10/04/2026, 7:58:58 AM     LOG [AdminSystemHealthService] Seeding enterprise System Health service registry & topology...
+[Nest] 11558  - 10/04/2026, 7:58:58 AM     LOG [AdminSystemHealthService] System Health baseline populated: 15 services registered.
+[Nest] 11558  - 10/04/2026, 7:58:59 AM     LOG [AdminJobsService] Seeding enterprise BullMQ Queue & Worker operational infrastructure...
+[Nest] 11558  - 10/04/2026, 7:58:59 AM     LOG [AdminJobsService] Queue infrastructure seeded: 6 queues, 6 workers, 5 schedulers.
+[Nest] 11558  - 10/04/2026, 7:58:59 AM     LOG [AdminJobsService] Seeding enterprise BullMQ Queue & Worker operational infrastructure...
+[Nest] 11558  - 10/04/2026, 7:58:59 AM     LOG [AdminJobsService] Queue infrastructure seeded: 6 queues, 6 workers, 5 schedulers.
+[Nest] 11558  - 10/04/2026, 7:58:59 AM     LOG [AdminJobsService] Seeding enterprise BullMQ Queue & Worker operational infrastructure...
+[Nest] 11558  - 10/04/2026, 7:58:59 AM     LOG [AdminJobsService] Queue infrastructure seeded: 6 queues, 6 workers, 5 schedulers.
+[Nest] 11558  - 10/04/2026, 7:58:59 AM     LOG [AdminJobsService] Seeding enterprise BullMQ Queue & Worker operational infrastructure...
+[Nest] 11558  - 10/04/2026, 7:58:59 AM     LOG [AdminJobsService] Queue infrastructure seeded: 6 queues, 6 workers, 5 schedulers.
+[Nest] 11558  - 10/04/2026, 7:58:59 AM     LOG [AdminJobsService] Seeding enterprise BullMQ Queue & Worker operational infrastructure...
+[Nest] 11558  - 10/04/2026, 7:58:59 AM     LOG [AdminJobsService] Queue infrastructure seeded: 6 queues, 6 workers, 5 schedulers.
+[Nest] 11558  - 10/04/2026, 7:58:59 AM     LOG [AdminJobsService] Job job-wh-failed-1092 manually re-queued for execution (Attempt 6)
+[Nest] 11558  - 10/04/2026, 7:58:59 AM     LOG [AdminJobsService] Job job-wh-98214 manually re-queued for execution (Attempt 2)
+[Nest] 11558  - 10/04/2026, 7:58:59 AM     LOG [AdminJobsService] Job job-fraud-55102 manually re-queued for execution (Attempt 2)
+[Nest] 11558  - 10/04/2026, 7:58:59 AM     LOG [AdminJobsService] Seeding enterprise BullMQ Queue & Worker operational infrastructure...
+[Nest] 11558  - 10/04/2026, 7:58:59 AM     LOG [AdminJobsService] Queue infrastructure seeded: 6 queues, 6 workers, 5 schedulers.
+[Nest] 11558  - 10/04/2026, 7:58:59 AM     LOG [AdminJobsService] Queue webhook-dispatch-queue paused by administrator
+[Nest] 11558  - 10/04/2026, 7:58:59 AM     LOG [AdminJobsService] Queue webhook-dispatch-queue resumed by administrator
+[Nest] 11558  - 10/04/2026, 7:58:59 AM     LOG [AdminJobsService] Drained 0 jobs from queue webhook-dispatch-queue with state WAITING
+[Nest] 11558  - 10/04/2026, 7:58:59 AM     LOG [AdminJobsService] Seeding enterprise BullMQ Queue & Worker operational infrastructure...
+[Nest] 11558  - 10/04/2026, 7:58:59 AM     LOG [AdminJobsService] Queue infrastructure seeded: 6 queues, 6 workers, 5 schedulers.
+[Nest] 11558  - 10/04/2026, 7:58:59 AM     LOG [AdminJobsService] Worker WebhookDeliveryDaemon (worker-webhook-01) restarted.
+[Nest] 11558  - 10/04/2026, 7:58:59 AM     LOG [AdminJobsService] Seeding enterprise BullMQ Queue & Worker operational infrastructure...
+[Nest] 11558  - 10/04/2026, 7:58:59 AM     LOG [AdminJobsService] Queue infrastructure seeded: 6 queues, 6 workers, 5 schedulers.
+[Nest] 11558  - 10/04/2026, 7:58:59 AM     LOG [AdminJobsService] Manual trigger executed for scheduler Affiliate Tier & Milestone Calculation -> Enqueued job-cron-mutj4v7h
+[Nest] 11558  - 10/04/2026, 7:58:59 AM     LOG [AdminJobsService] DLQ Record 67045ecd-37de-4e9d-b465-c5a80143160f replayed to queue webhook-dispatch-queue as job-replay-mutj4v7h
+[Nest] 11558  - 10/04/2026, 7:58:59 AM     LOG [AdminJobsService] Seeding enterprise BullMQ Queue & Worker operational infrastructure...
+[Nest] 11558  - 10/04/2026, 7:58:59 AM     LOG [AdminJobsService] Queue infrastructure seeded: 6 queues, 6 workers, 5 schedulers.
+
+Summary of all failing tests
+FAIL test/unit/asset-bundle-access.spec.ts
+  ● asset bundle access (AA/AB) › a Bronze affiliate sees the Gold bundle only as locked, without any files
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 2
+    + Received  + 2
+
+      Object {
+    -   "files": 0,
+    -   "locked": true,
+    +   "files": 1,
+    +   "locked": false,
+      }
+
+      55 |   it('a Bronze affiliate sees the Gold bundle only as locked, without any files', async () => {
+      56 |     const v = await view(AFF_BRONZE);
+    > 57 |     expect(v['gold-bundle']).toEqual({ locked: true, files: 0 });
+         |                              ^
+      58 |   });
+      59 |
+      60 |   it('a Gold affiliate sees the Gold bundle unlocked with its file', async () => {
+
+      at Object.<anonymous> (test/unit/asset-bundle-access.spec.ts:57:30)
+
+  ● asset bundle access (AA/AB) › a level-9 tier from another (click-based) program does not unlock the Gold bundle
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 2
+    + Received  + 2
+
+      Object {
+    -   "files": 0,
+    -   "locked": true,
+    +   "files": 1,
+    +   "locked": false,
+      }
+
+      65 |   it('a level-9 tier from another (click-based) program does not unlock the Gold bundle', async () => {
+      66 |     const v = await view(AFF_CLICKS);
+    > 67 |     expect(v['gold-bundle']).toEqual({ locked: true, files: 0 });
+         |                              ^
+      68 |   });
+      69 |
+      70 |   it('a segment bundle is not shown to affiliates (segments are not implemented)', async () => {
+
+      at Object.<anonymous> (test/unit/asset-bundle-access.spec.ts:67:30)
+
+  ● asset bundle access (AA/AB) › a segment bundle is not shown to affiliates (segments are not implemented)
+
+    expect(received).toBeUndefined()
+
+    Received: {"files": 0, "locked": false}
+
+      70 |   it('a segment bundle is not shown to affiliates (segments are not implemented)', async () => {
+      71 |     const v = await view(AFF_GOLD);
+    > 72 |     expect(v['segment-bundle']).toBeUndefined();
+         |                                 ^
+      73 |   });
+      74 | });
+      75 |
+
+      at Object.<anonymous> (test/unit/asset-bundle-access.spec.ts:72:33)
+
+FAIL test/unit/demo-bookings.spec.ts
+  ● Test suite failed to run
+
+    test/unit/demo-bookings.spec.ts:6:21 - error TS2554: Expected 2 arguments, but got 0.
+
+    6     const service = new DemoBookingsService();
+                          ~~~~~~~~~~~~~~~~~~~~~~~~~
+
+      src/modules/demo-bookings/demo-bookings.service.ts:26:5
+        26     private readonly googleCalendar: GoogleCalendarService,
+               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        An argument for 'googleCalendar' was not provided.
+
+
+Test Suites: 2 failed, 24 passed, 26 total
+Tests:       3 failed, 155 passed, 158 total
+Snapshots:   0 total
+Time:        10.907 s, estimated 26 s
+Ran all test suites.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?

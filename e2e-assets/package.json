@@ -1,0 +1,16 @@
+{
+  "name": "partneriq-assets-e2e",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "seed": "tsx scripts/seed-fixtures.ts",
+    "cleanup": "tsx scripts/cleanup.ts"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-s3": "^3.1146.0",
+    "@playwright/test": "1.56.1",
+    "mysql2": "^3.23.3",
+    "sharp": "^0.34.5",
+    "tsx": "^4.21.0"
+  }
+}
